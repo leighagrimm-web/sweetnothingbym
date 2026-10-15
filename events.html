@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Special Events · Sweet Nothings by M</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-page="events">
+<div id="site-header"></div>
+<main>
+  <section class="hero wrap">
+    <p class="eyebrow">Special events</p>
+    <h1>Classes, pop-ups &amp; seasonal specials</h1>
+    <p class="lead">Limited-time cookies and cookie decorating classes. Follow along on Instagram for the latest dates.</p>
+  </section>
+  <section class="section wrap">
+    <div class="menu-grid">
+      <article class="card">
+        <div class="placeholder" style="height:200px;border-radius:0">[Class photo]</div>
+        <div class="card-body">
+          <p class="eyebrow" style="margin:0">[Date] · [Time]</p>
+          <h3>[Cookie decorating class]</h3>
+          <p class="desc">[What attendees will make, what's included, location, and how many spots are available.]</p>
+          <p class="price">[$ per person]</p>
+          <a class="btn ghost" href="#" aria-disabled="true">Sign-up details coming soon</a>
+        </div>
+      </article>
+      <article class="card">
+        <div class="placeholder" style="height:200px;border-radius:0">[Seasonal cookie photo]</div>
+        <div class="card-body">
+          <p class="eyebrow" style="margin:0">[Available dates]</p>
+          <h3>[Seasonal special]</h3>
+          <p class="desc">[Holiday or seasonal box description. Specials can also be added to the artisan menu from the admin page.]</p>
+          <a class="btn" href="index.html">Order now</a>
+        </div>
+      </article>
+      <article class="card">
+        <div class="placeholder" style="height:200px;border-radius:0">[Event photo]</div>
+        <div class="card-body">
+          <h3>Planning something bigger?</h3>
+          <p class="desc">For weddings, corporate gifts or large events, start an order and describe what you have in mind, or reach out on Instagram.</p>
+          <a class="btn ghost" id="ig-link" href="#" target="_blank" rel="noopener">Message on Instagram</a>
+        </div>
+      </article>
+    </div>
+  </section>
+</main>
+<div id="site-footer"></div>
+<script src="js/config.js"></script>
+<script src="js/layout.js"></script>
+<script>document.getElementById('ig-link').href = SN.load().instagram;</script>
+</body>
+</html>
