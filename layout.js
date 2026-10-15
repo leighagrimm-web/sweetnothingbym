@@ -16,7 +16,7 @@
     header.innerHTML =
       '<div class="proto-banner">Prototype preview: orders here are for demo only and are not sent anywhere.</div>' +
       '<header class="site-header"><div class="wrap">' +
-        '<a class="brand" href="index.html"><img src="assets/logo.png" alt="Sweet Nothings by M"><span>Sweet Nothings <em>by M</em></span></a>' +
+        '<a class="brand" href="index.html"><img src="logo.png" alt="Sweet Nothings by M"><span>Sweet Nothings <em>by M</em></span></a>' +
         '<div class="header-right">' +
           '<nav class="main-nav" aria-label="Main">' +
             links.map(([key, href, label]) => '<a href="' + href + '"' + (key === page ? ' aria-current="page"' : '') + '>' + label + '</a>').join('') +

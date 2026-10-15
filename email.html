@@ -5,17 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Order Confirmation Preview · Sweet Nothings by M</title>
 <meta name="robots" content="noindex">
-<link rel="icon" href="assets/logo.png">
+<link rel="icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="proto-banner">Preview of the confirmation email the customer receives. The owner gets a matching "New order" email. <a href="index.html">Back to the site</a></div>
 <div class="email-wrap" id="email"></div>
 
-<script src="js/config.js"></script>
+<script src="config.js"></script>
 <script>
 (function () {
   const cfg = SN.load();
@@ -53,7 +53,7 @@
     '<div class="email-meta"><strong style="color:var(--navy)">Subject:</strong> Your Sweet Nothings order ' + esc(o.number) + ' is in!<br>' +
       '<strong style="color:var(--navy)">To:</strong> ' + esc(o.customer.email) + (sample ? ' <em>(sample order)</em>' : '') + '</div>' +
     '<div class="email">' +
-      '<div class="email-top"><img src="assets/logo.png" alt="Sweet Nothings by M"><h1>Thank you' + (first ? ', ' + esc(first) : '') + '!</h1>' +
+      '<div class="email-top"><img src="logo.png" alt="Sweet Nothings by M"><h1>Thank you' + (first ? ', ' + esc(first) : '') + '!</h1>' +
         '<p class="muted" style="margin:8px 0 0">Order number <strong style="color:var(--navy)">' + esc(o.number) + '</strong></p></div>' +
       '<div class="email-body">' +
         '<div style="background:var(--blush);border-radius:12px;padding:16px 18px;font-size:15px"><strong>Next step:</strong> I’ll review your order and send a QuickBooks invoice within 1–2 days. Your date is reserved once the invoice is paid.</div>' +
