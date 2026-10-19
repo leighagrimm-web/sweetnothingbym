@@ -1,10 +1,26 @@
 /*
  * Sweet Nothings by M — shop settings and shared helpers.
  *
- * PROTOTYPE NOTE: settings, the bag and orders are kept in this browser's
- * storage (localStorage / sessionStorage). In the real build these move to the
- * Google Sheet (Settings tab + Orders tab) via Google Apps Script.
+ * Live settings come from the Google Sheet through the Apps Script web app (see apps-script/).
+ * SN_DEFAULTS below is the fallback the site shows if the Sheet can't be reached.
+ * Orders and messages are sent to the Sheet. The bag stays in this browser (sessionStorage).
+ * admin.html is still the prototype (this browser's storage only) until it moves to Apps Script in phase 2.
  */
+
+/* ---------- Which Google Sheet this copy of the site talks to ---------- */
+// Each environment has its own Sheet + Apps Script web app:
+//   uat  = the GitHub Pages test site, in Leigha's Google account
+//   prod = Melissa's own domain, in her Google account (fill in at launch)
+// Paste each web app URL (ends in /exec) below. Any address not listed in PROD_HOSTS uses UAT.
+const SN_ENV = (function () {
+  const API = {
+    uat: 'https://script.google.com/macros/s/AKfycbxevgGnDBQn2XUOqY3J9Ou873czPs7xWOH3sj7nPriq3K_vPAxeNw1acPVDgPCJhalw/exec',
+    prod: ''
+  };
+  const PROD_HOSTS = [];   // e.g. ['sweetnothingsbym.com', 'www.sweetnothingsbym.com']
+  const name = PROD_HOSTS.indexOf(location.hostname) !== -1 ? 'prod' : 'uat';
+  return { name, api: API[name] };
+})();
 
 const SN_DEFAULTS = {
   leadDays: 8,                // minimum days between ordering and the date needed
@@ -61,15 +77,65 @@ const SN_DEFAULTS = {
 const SN = {
   clone(o) { return JSON.parse(JSON.stringify(o)); },
 
-  // opts.ignorePreview: the admin page always edits the saved settings, never a preview draft.
+  // Settings for the public pages: live settings from the Sheet (once SN.ready resolves), else SN_DEFAULTS.
+  // opts.ignorePreview: the prototype admin page, which still edits this browser's own copy until phase 2.
   load(opts) {
     let cfg = SN.clone(SN_DEFAULTS);
     try {
-      const draft = !(opts && opts.ignorePreview) && SN.isPreview() ? localStorage.getItem('sn_config_draft') : null;
-      const raw = draft || localStorage.getItem('sn_config');
-      if (raw) cfg = Object.assign(cfg, JSON.parse(raw));
+      if (opts && opts.ignorePreview) {
+        const raw = localStorage.getItem('sn_config');
+        if (raw) cfg = Object.assign(cfg, JSON.parse(raw));
+      } else {
+        if (SN._live) cfg = Object.assign(cfg, SN.clone(SN._live));
+        // Preview from the prototype admin (same browser) when the Sheet has no draft.
+        const local = SN.isPreview() && !SN._serverDraft ? localStorage.getItem('sn_config_draft') : null;
+        if (local) cfg = Object.assign(cfg, JSON.parse(local));
+      }
     } catch (e) { /* storage unavailable: use defaults */ }
     return SN.dropPastDates(cfg);
+  },
+  _live: null,          // settings from the Sheet (in preview mode: live settings with the draft applied)
+  _serverDraft: false,  // true when the Sheet's Draft tab had unsaved admin changes
+
+  /* ---------- Talking to the Apps Script web app ---------- */
+  // GET returns JSON. POST uses text/plain with a JSON body and no custom headers, so the browser skips the CORS preflight.
+  request(opts, timeoutMs) {
+    if (!SN_ENV.api) return Promise.reject(new Error('No API URL set for ' + SN_ENV.name));
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+    const url = SN_ENV.api + (opts.query ? '?' + opts.query : '');
+    const init = opts.body ? { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(opts.body) } : {};
+    if (ctrl) init.signal = ctrl.signal;
+    return fetch(url, init)
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .finally(() => clearTimeout(timer));
+  },
+  post(action, data) { return SN.request({ body: Object.assign({ action }, data) }, 45000); },
+  // Friendly text for a failed send. r is the server's reply ({ ok:false, error | errors }) or a network error.
+  sendErrorText(r) {
+    if (r && r.code === 'invalid' && r.errors) return 'Please check: ' + r.errors.join(', ') + '.';
+    if (r && r.error && r.ok === false) return r.error;
+    return 'Sorry, that didn’t go through. Please check your connection and try again in a minute. If it keeps happening, message me on Instagram ' + (SN.load().instagramHandle || '') + '.';
+  },
+
+  // Loads live settings once per page. Cached for 5 minutes per tab so moving between pages is instant.
+  fetchConfig() {
+    const preview = SN.isPreview();
+    const KEY = 'sn_live_cfg';
+    if (!preview) {
+      try {
+        const c = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+        if (c && Date.now() - c.t < 5 * 60 * 1000) { SN._live = c.cfg; return Promise.resolve(); }
+      } catch (e) { /* ignore */ }
+    }
+    return SN.request({ query: 'action=config' + (preview ? '&preview=1' : '') }, 10000)
+      .then((r) => {
+        if (!r || !r.ok || !r.config) return;
+        SN._live = r.config;
+        SN._serverDraft = !!r.hasDraft;
+        if (!preview) { try { sessionStorage.setItem(KEY, JSON.stringify({ t: Date.now(), cfg: r.config })); } catch (e) { /* ignore */ } }
+      })
+      .catch(() => { /* Sheet unreachable: pages fall back to SN_DEFAULTS */ });
   },
   // Blocked dates in the past are removed automatically so the list doesn't get cluttered.
   dropPastDates(cfg) {
@@ -80,13 +146,14 @@ const SN = {
 
   /* ---------- Preview mode (admin "Preview changes") ---------- */
   // A tab opened with ?preview=1 shows the admin's unsaved draft until the visitor exits preview.
+  // The draft comes from the Sheet's Draft tab (phase 2 admin) or, for the prototype admin, this browser's storage.
   isPreview() {
     try {
       if (new URLSearchParams(location.search).get('preview') === '1') sessionStorage.setItem('sn_preview', '1');
-      return sessionStorage.getItem('sn_preview') === '1' && !!localStorage.getItem('sn_config_draft');
+      return sessionStorage.getItem('sn_preview') === '1' && (SN._serverDraft || !!localStorage.getItem('sn_config_draft') || !SN._live);
     } catch (e) { return false; }
   },
-  exitPreview() { try { sessionStorage.removeItem('sn_preview'); } catch (e) { /* ignore */ } },
+  exitPreview() { try { sessionStorage.removeItem('sn_preview'); sessionStorage.removeItem('sn_live_cfg'); } catch (e) { /* ignore */ } },
   saveDraft(cfg) { try { localStorage.setItem('sn_config_draft', JSON.stringify(cfg)); return true; } catch (e) { return false; } },
   clearDraft() { try { localStorage.removeItem('sn_config_draft'); } catch (e) { /* ignore */ } },
   save(cfg) {
@@ -183,6 +250,9 @@ const SN = {
     return { subtotal, tax, fee: f, total: subtotal + tax + f };
   }
 };
+
+// Pages wait on this before reading settings: SN.ready.then(() => { const cfg = SN.load(); ... })
+SN.ready = SN.fetchConfig();
 
 // Shared inline icons (stroke SVG, decorative).
 const SN_ICONS = {

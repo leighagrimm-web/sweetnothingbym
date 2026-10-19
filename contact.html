@@ -67,8 +67,10 @@
                 <input type="file" id="m-photo" accept="image/*" class="sr-only">
               </label>
             </div>
+            <div class="hp" aria-hidden="true"><label>Website <input type="text" id="m-website" tabindex="-1" autocomplete="off"></label></div>
             <div>
-              <button type="submit" class="btn btn-lg">Send message</button>
+              <button type="submit" class="btn btn-lg" id="m-send">Send message</button>
+              <p class="err" id="m-send-err" role="alert" hidden style="margin-top:10px"></p>
             </div>
           </div>
         </form>
@@ -89,9 +91,9 @@
 <script src="layout.js"></script>
 <script>
 (function () {
-  const cfg = SN.load();
   const $ = (s) => document.querySelector(s);
-  $('#ig-link').href = cfg.instagram;
+  $('#ig-link').href = SN.load().instagram;
+  SN.ready.then(() => { $('#ig-link').href = SN.load().instagram; });
   $('#ig-icon').innerHTML = SN_ICONS.insta;
   $('#m-photo-thumb').innerHTML = SN_ICONS.upload;
 
@@ -131,18 +133,32 @@
     $('#m-email').dataset.touched = '1'; $('#m-msg').dataset.touched = '1';
     if (!check(true)) { (emailOk($('#m-email').value) ? $('#m-msg') : $('#m-email')).focus(); return; }
     const msg = {
-      id: Date.now(),
-      createdAt: new Date().toISOString(),
       name: $('#m-name').value.trim(),
       email: $('#m-email').value.trim(),
       phone: $('#m-phone').value.trim(),
       topic: $('#m-topic').value,
       orderNumber: $('#m-topic').value === 'An existing order' ? $('#m-order').value.trim() : '',
       message: $('#m-msg').value.trim(),
-      photoName,
-      status: 'New'
+      photoName,   // the photo itself is saved to Drive in a later phase
+      source: 'contact',
+      website: $('#m-website').value
     };
-    const all = SN.getMessages(); all.unshift(msg); SN.setMessages(all);
+    const btn = $('#m-send');
+    if (btn.getAttribute('aria-disabled') === 'true') return;
+    btn.setAttribute('aria-disabled', 'true');
+    btn.textContent = 'Sending…';
+    $('#m-send-err').hidden = true;
+    SN.post('sendMessage', msg)
+      .then((r) => { if (!r || !r.ok) throw r; sent(msg); })
+      .catch((r) => {
+        btn.removeAttribute('aria-disabled');
+        btn.textContent = 'Send message';
+        $('#m-send-err').textContent = SN.sendErrorText(r);
+        $('#m-send-err').hidden = false;
+      });
+  });
+
+  function sent(msg) {
     const first = msg.name ? msg.name.split(' ')[0] : '';
     $('#form-card').innerHTML =
       '<div class="done" role="status">' +
@@ -153,7 +169,7 @@
       '</div>';
     $('#form-card').querySelector('h3').setAttribute('tabindex', '-1');
     $('#form-card').querySelector('h3').focus();
-  });
+  }
 })();
 </script>
 </body>

@@ -1,5 +1,5 @@
-/* Order page: menu, item slide-over, bag + checkout. */
-(function () {
+/* Order page: menu, item slide-over, bag + checkout. Waits for the Sheet's settings so prices are current. */
+SN.ready.then(function () {
   const cfg = SN.load();
   let bag = SN.getBag();
   let mode = null;            // null | 'custom' | 'mini' | 'large' | 'bag' | 'done'
@@ -7,6 +7,7 @@
   let draftTried = false;
   let tried = false;
   let lastOrder = null;
+  let sending = false;
   let opener = null;
   let toastTimer = null;
   const checkout = {
@@ -290,6 +291,7 @@
             '<div class="field"><label class="label" for="c-email">Email</label><input class="input" id="c-email" type="email" autocomplete="email" data-co="email" value="' + esc(checkout.email) + '"></div>' +
             '<div class="field"><label class="label" for="c-phone">Phone</label><input class="input" id="c-phone" type="tel" autocomplete="tel" data-co="phone" value="' + esc(checkout.phone) + '"></div>' +
           '</div>' +
+          '<div class="hp" aria-hidden="true"><label>Website <input type="text" id="c-website" tabindex="-1" autocomplete="off"></label></div>' +
         '</div></div>' +
 
         '<div class="sec totals">' +
@@ -301,7 +303,7 @@
       '<div class="panel-foot">' +
         '<div class="grand"><strong>Estimated total</strong><strong id="t-total"></strong></div>' +
         '<div class="missing" id="missing" hidden></div>' +
-        '<button type="button" class="btn block" data-act="submit">Send order request</button>' +
+        '<button type="button" class="btn block" data-act="submit"' + (sending ? ' aria-disabled="true">Sending…' : '>Send order request') + '</button>' +
         '<p class="hint" style="text-align:center;margin-top:10px">No payment today. M will review your request, confirm the final price, and email you an invoice to pay.</p>' +
       '</div>';
   }
@@ -380,7 +382,7 @@
         '<p class="muted" style="margin:12px 0 0"><strong>This is not a final order yet.</strong> We sent a copy of your request to ' + esc(o.customer.email) + '. M will review it and send a second email with your confirmation, final price and invoice. Your date is reserved once the invoice is paid.</p>' +
         '<p style="margin:20px 0 0;font-family:var(--serif);font-size:30px;font-weight:600">Estimated total ' + money(o.total) + '</p>' +
         '<div class="stack" style="margin-top:24px;align-items:center">' +
-          '<a class="btn ghost" href="email.html?o=' + encodeURIComponent(o.number) + '" target="_blank" rel="noopener">Preview the request email</a>' +
+          (SN_ENV.name === 'uat' ? '<a class="btn ghost" href="email.html?o=' + encodeURIComponent(o.number) + '" target="_blank" rel="noopener">Preview the request email</a>' : '') +
           '<button type="button" class="btn" data-act="close">Back to the menu</button>' +
         '</div>' +
       '</div></div>';
@@ -481,30 +483,52 @@
     }
     const miss = missingList();
     if (miss.length) { tried = true; updateCheckoutUI(); $('#missing').scrollIntoView({ block: 'nearest' }); return; }
-    const q = quote();
-    const order = {
-      number: SN.nextOrderNumber(),
-      createdAt: new Date().toISOString(),
-      status: 'Pending review',
-      items: bag.map((it) => Object.assign({}, it, { lineTotal: SN.itemTotal(cfg, it), summary: SN.describeItem(cfg, it) })),
-      eventType: checkout.eventType === 'Other' ? 'Other: ' + checkout.eventOther.trim() : checkout.eventType,
+    const btn = $('[data-act="submit"]', panel);
+    if (sending) return;
+    sending = true;
+    btn.setAttribute('aria-disabled', 'true');
+    btn.textContent = 'Sending…';
+    $('#missing').hidden = true;
+    // Prices aren't sent: the Sheet re-prices every line and re-checks every rule.
+    SN.post('submitOrder', {
+      items: bag.map((it) => ({ kind: it.kind, qty: it.qty, designs: it.designs, desc: it.desc, photoName: it.photoName, fq: it.fq })),
+      eventType: checkout.eventType,
+      eventOther: checkout.eventOther.trim(),
       dateNeeded: checkout.date,
       allergies: checkout.allergies.trim(),
       fulfillment: checkout.fulfillment,
-      address: q.isDel ? { street: checkout.address.trim(), city: checkout.city.trim(), zip: checkout.zip } : null,
+      address: { street: checkout.address.trim(), city: checkout.city.trim(), zip: checkout.zip },
       customer: { name: checkout.name.trim(), email: checkout.email.trim(), phone: checkout.phone.trim() },
-      subtotal: q.subtotal, tax: q.tax, deliveryFee: q.fee, total: q.total, taxRate: cfg.taxRate
-    };
-    const orders = SN.getOrders();
-    orders.unshift(order);
-    SN.setOrders(orders);
+      website: $('#c-website').value
+    })
+      .then((r) => { if (!r || !r.ok || !r.order) throw r; orderSent(r.order); })
+      .catch((r) => {
+        if (mode !== 'bag') return;
+        const b = $('[data-act="submit"]', panel);
+        b.removeAttribute('aria-disabled');
+        b.textContent = 'Send order request';
+        const box = $('#missing');
+        box.hidden = false;
+        box.innerHTML = r && r.code === 'invalid' && r.errors
+          ? '<strong>Still needed:</strong> ' + esc(r.errors.join(', '))
+          : esc(SN.sendErrorText(r));
+        box.scrollIntoView({ block: 'nearest' });
+      })
+      .finally(() => { sending = false; });
+  }
+
+  function orderSent(order) {
+    // Test site only: keep a copy in this browser so the prototype admin page and the email preview link still work.
+    if (SN_ENV.name === 'uat') { const orders = SN.getOrders(); orders.unshift(order); SN.setOrders(orders); }
     lastOrder = order;
     bag = [];
     saveBag();
     tried = false;
     checkout.date = '';
+    const wasOpen = panel.classList.contains('open');
     mode = 'done';
     renderPanel();
+    if (!wasOpen) showPanel(bagBtn);   // they closed the bag while it was sending
     const c = $('[data-act="close"]', panel);
     if (c) c.focus();
   }
@@ -533,4 +557,4 @@
     history.replaceState(null, '', location.pathname);
     openBag(bagBtn);
   }
-})();
+});

@@ -17,11 +17,18 @@ A clickable prototype of the ordering site for **Sweet Nothings by M** ([@sweet_
 
 Settings live in `js/config.js` (`SN_DEFAULTS`). Shared look is in `css/styles.css`.
 
-## Prototype limits (on purpose)
+## Backend (phase 1)
 
-- **Nothing is sent anywhere.** Orders, admin changes and the bag are saved in the visitor's own browser only. If M changes a price in admin, she'll see it on the order page on *her* device, but nobody else will.
-- **No login** on the admin page yet.
-- **No real emails, Google Sheet or payments** yet.
+- Settings, orders and messages live in a **Google Sheet**, served by a **Google Apps Script** web app. Setup steps are in [`apps-script/README.md`](apps-script/README.md).
+- `config.js` → `SN_ENV` picks the backend by website address: the GitHub Pages site uses the **UAT** Sheet, and Melissa's domain will use **PROD**.
+- Sending an order request saves it as `SN-####`, emails the customer "request received (not yet confirmed)", and emails the owner "New order to review". Contact and "Message me" messages are saved and emailed to the owner, with reply-to set to the customer.
+- If the Sheet can't be reached, pages show the built-in defaults, and sending shows a friendly error.
+
+## Still prototype (later phases)
+
+- **Admin page** (`admin.html`) still works only in the browser it's opened in. It moves to Apps Script with Google sign-in in phase 2. Until then, edit settings directly in the Sheet.
+- **Photos** aren't uploaded yet (phase 4). Only the file name is recorded.
+- **Payments / QuickBooks** come in phase 3.
 
 ## Publish it on GitHub Pages
 

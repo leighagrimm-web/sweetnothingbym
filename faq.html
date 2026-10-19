@@ -37,13 +37,13 @@
 <script src="config.js"></script>
 <script src="layout.js"></script>
 <script>
-(function () {
+SN.ready.then(function () {
   const faqs = (SN.load().faqs || []).filter((f) => f.q && f.q.trim());
   const list = document.getElementById('faq-list');
   list.innerHTML = faqs.length
     ? faqs.map((f, i) => '<details class="faq"' + (i === 0 ? ' open' : '') + '><summary>' + SN.esc(f.q) + '</summary><div class="faq-a">' + SN.esc(f.a) + '</div></details>').join('')
     : '<p class="muted">No questions yet.</p>';
-})();
+});
 </script>
 </body>
 </html>

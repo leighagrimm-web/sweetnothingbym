@@ -1,0 +1,55 @@
+# Apps Script backend
+
+`Code.gs` is the whole backend: the Google Sheet layout, the public web app the website talks to, and the emails.
+It is pasted into the Sheet's Apps Script editor by hand. Each environment (UAT, PROD) has its own Sheet and script.
+
+## Set up a new environment (one time, about 10 minutes)
+
+Type the addresses below yourself rather than clicking links in emails. Before you approve anything, check that the browser's address bar says `google.com`.
+
+1. **Make the Sheet.** Signed in to the right Google account, go to `sheets.new`. Name it `Sweet Nothings – UAT` (or `– PROD`).
+2. **Open the script editor.** In the Sheet: **Extensions → Apps Script**. Click "Untitled project" at the top and rename it `Sweet Nothings backend`.
+3. **Set the time zone.** Click the gear (**Project Settings**) on the left. Under **Time zone**, pick **(GMT-06:00) Central Time – Chicago**.
+4. **Paste the code.** Click **Editor** (the `<>` icon), then `Code.gs`. Select everything in it and delete it. Paste in the full contents of `apps-script/Code.gs` from this repo. Press **Ctrl+S** to save.
+5. **Build the tabs.** In the toolbar's function menu (next to **Debug**), pick **setupSheet** and click **Run**.
+   - Google asks for permission the first time: **Review permissions** → choose the account.
+   - It warns "Google hasn't verified this app". That's normal for your own script. Click **Advanced** → **Go to Sweet Nothings backend (unsafe)** → **Allow**.
+   - The log should end with `Sheet is ready.` Back in the Sheet, you'll see the tabs: Settings, Flavors, Zones, BlockedDates, FAQ, Orders, OrderItems, Messages, Draft, Counters.
+6. **Publish the web app.** Click **Deploy → New deployment**. Click the gear next to "Select type" and choose **Web app**.
+   - Description: `v1`
+   - Execute as: **Me**
+   - Who has access: **Anyone**
+
+   Click **Deploy** and copy the **Web app URL** (it ends in `/exec`).
+7. **Point the website at it.** Paste the URL into `config.js` → `SN_ENV` → `API.uat` (or `API.prod`).
+
+For PROD, also set `environment` to `PROD` and `siteUrl` to the real domain on the Settings tab. Leave `ownerEmail` blank to send alerts to the account that runs the script, and set `replyToEmail` to the business inbox.
+
+## Updating the code later
+
+1. Paste the new `Code.gs` over the old one and save.
+2. If the update added tabs or settings, run **setupSheet** again. It only adds what's missing.
+3. Click **Deploy → Manage deployments**. Click the pencil, set **Version** to **New version**, and click **Deploy**.
+
+   Don't use "New deployment" for updates: that creates a new URL and the website would stop reaching the script.
+
+## What's in the Sheet
+
+| Tab | What it holds |
+|---|---|
+| Settings | Prices, lead time, tax, notes, contact info. `PRIVATE` rows are never sent to the website. |
+| Flavors, Zones, BlockedDates, FAQ | The lists from the admin page. Past blocked dates are ignored automatically. |
+| Orders | One row per order request: `SN-####`, status, customer, date, totals, and whether each email sent. |
+| OrderItems | One row per item in an order. |
+| Messages | Contact page and "Message me" messages. |
+| Draft | Unsaved admin changes for "Preview changes" (used from phase 2). |
+| Counters | Next order number (starts at 1042) and next message ID. |
+
+Editing the Sheet updates the website right away. Settings are cached for up to 10 minutes, and an edit clears that cache.
+
+## Email
+
+Emails go out with MailApp from the account that runs the script. That's about 100 emails a day on a personal Gmail.
+
+- If a send fails, the order row says `FAILED: …` in the **Customer email** or **Owner alert** column.
+- In UAT, every subject starts with `[TEST]`.

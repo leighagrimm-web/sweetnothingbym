@@ -119,7 +119,7 @@
 <script src="config.js"></script>
 <script src="layout.js"></script>
 <script>
-(function () {
+SN.ready.then(function () {
   const cfg = SN.load();
   const m = SN.money;
   document.getElementById('lead-days').textContent = cfg.leadDays;
@@ -134,7 +134,7 @@
     document.getElementById('special-icon').innerHTML = SN_ICONS.star;
     document.getElementById('special-text').textContent = cfg.specialText;
   }
-})();
+});
 </script>
 </body>
 </html>

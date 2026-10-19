@@ -31,6 +31,8 @@ button { font: inherit; color: inherit; }
 .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
 .muted { color: var(--muted); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Spam trap field: hidden from people (and screen readers); bots tend to fill it in. */
+.hp { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
 :focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
 
 /* ---------- Prototype banner ---------- */

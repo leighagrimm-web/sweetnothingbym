@@ -17,7 +17,7 @@
 
 <script src="config.js"></script>
 <script>
-(function () {
+SN.ready.then(function () {
   const cfg = SN.load();
   const esc = SN.esc, money = SN.money;
   const params = new URLSearchParams(location.search);
@@ -131,7 +131,7 @@
       '</div>' +
       '<div class="email-foot">Sweet Nothings by M \u00b7 <a href="' + esc(cfg.instagram) + '">' + esc(cfg.instagramHandle) + '</a></div>' +
     '</div>';
-})();
+});
 </script>
 </body>
 </html>

@@ -1,6 +1,5 @@
 /* Shared header and footer for the public pages. */
 (function () {
-  const cfg = SN.load();
   const page = document.body.dataset.page || '';
   const links = [
     ['order', 'order.html', 'Order'],
@@ -10,45 +9,56 @@
     ['faq', 'faq.html', 'FAQ'],
     ['contact', 'contact.html', 'Contact']
   ];
-  const count = SN.getBag().reduce((a, it) => a + it.qty, 0);
   const onOrder = page === 'order';
 
-  const header = document.getElementById('site-header');
-  if (header) {
-    header.innerHTML =
-      (SN.isPreview()
-        ? '<div class="preview-banner" role="status"><span><strong>Preview mode:</strong> you’re seeing your unsaved changes. Customers can’t see this yet.</span><button type="button" id="exit-preview">Exit preview</button></div>'
-        : '<div class="proto-banner">Prototype preview: orders here are for demo only and are not sent anywhere.</div>') +
-      '<header class="site-header"><div class="wrap">' +
-        '<a class="brand" href="index.html"><img src="logo.png" alt="Sweet Nothings by M"><span>Sweet Nothings <em>by M</em></span></a>' +
-        '<div class="header-right">' +
-          '<nav class="main-nav" aria-label="Main">' +
-            links.map(([key, href, label]) => '<a href="' + href + '"' + (key === page ? ' aria-current="page"' : '') + '>' + label + '</a>').join('') +
+  // Drawn right away from saved/default settings so the page doesn't flash, then redrawn once if the Sheet's settings differ.
+  let drawn = '';
+  function render() {
+    const cfg = SN.load();
+    const preview = SN.isPreview();
+    const sig = JSON.stringify([preview, cfg.instagram, cfg.instagramHandle, cfg.pickupCity]);
+    if (sig === drawn) return;
+    drawn = sig;
+    const count = SN.getBag().reduce((a, it) => a + it.qty, 0);
+    const header = document.getElementById('site-header');
+    if (header) {
+      header.innerHTML =
+        (preview
+          ? '<div class="preview-banner" role="status"><span><strong>Preview mode:</strong> you’re seeing your unsaved changes. Customers can’t see this yet.</span><button type="button" id="exit-preview">Exit preview</button></div>'
+          : SN_ENV.name === 'uat' ? '<div class="proto-banner">Test site: orders and messages here are for testing only.</div>' : '') +
+        '<header class="site-header"><div class="wrap">' +
+          '<a class="brand" href="index.html"><img src="logo.png" alt="Sweet Nothings by M"><span>Sweet Nothings <em>by M</em></span></a>' +
+          '<div class="header-right">' +
+            '<nav class="main-nav" aria-label="Main">' +
+              links.map(([key, href, label]) => '<a href="' + href + '"' + (key === page ? ' aria-current="page"' : '') + '>' + label + '</a>').join('') +
+            '</nav>' +
+            '<a class="icon-btn" href="' + SN.esc(cfg.instagram) + '" target="_blank" rel="noopener" aria-label="Instagram ' + SN.esc(cfg.instagramHandle) + '">' + SN_ICONS.insta + '</a>' +
+            (onOrder
+              ? '<button type="button" class="bag-btn" id="bag-btn" aria-label="Open bag">' + SN_ICONS.bag + ' Bag <span class="bag-count" id="bag-count">' + count + '</span></button>'
+              : '<a class="bag-btn" href="order.html?bag=1" aria-label="Open bag">' + SN_ICONS.bag + ' Bag <span class="bag-count">' + count + '</span></a>') +
+          '</div>' +
+        '</div></header>';
+    }
+
+    const exitBtn = document.getElementById('exit-preview');
+    if (exitBtn) exitBtn.addEventListener('click', () => { SN.exitPreview(); location.href = location.pathname; });
+
+    const footer = document.getElementById('site-footer');
+    if (footer) {
+      footer.innerHTML =
+        '<footer class="site-footer"><div class="wrap">' +
+          '<span>© Sweet Nothings by M · Pickup in ' + SN.esc(cfg.pickupCity) + '</span>' +
+          '<nav aria-label="Footer">' +
+            '<a href="' + SN.esc(cfg.instagram) + '" target="_blank" rel="noopener">Instagram ' + SN.esc(cfg.instagramHandle) + '</a>' +
+            '<a href="faq.html">FAQ</a>' +
+            '<a href="contact.html">Contact</a>' +
+            '<a href="admin.html">Owner admin (prototype)</a>' +
           '</nav>' +
-          '<a class="icon-btn" href="' + SN.esc(cfg.instagram) + '" target="_blank" rel="noopener" aria-label="Instagram ' + SN.esc(cfg.instagramHandle) + '">' + SN_ICONS.insta + '</a>' +
-          (onOrder
-            ? '<button type="button" class="bag-btn" id="bag-btn" aria-label="Open bag">' + SN_ICONS.bag + ' Bag <span class="bag-count" id="bag-count">' + count + '</span></button>'
-            : '<a class="bag-btn" href="order.html?bag=1" aria-label="Open bag">' + SN_ICONS.bag + ' Bag <span class="bag-count">' + count + '</span></a>') +
-        '</div>' +
-      '</div></header>';
+        '</div></footer>';
+    }
   }
-
-  const exitBtn = document.getElementById('exit-preview');
-  if (exitBtn) exitBtn.addEventListener('click', () => { SN.exitPreview(); location.href = location.pathname; });
-
-  const footer = document.getElementById('site-footer');
-  if (footer) {
-    footer.innerHTML =
-      '<footer class="site-footer"><div class="wrap">' +
-        '<span>© Sweet Nothings by M · Pickup in ' + SN.esc(cfg.pickupCity) + '</span>' +
-        '<nav aria-label="Footer">' +
-          '<a href="' + SN.esc(cfg.instagram) + '" target="_blank" rel="noopener">Instagram ' + SN.esc(cfg.instagramHandle) + '</a>' +
-          '<a href="faq.html">FAQ</a>' +
-          '<a href="contact.html">Contact</a>' +
-          '<a href="admin.html">Owner admin (prototype)</a>' +
-        '</nav>' +
-      '</div></footer>';
-  }
+  render();
+  SN.ready.then(render);
 })();
 
 /* ---------- Quick "Message me" form (email + message), opened by any [data-quick-message] button ---------- */
@@ -78,7 +88,9 @@
         '<div class="field"><label class="label" for="qm-msg">Your message</label>' +
           '<textarea class="input" id="qm-msg" rows="6" required aria-describedby="qm-msg-err" placeholder="Ask me anything: flavors, allergies, a design idea, an event…"></textarea>' +
           '<p class="err" id="qm-msg-err" hidden>Please add a message.</p></div>' +
-        '<button type="submit" class="btn block">Send message</button>' +
+        '<div class="hp" aria-hidden="true"><label>Website <input type="text" id="qm-website" tabindex="-1" autocomplete="off"></label></div>' +
+        '<button type="submit" class="btn block" id="qm-send">Send message</button>' +
+        '<p class="err" id="qm-send-err" role="alert" hidden></p>' +
         '<p class="hint" style="text-align:center">Want to add a photo or phone number? Use the <a href="contact.html">full contact form</a>.</p>' +
       '</div></form>';
   }
@@ -131,14 +143,28 @@
     email.setAttribute('aria-invalid', String(eBad));
     msg.setAttribute('aria-invalid', String(mBad));
     if (eBad || mBad) { (eBad ? email : msg).focus(); return; }
-    const all = SN.getMessages();
-    all.unshift({ id: Date.now(), createdAt: new Date().toISOString(), name: '', email: email.value.trim(), phone: '', topic, orderNumber: '', message: msg.value.trim(), photoName: '', status: 'New' });
-    SN.setMessages(all);
+    const btn = document.getElementById('qm-send');
+    const sendErr = document.getElementById('qm-send-err');
+    if (btn.getAttribute('aria-disabled') === 'true') return;
+    btn.setAttribute('aria-disabled', 'true');
+    btn.textContent = 'Sending…';
+    sendErr.hidden = true;
+    SN.post('sendMessage', { email: email.value.trim(), message: msg.value.trim(), topic, source: 'quick', website: document.getElementById('qm-website').value })
+      .then((r) => { if (!r || !r.ok) throw r; sent(email.value.trim()); })
+      .catch((r) => {
+        btn.removeAttribute('aria-disabled');
+        btn.textContent = 'Send message';
+        sendErr.textContent = SN.sendErrorText(r);
+        sendErr.hidden = false;
+      });
+  });
+
+  function sent(address) {
     body.innerHTML =
       '<div class="done" role="status"><div class="check">' + SN_ICONS.check + '</div>' +
         '<h3 tabindex="-1" id="qm-done">Message sent!</h3>' +
-        '<p class="muted" style="margin:12px auto 0;max-width:360px">I’ll reply to <strong style="color:var(--navy)">' + esc(email.value.trim()) + '</strong>, usually within 1–2 days.</p>' +
+        '<p class="muted" style="margin:12px auto 0;max-width:360px">I’ll reply to <strong style="color:var(--navy)">' + esc(address) + '</strong>, usually within 1–2 days.</p>' +
         '<button type="button" class="btn" data-qm="close" style="margin-top:22px">Done</button></div>';
     document.getElementById('qm-done').focus();
-  });
+  }
 })();
