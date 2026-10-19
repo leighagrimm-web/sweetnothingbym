@@ -23,10 +23,12 @@
 <div class="wrap admin-layout">
   <nav class="admin-nav" aria-label="Admin sections">
     <a href="#orders">Orders</a>
+    <a href="#messages">Messages</a>
     <a href="#custom">Custom pricing</a>
     <a href="#artisan">Artisan &amp; flavors</a>
     <a href="#rules">Ordering rules</a>
     <a href="#zones">Drop-off zones</a>
+    <a href="#faq">FAQ</a>
     <a href="#settings">Tax &amp; contact</a>
   </nav>
 
@@ -34,35 +36,40 @@
     <div class="admin-title">
       <div>
         <h1>Shop settings</h1>
-        <p>Changes show on the order page as soon as you save.</p>
+        <p>Use <strong>Preview changes</strong> to see the site with your edits before anything goes live. Customers only see changes after you save.</p>
       </div>
-      <button type="button" class="btn" id="save-top">Save changes</button>
+      <div class="row-gap" style="gap:10px">
+        <a class="btn ghost" href="index.html?preview=1" target="_blank" data-preview>Preview changes</a>
+        <button type="button" class="btn" id="save-top">Save changes</button>
+      </div>
     </div>
 
     <section class="panel-card" id="orders" aria-labelledby="orders-h">
       <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-start">
-        <div><h2 id="orders-h">Orders</h2><p class="sub">Orders placed on the site. Update the status as you invoice, get paid and bake.</p></div>
+        <div><h2 id="orders-h">Orders</h2><p class="sub">New requests come in as <strong>Pending review</strong>. Click <strong>Review</strong> to approve as-is or with changes. Either way, the QuickBooks invoice goes to the customer.</p></div>
         <button type="button" class="btn ghost small" id="clear-orders">Clear demo orders</button>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Order</th><th>Customer</th><th>Needed by</th><th>Event</th><th>Cookies</th><th>Pickup / drop-off</th><th>Total</th><th>Status</th></tr></thead>
+        <thead><tr><th>Order</th><th>Customer</th><th>Needed by</th><th>Event</th><th>Cookies</th><th>Pickup / drop-off</th><th>Total</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
         <tbody id="orders-body"></tbody>
       </table></div>
     </section>
 
+    <section class="panel-card" id="messages" aria-labelledby="messages-h">
+      <h2 id="messages-h">Messages</h2>
+      <p class="sub">Questions sent from the Contact page. In the real site these also land in your email inbox, so you can just hit reply.</p>
+      <div class="stack" id="msg-list"></div>
+    </section>
+
     <section class="panel-card" id="custom" aria-labelledby="custom-h">
       <h2 id="custom-h">Custom cookie pricing</h2>
-      <p class="sub">Price per cookie is set by how many different designs the customer picks.</p>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Designs from</th><th>Designs to</th><th>Price per cookie</th><th><span class="sr-only">Delete</span></th></tr></thead>
-        <tbody id="tiers-body"></tbody>
-      </table></div>
-      <button type="button" class="btn dashed" data-act="add-tier" style="margin-top:14px">+ Add a price tier</button>
-      <div class="fields" style="margin-top:22px">
-        <div class="field"><label class="label" for="maxDesigns">Most designs allowed</label><div class="input-wrap"><input id="maxDesigns" type="number" min="1" max="24" data-path="maxDesigns" data-type="int"><span>designs</span></div><p class="hint">Customers can pick 1 up to this number.</p></div>
+      <p class="sub">Customers see a starting price and an estimate. You set the final price when you approve each order.</p>
+      <div class="fields">
+        <div class="field"><label class="label" for="customBasePrice">Starting price</label><div class="input-wrap"><span>$</span><input id="customBasePrice" type="number" min="0" step="0.25" data-path="customBasePrice" data-type="num"><span>/ cookie</span></div></div>
         <div class="field"><label class="label" for="minQty">Minimum order</label><div class="input-wrap"><input id="minQty" type="number" min="1" data-path="minQty" data-type="int"><span>cookies</span></div></div>
+        <div class="field"><label class="label" for="maxDesigns">Most designs a customer can pick</label><div class="input-wrap"><input id="maxDesigns" type="number" min="1" max="24" data-path="maxDesigns" data-type="int"><span>designs</span></div></div>
+        <div class="field" style="grid-column:1 / -1"><label class="label" for="customNote">Pricing note shown to customers</label><textarea class="input" id="customNote" rows="2" data-path="customNote"></textarea></div>
       </div>
-      <p class="err" id="tier-warn" hidden style="margin-top:12px"></p>
     </section>
 
     <section class="panel-card" id="artisan" aria-labelledby="artisan-h">
@@ -100,7 +107,8 @@
       <span class="label" style="display:block;margin-top:20px">Blocked dates</span>
       <div class="row-gap" id="blocked" style="margin-top:8px"></div>
       <form id="add-block" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;align-items:flex-end">
-        <div class="field"><label class="label" for="new-block">Block a date</label><input class="input" id="new-block" type="date"></div>
+        <div class="field"><label class="label" for="new-block">Block a date</label><input class="input" id="new-block" type="date">
+        <p class="hint">Dates that have passed are removed automatically.</p></div>
         <button type="submit" class="btn navy">+ Block date</button>
       </form>
     </section>
@@ -113,6 +121,13 @@
         <tbody id="zones-body"></tbody>
       </table></div>
       <button type="button" class="btn dashed" data-act="add-zone" style="margin-top:14px">+ Add a ZIP code</button>
+    </section>
+
+    <section class="panel-card" id="faq" aria-labelledby="faq-h">
+      <h2 id="faq-h">FAQ</h2>
+      <p class="sub">These show on the FAQ page in this order. Replace anything in [brackets] with your own details.</p>
+      <div class="stack" id="faq-editor"></div>
+      <button type="button" class="btn dashed" data-act="add-faq" style="margin-top:14px">+ Add a question</button>
     </section>
 
     <section class="panel-card" id="settings" aria-labelledby="settings-h">
@@ -131,11 +146,15 @@
   </main>
 </div>
 
+<div class="scrim" id="scrim"></div>
+<aside class="panel review-panel" id="review" role="dialog" aria-modal="true" aria-labelledby="review-title" tabindex="-1"></aside>
+
 <div class="save-bar" id="save-bar" role="region" aria-label="Unsaved changes">
   <div class="wrap">
     <span>You have unsaved changes.</span>
     <div class="row-gap">
       <button type="button" class="btn ghost small" id="discard">Discard</button>
+      <a class="btn ghost small" href="index.html?preview=1" target="_blank" data-preview>Preview changes</a>
       <button type="button" class="btn small" id="save-bottom">Save changes</button>
     </div>
   </div>

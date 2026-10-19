@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact · Sweet Nothings by M</title>
+<meta name="description" content="Questions about cookies, allergies or a custom design? Send Sweet Nothings by M a message.">
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="contact">
+<div id="site-header"></div>
+<main>
+  <section class="hero wrap">
+    <p class="eyebrow">Contact</p>
+    <h1>Let’s talk cookies</h1>
+    <p class="lead">Questions about flavors, allergies or a custom design you have in mind? Send a message and I’ll get back to you by email.</p>
+  </section>
+
+  <section class="section wrap" style="padding-top:12px">
+    <div class="contact-grid">
+      <div class="content-card" id="form-card">
+        <form id="contact-form" novalidate>
+          <div class="stack" style="gap:16px">
+            <div class="grid-2">
+              <div class="field">
+                <label class="label" for="m-name">Your name</label>
+                <input class="input" id="m-name" name="name" type="text" autocomplete="name">
+              </div>
+              <div class="field">
+                <label class="label" for="m-topic">What’s it about?</label>
+                <select class="input" id="m-topic" name="topic">
+                  <option>General question</option>
+                  <option>Custom design idea</option>
+                  <option>Allergies or dietary needs</option>
+                  <option>An existing order</option>
+                  <option>Special events or classes</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="label" for="m-email">Email <span class="muted" style="font-weight:400">(required)</span></label>
+                <input class="input" id="m-email" name="email" type="email" autocomplete="email" required aria-describedby="m-email-err">
+                <p class="err" id="m-email-err" hidden>Please enter a valid email so I can reply.</p>
+              </div>
+              <div class="field">
+                <label class="label" for="m-phone">Phone <span class="muted" style="font-weight:400">(optional)</span></label>
+                <input class="input" id="m-phone" name="phone" type="tel" autocomplete="tel">
+              </div>
+            </div>
+            <div class="field" id="order-num-wrap" hidden>
+              <label class="label" for="m-order">Order number <span class="muted" style="font-weight:400">(if you have it)</span></label>
+              <input class="input" id="m-order" name="order" type="text" placeholder="SN-1042">
+            </div>
+            <div class="field">
+              <label class="label" for="m-msg">Your message</label>
+              <textarea class="input" id="m-msg" name="message" rows="6" required aria-describedby="m-msg-err" placeholder="Tell me what you’re thinking: the occasion, date, colors, theme, how many cookies…"></textarea>
+              <p class="err" id="m-msg-err" hidden>Please add a message.</p>
+            </div>
+            <div class="field">
+              <span class="label">Photo (optional)</span>
+              <label class="upload" for="m-photo"><span id="m-photo-thumb"></span>
+                <span><strong id="m-photo-label">Add an inspiration photo</strong><br><span class="hint">JPG or PNG, up to 10 MB</span></span>
+                <input type="file" id="m-photo" accept="image/*" class="sr-only">
+              </label>
+            </div>
+            <div>
+              <button type="submit" class="btn btn-lg">Send message</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <aside class="side-card" aria-label="Other ways to reach me">
+        <h2>Good to know</h2>
+        <p class="muted" style="margin:0">I usually reply within 1–2 days. For quick questions about ingredients or allergies, the FAQ may already have your answer.</p>
+        <a class="row-link" href="faq.html"><span class="icon-btn" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F2A44" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 015 0c0 1.7-2.5 2-2.5 4"/><circle cx="12" cy="17" r=".6" fill="#1F2A44"/></svg></span>Read the FAQ</a>
+        <a class="row-link" id="ig-link" href="#" target="_blank" rel="noopener"><span class="icon-btn" id="ig-icon" aria-hidden="true"></span><span id="ig-handle">See my latest work on Instagram</span></a>
+        <a class="row-link" href="order.html"><span class="icon-btn" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F2A44" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1.2 12H6.2z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg></span>Ready to order? Start here</a>
+      </aside>
+    </div>
+  </section>
+</main>
+<div id="site-footer"></div>
+<script src="config.js"></script>
+<script src="layout.js"></script>
+<script>
+(function () {
+  const cfg = SN.load();
+  const $ = (s) => document.querySelector(s);
+  $('#ig-link').href = cfg.instagram;
+  $('#ig-icon').innerHTML = SN_ICONS.insta;
+  $('#m-photo-thumb').innerHTML = SN_ICONS.upload;
+
+  // Preselect topic from a link like contact.html?topic=design
+  const topicParam = new URLSearchParams(location.search).get('topic');
+  if (topicParam === 'design') $('#m-topic').value = 'Custom design idea';
+  if (topicParam === 'allergy') $('#m-topic').value = 'Allergies or dietary needs';
+  const syncOrderField = () => { $('#order-num-wrap').hidden = $('#m-topic').value !== 'An existing order'; };
+  $('#m-topic').addEventListener('change', syncOrderField);
+  syncOrderField();
+
+  let photoName = '', photoUrl = '';
+  $('#m-photo').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (photoUrl) URL.revokeObjectURL(photoUrl);
+    photoName = f ? f.name : '';
+    photoUrl = f ? URL.createObjectURL(f) : '';
+    $('#m-photo-label').textContent = f ? 'Attached: ' + f.name : 'Add an inspiration photo';
+    $('#m-photo-thumb').innerHTML = f ? '<img src="' + photoUrl + '" alt="">' : SN_ICONS.upload;
+  });
+
+  const emailOk = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  function check(showAll) {
+    const e = $('#m-email'), m = $('#m-msg');
+    const eBad = !emailOk(e.value), mBad = !m.value.trim();
+    if (showAll || e.dataset.touched) { $('#m-email-err').hidden = !eBad; e.setAttribute('aria-invalid', String(eBad)); }
+    if (showAll || m.dataset.touched) { $('#m-msg-err').hidden = !mBad; m.setAttribute('aria-invalid', String(mBad)); }
+    return !(eBad || mBad);
+  }
+  ['#m-email', '#m-msg'].forEach((s) => {
+    $(s).addEventListener('blur', (ev) => { ev.target.dataset.touched = '1'; check(false); });
+    $(s).addEventListener('input', () => check(false));
+  });
+
+  $('#contact-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    $('#m-email').dataset.touched = '1'; $('#m-msg').dataset.touched = '1';
+    if (!check(true)) { (emailOk($('#m-email').value) ? $('#m-msg') : $('#m-email')).focus(); return; }
+    const msg = {
+      id: Date.now(),
+      createdAt: new Date().toISOString(),
+      name: $('#m-name').value.trim(),
+      email: $('#m-email').value.trim(),
+      phone: $('#m-phone').value.trim(),
+      topic: $('#m-topic').value,
+      orderNumber: $('#m-topic').value === 'An existing order' ? $('#m-order').value.trim() : '',
+      message: $('#m-msg').value.trim(),
+      photoName,
+      status: 'New'
+    };
+    const all = SN.getMessages(); all.unshift(msg); SN.setMessages(all);
+    const first = msg.name ? msg.name.split(' ')[0] : '';
+    $('#form-card').innerHTML =
+      '<div class="done" role="status">' +
+        '<div class="check">' + SN_ICONS.check + '</div>' +
+        '<h3>Thanks' + (first ? ', ' + SN.esc(first) : '') + '! Your message is on its way.</h3>' +
+        '<p class="muted" style="margin:12px auto 0;max-width:440px">I’ll reply to <strong style="color:var(--navy)">' + SN.esc(msg.email) + '</strong>, usually within 1–2 days.</p>' +
+        '<div class="row-gap" style="justify-content:center;margin-top:22px;gap:10px"><a class="btn ghost" href="faq.html">Browse the FAQ</a><a class="btn" href="order.html">Start your order</a></div>' +
+      '</div>';
+    $('#form-card').querySelector('h3').setAttribute('tabindex', '-1');
+    $('#form-card').querySelector('h3').focus();
+  });
+})();
+</script>
+</body>
+</html>

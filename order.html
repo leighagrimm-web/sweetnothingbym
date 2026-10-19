@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order Cookies · Sweet Nothings by M</title>
+<meta name="description" content="Order custom decorated cookies and artisan cookies from Sweet Nothings by M. Pickup in Rosemont, IL or local drop-off.">
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="order">
+<div id="site-header"></div>
+
+<main>
+  <section class="hero wrap">
+    <p class="eyebrow">Order online</p>
+    <h1>Start your order</h1>
+    <p class="lead">Choose your cookies, add them to your bag, then pick your date at checkout. Please order at least <span id="lead-days">8</span> days ahead. Pickup in Rosemont or local drop-off.</p>
+  </section>
+
+  <section class="wrap" id="special-wrap" hidden>
+    <div class="special">
+      <span id="special-icon"></span>
+      <div><strong>Special:</strong> <span id="special-text"></span></div>
+    </div>
+  </section>
+
+  <section class="section wrap" aria-labelledby="menu-title">
+    <h2 id="menu-title">The menu</h2>
+    <p id="closed-note" class="missing" hidden>We're not taking new orders right now. Check back soon or follow along on Instagram.</p>
+    <div class="menu-grid" id="menu"></div>
+  </section>
+</main>
+
+<div id="site-footer"></div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" tabindex="-1"></aside>
+
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <span id="toast-icon"></span><span id="toast-text"></span>
+  <button type="button" id="toast-view">View bag</button>
+</div>
+
+<script src="config.js"></script>
+<script src="layout.js"></script>
+<script src="order.js"></script>
+</body>
+</html>

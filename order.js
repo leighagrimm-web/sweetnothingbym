@@ -11,7 +11,7 @@
   let toastTimer = null;
   const checkout = {
     eventType: '', eventOther: '', date: '', fulfillment: 'pickup',
-    address: '', city: '', zip: '', name: '', email: '', phone: ''
+    address: '', city: '', zip: '', name: '', email: '', phone: '', allergies: ''
   };
 
   const $ = (sel, root) => (root || document).querySelector(sel);
@@ -36,9 +36,9 @@
     large: '<svg width="120" height="120" viewBox="0 0 120 120" fill="none" aria-hidden="true"><circle cx="60" cy="60" r="44" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="46" cy="48" r="5" fill="#1F2A44"/><circle cx="70" cy="44" r="4" fill="#1F2A44"/><circle cx="74" cy="70" r="5" fill="#1F2A44"/><circle cx="50" cy="74" r="4" fill="#1F2A44"/><circle cx="60" cy="60" r="3" fill="#C65A4B"/></svg>'
   };
   const bg = { custom: '#F7E3DD', mini: '#EDE3DA', large: '#E4E7EE' };
-  const lowestCustom = Math.min.apply(null, cfg.customTiers.map((t) => t.price));
+  const customEach = SN.customPrice(cfg);
   const menuItems = [
-    { kind: 'custom', title: 'Custom Cookies', desc: 'Hand-decorated to your theme, with up to ' + cfg.maxDesigns + ' different designs per set. Tell us your vision and share an inspiration photo.', price: 'From ' + money(lowestCustom) + ' / cookie', small: '1 dozen min.', cta: 'Customize & add' },
+    { kind: 'custom', title: 'Custom Cookies', desc: 'Hand-decorated to your theme. Tell us your vision and share an inspiration photo. ' + (cfg.customNote || ''), price: 'Starting at ' + money(customEach) + ' / cookie', small: '1 dozen min.', cta: 'Customize & add' },
     { kind: 'mini', title: 'Mini Artisan', desc: 'Bite-size classics. Mix up to ' + cfg.flavorsPerDozen + ' flavors per dozen, then add extras one at a time.', price: money(cfg.miniPerDozen) + ' / dozen', small: money(SN.perCookie(cfg, 'mini')) + ' each', cta: 'Choose flavors' },
     { kind: 'large', title: 'Large Artisan', desc: 'Big, bakery-style cookies. Mix up to ' + cfg.flavorsPerDozen + ' flavors per dozen, then add extras one at a time.', price: money(cfg.largePerDozen) + ' / dozen', small: money(SN.perCookie(cfg, 'large')) + ' each', cta: 'Choose flavors' }
   ];
@@ -105,12 +105,6 @@
       '<button type="button" class="x-btn" data-act="close" aria-label="Close">' + SN_ICONS.close + '</button></div>';
   }
 
-  function tierHint() {
-    return cfg.customTiers.slice().sort((a, b) => a.from - b.from).map((t) =>
-      (t.from === t.to ? t.from + ' design' + (t.from > 1 ? 's' : '') : t.from + '–' + t.to + ' designs') + ' ' + money(t.price)
-    ).join(' · ') + ' per cookie';
-  }
-
   function renderPanel() {
     if (mode === 'custom') panel.innerHTML = renderCustom();
     else if (mode === 'mini' || mode === 'large') panel.innerHTML = renderArtisan();
@@ -120,21 +114,34 @@
     if (mode === 'bag') updateCheckoutUI();
   }
 
+  // Dropdown options for quantities. Dozens are labeled so they're easy to spot.
+  const QTY_MAX = 240;
+  function qtyOptions(from, to, current, dozenLabels) {
+    let html = '';
+    const top = Math.max(to, current || 0);
+    for (let n = from; n <= top; n++) {
+      const label = dozenLabels && n > 0 && n % 12 === 0 ? n + ' (' + (n / 12) + ' dozen)' : String(n);
+      html += '<option value="' + n + '"' + (n === current ? ' selected' : '') + '>' + label + '</option>';
+    }
+    return html;
+  }
+
   function renderCustom() {
     let pills = '';
     for (let n = 1; n <= cfg.maxDesigns; n++) pills += '<button type="button" class="pill" data-act="design" data-n="' + n + '" aria-pressed="false">' + n + '</button>';
-    return head('Custom Cookies', 'From ' + money(lowestCustom) + ' per cookie · 1 dozen minimum') +
+    return head('Custom Cookies', 'Starting at ' + money(customEach) + ' per cookie · 1 dozen minimum') +
       '<div class="panel-body"><div class="stack" style="gap:22px">' +
         '<div class="field"><span class="label" id="designs-label">How many different designs?</span>' +
           '<div class="row-gap" role="group" aria-labelledby="designs-label">' + pills + '</div>' +
-          '<p class="hint">' + esc(tierHint()) + '</p></div>' +
+          '<p class="hint">Helps M plan and price your set.</p></div>' +
         '<div class="field"><span class="label" id="qty-label">Quantity</span>' +
           '<div class="qty" role="group" aria-labelledby="qty-label">' +
             '<button type="button" class="step" data-act="qty-dec" aria-label="One fewer cookie">' + SN_ICONS.minus + '</button>' +
-            '<output id="d-qty" style="font-size:24px;min-width:44px" aria-live="polite"></output>' +
+            '<select class="input qty-select" id="d-qty" aria-label="Number of custom cookies">' + qtyOptions(cfg.minQty, QTY_MAX, draft.qty, true) + '</select>' +
             '<button type="button" class="step" data-act="qty-inc" aria-label="One more cookie">' + SN_ICONS.plus + '</button>' +
-            '<span class="muted" style="font-size:14px">× <span id="d-each"></span> each</span>' +
-          '</div><p class="hint">Minimum ' + cfg.minQty + '. Add more one at a time.</p></div>' +
+            '<span class="muted" style="font-size:14px">× <span id="d-each"></span> each (starting price)</span>' +
+          '</div><p class="hint">Minimum ' + cfg.minQty + '. Pick a number or use the + and − buttons.</p></div>' +
+        '<div class="note-box">' + esc(cfg.customNote || '') + ' M will confirm your final price before you pay.</div>' +
         '<div class="field"><label class="label" for="d-desc">Describe your cookies</label>' +
           '<textarea class="input" id="d-desc" rows="5" data-draft="desc" placeholder="Theme, colors, names or wording, and how many of each design…"></textarea></div>' +
         '<div class="field"><span class="label">Inspiration photo (optional)</span>' +
@@ -150,18 +157,19 @@
     const per = SN.perCookie(cfg, mode);
     const flavors = cfg.flavors.filter((f) => f.on);
     const rows = flavors.map((f) =>
-      '<div class="flavor-row"><div><div style="font-weight:600">' + esc(f.name) + '</div>' +
-        (f.special ? '<div class="badge">SPECIAL</div>' : '') + '</div>' +
+      '<div class="flavor-row" data-row="' + esc(f.id) + '"><div><div class="flavor-name">' + esc(f.name) + '</div>' +
+        (f.special ? '<div class="badge">SPECIAL</div>' : '') +
+        '<div class="lock-note" hidden>Flavor limit reached</div></div>' +
       '<div class="qty">' +
         '<button type="button" class="step" data-act="f-dec" data-id="' + esc(f.id) + '" aria-label="One less ' + esc(f.name) + '">' + SN_ICONS.minus + '</button>' +
-        '<output data-fq="' + esc(f.id) + '">0</output>' +
+        '<select class="input qty-select qty-select-sm" data-fq="' + esc(f.id) + '" aria-label="Number of ' + esc(f.name) + '">' + qtyOptions(0, 96, draft.fq[f.id] || 0) + '</select>' +
         '<button type="button" class="step" data-act="f-inc" data-id="' + esc(f.id) + '" aria-label="One more ' + esc(f.name) + '">' + SN_ICONS.plus + '</button>' +
       '</div></div>').join('');
     const title = mode === 'mini' ? 'Mini Artisan' : 'Large Artisan';
     const dozen = mode === 'mini' ? cfg.miniPerDozen : cfg.largePerDozen;
     return head(title, money(dozen) + ' per dozen · ' + money(per) + ' each') +
       '<div class="panel-body">' +
-        '<p style="margin:0 0 6px">Pick your flavors. Mix up to ' + cfg.flavorsPerDozen + ' per dozen.</p>' +
+        '<p style="margin:0 0 6px">Pick your flavors. Mix up to ' + cfg.flavorsPerDozen + ' flavors per dozen (' + cfg.flavorsPerDozen * 2 + ' flavors for 2 dozen, and so on).</p>' +
         '<div style="border-top:1px solid var(--line);margin-top:10px">' + (rows || '<p class="hint" style="padding:14px 0">No flavors are available right now.</p>') + '</div>' +
         '<div class="row-gap" style="margin-top:16px"><button type="button" class="btn ghost small" data-act="f-clear">Clear</button></div>' +
         '<p class="hint" id="art-msg" style="margin-top:14px;font-size:14px" aria-live="polite"></p>' +
@@ -171,7 +179,7 @@
 
   function draftState() {
     if (draft.kind === 'custom') {
-      const each = SN.tierPrice(cfg, draft.designs);
+      const each = customEach;
       const err = draft.desc.trim() ? '' : 'Please describe your cookies.';
       return { total: draft.qty * each, each, err };
     }
@@ -182,7 +190,9 @@
   function updateDraftUI() {
     const st = draftState();
     if (draft.kind === 'custom') {
-      $('#d-qty').textContent = draft.qty;
+      const qs = $('#d-qty');
+      if (draft.qty > QTY_MAX && !qs.querySelector('option[value="' + draft.qty + '"]')) qs.insertAdjacentHTML('beforeend', '<option value="' + draft.qty + '">' + draft.qty + '</option>');
+      qs.value = String(draft.qty);
       $('#d-each').textContent = money(st.each);
       $('[data-act="qty-dec"]', panel).disabled = draft.qty <= cfg.minQty;
       $$('[data-act="design"]', panel).forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.n) === draft.designs)));
@@ -193,20 +203,39 @@
       errEl.textContent = st.err;
       $('#d-desc').setAttribute('aria-invalid', String(!!(draftTried && st.err)));
     } else {
-      $$('[data-fq]', panel).forEach((o) => { o.textContent = draft.fq[o.dataset.fq] || 0; });
+      $$('select[data-fq]', panel).forEach((o) => {
+        const v = draft.fq[o.dataset.fq] || 0;
+        if (!o.querySelector('option[value="' + v + '"]')) o.insertAdjacentHTML('beforeend', '<option value="' + v + '">' + v + '</option>');
+        o.value = String(v);
+      });
       $$('[data-act="f-dec"]', panel).forEach((b) => { b.disabled = !(draft.fq[b.dataset.id] > 0); });
       const c = st.check;
+      // Flavor limit: once they've used every allowed flavor, lock the flavors they haven't picked.
+      const atLimit = c.used >= c.max;
+      $$('.flavor-row[data-row]', panel).forEach((row) => {
+        const id = row.dataset.row;
+        const locked = atLimit && !(draft.fq[id] > 0);
+        row.classList.toggle('locked', locked);
+        $('[data-act="f-inc"]', row).disabled = locked;
+        $('select[data-fq]', row).disabled = locked;
+        $('.lock-note', row).hidden = !locked;
+      });
+      const perDozen = cfg.flavorsPerDozen;
+      const nextDozen = (Math.max(1, Math.floor(c.qty / 12)) + 1) * 12;
       const msg = $('#art-msg');
       if (c.err) {
         msg.textContent = c.err;
         msg.style.color = draftTried || c.used > c.max ? 'var(--error)' : 'var(--muted)';
+      } else if (atLimit) {
+        msg.textContent = c.qty + ' cookies · ' + c.used + ' of ' + c.max + ' flavors used. Reach ' + nextDozen + ' cookies to unlock ' + perDozen + ' more flavors.';
+        msg.style.color = 'var(--muted)';
       } else {
         msg.textContent = c.qty + ' cookies · ' + c.used + ' of ' + c.max + ' flavors used';
         msg.style.color = 'var(--muted)';
       }
     }
     const add = $('#add-btn');
-    add.textContent = 'Add to bag · ' + money(st.total);
+    add.textContent = 'Add to bag · ' + (draft.kind === 'custom' ? 'from ' : '') + money(st.total);
     add.setAttribute('aria-disabled', String(!!st.err));
   }
 
@@ -217,7 +246,7 @@
         '<button type="button" class="btn" data-act="close" style="margin-top:18px">Browse the menu</button></div></div>';
     }
     const items = bag.map((it) =>
-      '<div class="bag-item"><div class="top"><strong>' + it.qty + ' ' + esc(SN.itemLabel(it.kind)) + '</strong><strong>' + money(SN.itemTotal(cfg, it)) + '</strong></div>' +
+      '<div class="bag-item"><div class="top"><strong>' + it.qty + ' ' + esc(SN.itemLabel(it.kind)) + '</strong><strong>' + (it.kind === 'custom' ? 'from ' : '') + money(SN.itemTotal(cfg, it)) + '</strong></div>' +
       '<div class="detail">' + esc(SN.describeItem(cfg, it)) + '</div>' +
       (it.desc ? '<div class="note">“' + esc(it.desc) + '”</div>' : '') +
       '<button type="button" class="link-btn" data-act="remove" data-id="' + it.id + '">Remove</button></div>').join('');
@@ -238,6 +267,8 @@
           '<div class="field"><label class="label" for="c-date">Date you need them</label>' +
             '<input class="input" id="c-date" type="date" data-co="date" min="' + minISO + '" value="' + esc(checkout.date) + '">' +
             '<p class="hint" id="date-msg">Earliest available: ' + esc(SN.prettyDate(minISO)) + '</p></div>' +
+          '<div class="field"><label class="label" for="c-allergies">Allergies or dietary needs <span class="muted" style="font-weight:400">(optional)</span></label>' +
+            '<textarea class="input" id="c-allergies" rows="2" data-co="allergies" placeholder="e.g. one guest has a nut allergy, need 6 gluten-free">' + esc(checkout.allergies) + '</textarea></div>' +
         '</div></div>' +
 
         '<div class="sec"><h3>Pickup or drop-off</h3>' +
@@ -268,10 +299,10 @@
         '</div>' +
       '</div>' +
       '<div class="panel-foot">' +
-        '<div class="grand"><strong>Total</strong><strong id="t-total"></strong></div>' +
+        '<div class="grand"><strong>Estimated total</strong><strong id="t-total"></strong></div>' +
         '<div class="missing" id="missing" hidden></div>' +
-        '<button type="button" class="btn block" data-act="submit">Place order</button>' +
-        '<p class="hint" style="text-align:center;margin-top:10px">No payment today. You’ll get a QuickBooks invoice once M confirms your order.</p>' +
+        '<button type="button" class="btn block" data-act="submit">Send order request</button>' +
+        '<p class="hint" style="text-align:center;margin-top:10px">No payment today. M will review your request, confirm the final price, and email you an invoice to pay.</p>' +
       '</div>';
   }
 
@@ -341,15 +372,15 @@
 
   function renderDone() {
     const o = lastOrder;
-    return head('Order placed') +
+    return head('Request sent') +
       '<div class="panel-body"><div class="done">' +
         '<div class="check">' + SN_ICONS.check + '</div>' +
-        '<h3>Your order is in!</h3>' +
+        '<h3>Thanks, we got your request!</h3>' +
         '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(o.number) + '</strong></p>' +
-        '<p class="muted" style="margin:12px 0 0">A confirmation is on its way to ' + esc(o.customer.email) + '. M will review your order and send a QuickBooks invoice so you can pay by card or bank transfer.</p>' +
-        '<p style="margin:20px 0 0;font-family:var(--serif);font-size:30px;font-weight:600">Total ' + money(o.total) + '</p>' +
+        '<p class="muted" style="margin:12px 0 0"><strong>This is not a final order yet.</strong> We sent a copy of your request to ' + esc(o.customer.email) + '. M will review it and send a second email with your confirmation, final price and invoice. Your date is reserved once the invoice is paid.</p>' +
+        '<p style="margin:20px 0 0;font-family:var(--serif);font-size:30px;font-weight:600">Estimated total ' + money(o.total) + '</p>' +
         '<div class="stack" style="margin-top:24px;align-items:center">' +
-          '<a class="btn ghost" href="email.html?o=' + encodeURIComponent(o.number) + '" target="_blank" rel="noopener">Preview the confirmation email</a>' +
+          '<a class="btn ghost" href="email.html?o=' + encodeURIComponent(o.number) + '" target="_blank" rel="noopener">Preview the request email</a>' +
           '<button type="button" class="btn" data-act="close">Back to the menu</button>' +
         '</div>' +
       '</div></div>';
@@ -396,6 +427,13 @@
   });
   panel.addEventListener('change', (e) => {
     const t = e.target;
+    if (t.id === 'd-qty') { draft.qty = Math.max(cfg.minQty, parseInt(t.value, 10) || cfg.minQty); updateDraftUI(); return; }
+    if (t.matches('select[data-fq]')) {
+      const v = parseInt(t.value, 10) || 0;
+      if (v) draft.fq[t.dataset.fq] = v; else delete draft.fq[t.dataset.fq];
+      updateDraftUI();
+      return;
+    }
     if (t.id === 'd-photo') {
       const f = t.files && t.files[0];
       if (draft.photoUrl) URL.revokeObjectURL(draft.photoUrl);
@@ -435,16 +473,23 @@
   }
 
   function submitOrder() {
+    if (SN.isPreview()) {
+      const box = $('#missing');
+      box.hidden = false;
+      box.innerHTML = '<strong>Preview mode:</strong> ordering is turned off while you preview changes.';
+      return;
+    }
     const miss = missingList();
     if (miss.length) { tried = true; updateCheckoutUI(); $('#missing').scrollIntoView({ block: 'nearest' }); return; }
     const q = quote();
     const order = {
       number: SN.nextOrderNumber(),
       createdAt: new Date().toISOString(),
-      status: 'New',
+      status: 'Pending review',
       items: bag.map((it) => Object.assign({}, it, { lineTotal: SN.itemTotal(cfg, it), summary: SN.describeItem(cfg, it) })),
       eventType: checkout.eventType === 'Other' ? 'Other: ' + checkout.eventOther.trim() : checkout.eventType,
       dateNeeded: checkout.date,
+      allergies: checkout.allergies.trim(),
       fulfillment: checkout.fulfillment,
       address: q.isDel ? { street: checkout.address.trim(), city: checkout.city.trim(), zip: checkout.zip } : null,
       customer: { name: checkout.name.trim(), email: checkout.email.trim(), phone: checkout.phone.trim() },
@@ -483,7 +528,7 @@
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   });
 
-  // Opened from another page's Bag link (index.html?bag=1)
+  // Opened from another page's Bag link (order.html?bag=1)
   if (new URLSearchParams(location.search).get('bag')) {
     history.replaceState(null, '', location.pathname);
     openBag(bagBtn);

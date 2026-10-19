@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="proto-banner">Preview of the confirmation email the customer receives. The owner gets a matching "New order" email. <a href="index.html">Back to the site</a></div>
+<div class="proto-banner" id="banner">Email preview. <a href="index.html">Back to the site</a></div>
 <div class="email-wrap" id="email"></div>
 
 <script src="config.js"></script>
@@ -20,15 +20,17 @@
 (function () {
   const cfg = SN.load();
   const esc = SN.esc, money = SN.money;
-  const num = new URLSearchParams(location.search).get('o');
+  const params = new URLSearchParams(location.search);
+  const type = params.get('type') || 'request';      // request | invoice | declined
+  const num = params.get('o');
   let o = SN.getOrders().find((x) => x.number === num);
   let sample = false;
+
   if (!o) {
     sample = true;
     o = {
-      number: 'SN-1042', status: 'New', eventType: 'Baby Shower',
-      dateNeeded: SN.isoDate(SN.minDate(cfg)), fulfillment: 'pickup', address: null,
-      customer: { name: 'Sample Customer', email: 'customer@example.com', phone: '(555) 555-0100' },
+      number: 'SN-1042', eventType: 'Baby Shower', dateNeeded: SN.isoDate(SN.minDate(cfg)), fulfillment: 'pickup', address: null,
+      customer: { name: 'Sample Customer', email: 'customer@example.com', phone: '(847) 555-0100' },
       items: [{ kind: 'custom', qty: 24, designs: 3, desc: 'Soft pink and gold, "Oh Baby" plaques, onesies and baby blocks, 8 of each.', photoName: 'inspo.jpg' }],
       taxRate: cfg.taxRate
     };
@@ -37,42 +39,97 @@
     o.tax = Math.round(o.subtotal * cfg.taxRate) / 100;
     o.deliveryFee = 0;
     o.total = o.subtotal + o.tax;
+    if (type === 'invoice') {
+      const lines = [{ desc: '24 Custom Cookies (3 designs)', qty: 24, unit: 6 }];
+      const t = SN.invoiceTotals(lines, 0, cfg.taxRate);
+      o.invoice = Object.assign({ lines, fee: 0, note: 'These are going to be so cute! The hand-lettered plaques add $1 per cookie.', changed: true, sentAt: new Date().toISOString() }, t);
+    }
+    if (type === 'declined') o.declineNote = 'I\u2019m fully booked that weekend, but I\u2019d love to help with another date!';
   }
+
   const first = (o.customer.name || '').split(' ')[0];
-  const where = o.fulfillment === 'delivery' && o.address
+  const isDel = o.fulfillment === 'delivery' && o.address;
+  const where = isDel
     ? ['Drop-off to', esc(o.address.street) + ', ' + esc(o.address.city) + ' ' + esc(o.address.zip)]
-    : ['Pickup at', esc(cfg.pickupAddress)];
-  const items = o.items.map((it) =>
-    '<div style="padding:8px 0">' +
-      '<div style="display:flex;justify-content:space-between;gap:12px;font-size:15px"><span><strong>' + it.qty + ' ' + esc(SN.itemLabel(it.kind)) + '</strong></span><span>' + money(it.lineTotal) + '</span></div>' +
-      '<div class="hint">' + esc(it.summary) + '</div>' +
-      (it.desc ? '<div style="font-size:14px;color:var(--muted);background:#FBF7F4;border-radius:10px;padding:10px 12px;margin-top:6px"><strong style="color:var(--navy)">Your description:</strong> ' + esc(it.desc) + '</div>' : '') +
-    '</div>').join('');
+    : ['Pickup', type === 'invoice' ? esc(cfg.pickupAddress) : esc(cfg.pickupCity) + ' (address sent once confirmed)'];
+  const facts =
+    '<div class="facts">' +
+      '<div><div class="k">Needed by</div><div class="v">' + esc(SN.prettyDate(o.dateNeeded)) + '</div></div>' +
+      '<div><div class="k">Occasion</div><div class="v">' + esc(o.eventType) + '</div></div>' +
+      '<div><div class="k">' + where[0] + '</div><div class="v">' + where[1] + '</div></div>' +
+      '<div><div class="k">Contact</div><div class="v">' + esc(o.customer.name) + '<br>' + esc(o.customer.phone) + '</div></div>' +
+      (o.allergies ? '<div style="grid-column:1 / -1"><div class="k">Allergies / dietary needs</div><div class="v">' + esc(o.allergies) + '</div></div>' : '') +
+    '</div>';
+  const row = (label, val, bold) => '<div' + (bold ? ' style="border-top:1px solid var(--line);margin-top:6px;padding-top:10px;align-items:baseline"' : '') + '><span' + (bold ? '' : ' class="muted"') + '>' + (bold ? '<strong>' + label + '</strong>' : label) + '</span>' + (bold ? '<strong style="font-family:var(--serif);font-size:30px">' + val + '</strong>' : '<span>' + val + '</span>') + '</div>';
+
+  let subject, title, intro, middle = '', totals = '';
+  if (type === 'invoice' && o.invoice) {
+    const inv = o.invoice;
+    subject = 'Order confirmed \u2013 please pay your invoice \u2013 Sweet Nothings ' + o.number;
+    title = 'You\u2019re confirmed' + (first ? ', ' + esc(first) : '') + '!';
+    intro = '<div style="background:var(--blush);border-radius:12px;padding:16px 18px;font-size:15px">' +
+      (inv.changed ? 'I\u2019ve reviewed your order and updated the price. ' : 'I\u2019ve reviewed your order and it\u2019s all set. ') +
+      'Pay the invoice below to lock in your date.</div>' +
+      (inv.note ? '<div style="font-size:15px;border-left:3px solid var(--coral);padding:4px 0 4px 14px"><em>\u201c' + esc(inv.note) + '\u201d</em><br><span class="muted" style="font-size:13px">\u2014 M</span></div>' : '');
+    middle = '<div style="border-top:1px solid var(--line);padding-top:14px"><h2 style="font-size:24px;margin-bottom:6px">Your invoice</h2>' +
+      inv.lines.map((l) => '<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:15px"><span>' + esc(l.desc) + '<br><span class="hint">' + l.qty + ' \u00d7 ' + money(Number(l.unit)) + '</span></span><span>' + money(l.qty * l.unit) + '</span></div>').join('') + '</div>';
+    totals = row('Subtotal', money(inv.subtotal)) + row('Grocery tax (' + o.taxRate + '%)', money(inv.tax)) +
+      row(isDel ? 'Drop-off' : 'Pickup', isDel ? money(inv.fee) : 'Free') + row('Amount due', money(inv.total), true) +
+      (inv.changed ? '<div><span class="muted" style="font-size:13px">Your original estimate was ' + money(o.total) + '</span><span></span></div>' : '');
+    totals += '</div><div style="text-align:center"><span class="btn" role="img" aria-label="Pay invoice button (links to QuickBooks in the real email)" style="pointer-events:none">Pay invoice \u00b7 ' + money(inv.total) + '</span>' +
+      '<p class="hint" style="margin-top:8px">Secure payment by card or bank transfer through QuickBooks.</p>';
+  } else if (type === 'declined') {
+    subject = 'About your Sweet Nothings order request ' + o.number;
+    title = 'Thank you for thinking of us' + (first ? ', ' + esc(first) : '');
+    intro = '<div style="background:var(--blush);border-radius:12px;padding:16px 18px;font-size:15px">Unfortunately I\u2019m not able to take this order. You haven\u2019t been charged anything.</div>' +
+      (o.declineNote ? '<div style="font-size:15px;border-left:3px solid var(--coral);padding:4px 0 4px 14px"><em>\u201c' + esc(o.declineNote) + '\u201d</em><br><span class="muted" style="font-size:13px">\u2014 M</span></div>' : '');
+  } else {
+    subject = 'Order request received (not yet confirmed) \u2013 Sweet Nothings ' + o.number;
+    title = 'We got your order request' + (first ? ', ' + esc(first) : '') + '!';
+    intro =
+      '<div class="not-final" role="note">' +
+        '<div class="not-final-tag">Not a final order</div>' +
+        '<p style="margin:8px 0 0">This email confirms we <strong>received your request</strong>. Your order is <strong>not confirmed yet</strong>, your date is <strong>not reserved</strong>, and the price below is an <strong>estimate</strong>. You haven\u2019t been charged anything.</p>' +
+      '</div>' +
+      '<div><h2 style="font-size:24px;margin-bottom:10px">What happens next</h2>' +
+        '<ol class="next-steps">' +
+          '<li class="done-step"><strong>Request received</strong><span>That\u2019s this email.</span></li>' +
+          '<li><strong>I review your order</strong><span>I\u2019ll check the design, date and details, usually within 1\u20132 days.</span></li>' +
+          '<li><strong>You get a second email: your confirmation</strong><span>It includes the final price and a QuickBooks invoice. If anything changed from this estimate, I\u2019ll explain why.</span></li>' +
+          '<li><strong>Pay the invoice to lock in your date</strong><span>Your order is final once it\u2019s paid.</span></li>' +
+        '</ol>' +
+      '</div>';
+    middle = '<div style="border-top:1px solid var(--line);padding-top:14px"><h2 style="font-size:24px;margin-bottom:6px">What you requested</h2>' +
+      o.items.map((it) =>
+        '<div style="padding:8px 0"><div style="display:flex;justify-content:space-between;gap:12px;font-size:15px"><strong>' + it.qty + ' ' + esc(SN.itemLabel(it.kind)) + '</strong><span>' + (it.kind === 'custom' ? 'from ' : '') + money(it.lineTotal) + '</span></div>' +
+        '<div class="hint">' + esc(it.summary) + '</div>' +
+        (it.desc ? '<div style="font-size:14px;color:var(--muted);background:#FBF7F4;border-radius:10px;padding:10px 12px;margin-top:6px"><strong style="color:var(--navy)">Your description:</strong> ' + esc(it.desc) + '</div>' : '') +
+        '</div>').join('') + '</div>';
+    totals = row('Subtotal', money(o.subtotal)) + row('Grocery tax (' + o.taxRate + '%)', money(o.tax)) +
+      row(isDel ? 'Drop-off' : 'Pickup', isDel ? money(o.deliveryFee) : 'Free') + row('Estimated total*', money(o.total), true) +
+      '<div><span class="hint">*Estimate only, not a final price. ' + (o.items.some((it) => it.kind === 'custom') ? esc(cfg.customNote || '') + ' ' : '') + 'Your final price will be in your confirmation email.</span><span></span></div>';
+  }
+
+  const banners = {
+    request: 'Preview: email #1, sent automatically when the customer sends their request. M gets a matching \u201cNew order to review\u201d email.',
+    invoice: 'Preview: email #2, the confirmation, sent when M approves. In the real site QuickBooks sends the invoice with a Pay button.',
+    declined: 'Preview: email the customer gets if M declines the request.'
+  };
+  document.getElementById('banner').innerHTML = esc(banners[type] || banners.request) + (sample ? ' <em>(sample order)</em>' : '') + ' <a href="index.html">Back to the site</a>';
 
   document.getElementById('email').innerHTML =
-    '<div class="email-meta"><strong style="color:var(--navy)">Subject:</strong> Your Sweet Nothings order ' + esc(o.number) + ' is in!<br>' +
-      '<strong style="color:var(--navy)">To:</strong> ' + esc(o.customer.email) + (sample ? ' <em>(sample order)</em>' : '') + '</div>' +
+    '<div class="email-meta"><strong style="color:var(--navy)">Subject:</strong> ' + esc(subject) + '<br>' +
+      '<strong style="color:var(--navy)">To:</strong> ' + esc(o.customer.email) + '</div>' +
     '<div class="email">' +
-      '<div class="email-top"><img src="logo.png" alt="Sweet Nothings by M"><h1>Thank you' + (first ? ', ' + esc(first) : '') + '!</h1>' +
+      '<div class="email-top"><img src="logo.png" alt="Sweet Nothings by M"><h1>' + title + '</h1>' +
         '<p class="muted" style="margin:8px 0 0">Order number <strong style="color:var(--navy)">' + esc(o.number) + '</strong></p></div>' +
-      '<div class="email-body">' +
-        '<div style="background:var(--blush);border-radius:12px;padding:16px 18px;font-size:15px"><strong>Next step:</strong> I’ll review your order and send a QuickBooks invoice within 1–2 days. Your date is reserved once the invoice is paid.</div>' +
-        '<div class="facts">' +
-          '<div><div class="k">Needed by</div><div class="v">' + esc(SN.prettyDate(o.dateNeeded)) + '</div></div>' +
-          '<div><div class="k">Occasion</div><div class="v">' + esc(o.eventType) + '</div></div>' +
-          '<div><div class="k">' + where[0] + '</div><div class="v">' + where[1] + '</div></div>' +
-          '<div><div class="k">Contact</div><div class="v">' + esc(o.customer.name) + '<br>' + esc(o.customer.phone) + '</div></div>' +
-        '</div>' +
-        '<div style="border-top:1px solid var(--line);padding-top:14px"><h2 style="font-size:24px;margin-bottom:6px">Your cookies</h2>' + items + '</div>' +
-        '<div class="totals" style="border-top:1px solid var(--line);padding-top:14px">' +
-          '<div><span class="muted">Subtotal</span><span>' + money(o.subtotal) + '</span></div>' +
-          '<div><span class="muted">Grocery tax (' + o.taxRate + '%)</span><span>' + money(o.tax) + '</span></div>' +
-          '<div><span class="muted">' + (o.fulfillment === 'delivery' ? 'Drop-off' : 'Pickup') + '</span><span>' + (o.fulfillment === 'delivery' ? money(o.deliveryFee) : 'Free') + '</span></div>' +
-          '<div style="border-top:1px solid var(--line);margin-top:6px;padding-top:10px;align-items:baseline"><strong>Total</strong><strong style="font-family:var(--serif);font-size:30px">' + money(o.total) + '</strong></div>' +
-        '</div>' +
+      '<div class="email-body">' + intro +
+        (type === 'declined' ? '' : facts) +
+        middle +
+        (totals ? '<div class="totals" style="border-top:1px solid var(--line);padding-top:14px">' + totals + '</div>' : '') +
         '<p class="hint" style="font-size:14px">Questions or changes? Just reply to this email and mention your order number.</p>' +
       '</div>' +
-      '<div class="email-foot">Sweet Nothings by M · <a href="' + esc(cfg.instagram) + '">' + esc(cfg.instagramHandle) + '</a></div>' +
+      '<div class="email-foot">Sweet Nothings by M \u00b7 <a href="' + esc(cfg.instagram) + '">' + esc(cfg.instagramHandle) + '</a></div>' +
     '</div>';
 })();
 </script>

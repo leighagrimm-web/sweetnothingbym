@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAQ · Sweet Nothings by M</title>
+<meta name="description" content="Answers to common questions about Sweet Nothings by M cookies: ingredients, allergen-friendly options, ordering, pickup and drop-off.">
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="faq">
+<div id="site-header"></div>
+<main>
+  <section class="hero wrap">
+    <p class="eyebrow">FAQ</p>
+    <h1>Questions, answered</h1>
+    <p class="lead">Ingredients, allergen-friendly options, ordering and pickup. Don’t see your question? Just ask.</p>
+  </section>
+  <section class="section wrap" style="padding-top:12px">
+    <div class="faq-list" id="faq-list"></div>
+    <div class="content-card faq-cta">
+      <div>
+        <h2 style="font-size:28px;margin-bottom:6px">Still have a question?</h2>
+        <p class="muted" style="margin:0">Ask about flavors, allergies, or a design you have in mind.</p>
+      </div>
+      <div class="row-gap" style="gap:10px">
+        <a class="btn ghost" href="contact.html">Send a message</a>
+        <a class="btn" href="order.html">Start your order</a>
+      </div>
+    </div>
+  </section>
+</main>
+<div id="site-footer"></div>
+<script src="config.js"></script>
+<script src="layout.js"></script>
+<script>
+(function () {
+  const faqs = (SN.load().faqs || []).filter((f) => f.q && f.q.trim());
+  const list = document.getElementById('faq-list');
+  list.innerHTML = faqs.length
+    ? faqs.map((f, i) => '<details class="faq"' + (i === 0 ? ' open' : '') + '><summary>' + SN.esc(f.q) + '</summary><div class="faq-a">' + SN.esc(f.a) + '</div></details>').join('')
+    : '<p class="muted">No questions yet.</p>';
+})();
+</script>
+</body>
+</html>

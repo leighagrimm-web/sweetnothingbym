@@ -3,50 +3,138 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Order Cookies · Sweet Nothings by M</title>
-<meta name="description" content="Order custom decorated cookies and artisan cookies from Sweet Nothings by M. Pickup in Rosemont, IL or local drop-off.">
+<title>Sweet Nothings by M · Custom &amp; Artisan Cookies</title>
+<meta name="description" content="Custom decorated and artisan cookies by Sweet Nothings by M. Pickup in Rosemont, IL or local drop-off.">
 <link rel="icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
-<body data-page="order">
+<body data-page="home">
 <div id="site-header"></div>
 
 <main>
-  <section class="hero wrap">
-    <p class="eyebrow">Order online</p>
-    <h1>Cookies made for your moment</h1>
-    <p class="lead">Choose your cookies, add them to your bag, then pick your date at checkout. Please order at least <span id="lead-days">8</span> days ahead. Pickup in Rosemont or local drop-off.</p>
+  <section class="landing-hero">
+    <div class="wrap landing-hero-grid">
+      <div>
+        <p class="eyebrow">Custom &amp; artisan cookies · <span id="pickup-city">Rosemont, IL</span></p>
+        <h1>Handmade cookies for life’s sweetest moments</h1>
+        <p class="lead">Hand-decorated custom sets for birthdays, showers and celebrations, plus small-batch artisan favorites by the dozen.</p>
+        <div class="row-gap" style="margin-top:26px;gap:12px">
+          <a class="btn btn-lg" href="order.html">Start your order</a>
+          <a class="btn ghost btn-lg" href="gallery.html">See past creations</a>
+        </div>
+        <p class="hint" style="margin-top:14px">Please order at least <span id="lead-days">8</span> days ahead.</p>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="hero-photo">
+          <span class="tag">[Hero photo of her cookies]</span>
+          <img src="logo.png" alt="" class="hero-logo">
+        </div>
+      </div>
+    </div>
   </section>
 
-  <section class="wrap" id="special-wrap" hidden>
+  <section class="wrap" id="special-wrap" hidden style="margin-top:8px">
     <div class="special">
       <span id="special-icon"></span>
       <div><strong>Special:</strong> <span id="special-text"></span></div>
     </div>
   </section>
 
-  <section class="section wrap" aria-labelledby="menu-title">
-    <h2 id="menu-title">The menu</h2>
-    <p id="closed-note" class="missing" hidden>We're not taking new orders right now. Check back soon or follow along on Instagram.</p>
-    <div class="menu-grid" id="menu"></div>
+  <section class="section wrap" aria-labelledby="make-h">
+    <h2 id="make-h">What I make</h2>
+    <div class="menu-grid">
+      <article class="card">
+        <div class="card-media" style="background:#F7E3DD"><span class="tag">Photo coming soon</span><svg width="110" height="110" viewBox="0 0 120 120" fill="none" aria-hidden="true"><circle cx="60" cy="60" r="46" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="60" cy="60" r="36" stroke="#E8B4A8" stroke-width="2" stroke-dasharray="4 5"/><path d="M60 76s-16-9.5-16-20a8.5 8.5 0 0116-4 8.5 8.5 0 0116 4c0 10.5-16 20-16 20z" fill="#C65A4B"/></svg></div>
+        <div class="card-body">
+          <h3>Custom Cookies</h3>
+          <p class="desc">Hand-decorated to match your theme, colors and celebration. Share your idea and an inspiration photo.</p>
+          <p class="price">Starting at <span id="p-custom" style="font-weight:600;color:var(--navy)">$5.00</span> / cookie</p>
+        </div>
+      </article>
+      <article class="card">
+        <div class="card-media" style="background:#EDE3DA"><span class="tag">Photo coming soon</span><svg width="130" height="104" viewBox="0 0 140 110" fill="none" aria-hidden="true"><circle cx="42" cy="58" r="26" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="96" cy="44" r="26" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="80" cy="82" r="20" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="36" cy="52" r="3" fill="#1F2A44"/><circle cx="49" cy="63" r="3" fill="#1F2A44"/><circle cx="90" cy="40" r="3" fill="#C65A4B"/><circle cx="102" cy="50" r="3" fill="#E8B4A8"/><circle cx="78" cy="80" r="3" fill="#1F2A44"/></svg></div>
+        <div class="card-body">
+          <h3>Mini Artisan</h3>
+          <p class="desc">Bite-size classics like chocolate chip and funfetti. Mix up to <span class="fpd">4</span> flavors per dozen.</p>
+          <p class="price"><span id="p-mini" style="font-weight:600;color:var(--navy)">$24.00</span> / dozen</p>
+        </div>
+      </article>
+      <article class="card">
+        <div class="card-media" style="background:#E4E7EE"><span class="tag">Photo coming soon</span><svg width="110" height="110" viewBox="0 0 120 120" fill="none" aria-hidden="true"><circle cx="60" cy="60" r="44" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="46" cy="48" r="5" fill="#1F2A44"/><circle cx="70" cy="44" r="4" fill="#1F2A44"/><circle cx="74" cy="70" r="5" fill="#1F2A44"/><circle cx="50" cy="74" r="4" fill="#1F2A44"/><circle cx="60" cy="60" r="3" fill="#C65A4B"/></svg></div>
+        <div class="card-body">
+          <h3>Large Artisan</h3>
+          <p class="desc">Big, bakery-style cookies in your favorite flavors. Mix up to <span class="fpd">4</span> flavors per dozen.</p>
+          <p class="price"><span id="p-large" style="font-weight:600;color:var(--navy)">$36.00</span> / dozen</p>
+        </div>
+      </article>
+    </div>
+    <div style="text-align:center;margin-top:28px"><a class="btn btn-lg" href="order.html">Start your order</a></div>
+  </section>
+
+  <section class="band" aria-labelledby="how-h">
+    <div class="wrap">
+      <h2 id="how-h" style="font-size:34px;margin-bottom:22px">How ordering works</h2>
+      <ol class="how-steps">
+        <li><strong>Choose your cookies</strong><span>Pick custom, mini or large artisan, and tell me about your event.</span></li>
+        <li><strong>Send your request</strong><span>You’ll get an email right away. Nothing is charged yet.</span></li>
+        <li><strong>I confirm &amp; invoice</strong><span>I review your order and email your confirmation with the final price.</span></li>
+        <li><strong>Pay &amp; enjoy</strong><span>Your date is locked in once paid. Pick up in <span class="pickup-city">Rosemont</span> or choose drop-off.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section wrap" aria-labelledby="gal-h">
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:18px">
+      <h2 id="gal-h" style="margin:0">Recent creations</h2>
+      <a href="gallery.html" style="font-weight:600">View the gallery</a>
+    </div>
+    <div class="gallery-grid">
+      <div class="placeholder">[Cookie photo]</div>
+      <div class="placeholder">[Cookie photo]</div>
+      <div class="placeholder">[Cookie photo]</div>
+      <div class="placeholder">[Cookie photo]</div>
+    </div>
+  </section>
+
+  <section class="wrap" style="padding-bottom:72px">
+    <div class="cta-split">
+      <div class="content-card">
+        <h2 style="font-size:28px;margin-bottom:8px">Have a question?</h2>
+        <p class="muted">Ingredients, allergies, pickup and more.</p>
+        <a class="btn ghost" href="faq.html">Read the FAQ</a>
+      </div>
+      <div class="content-card">
+        <h2 style="font-size:28px;margin-bottom:8px">Have a design idea?</h2>
+        <p class="muted">Send a message and I’ll get back to you.</p>
+        <a class="btn ghost" href="contact.html">Contact me</a>
+      </div>
+    </div>
   </section>
 </main>
 
 <div id="site-footer"></div>
-
-<div class="scrim" id="scrim"></div>
-<aside class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" tabindex="-1"></aside>
-
-<div class="toast" id="toast" role="status" aria-live="polite">
-  <span id="toast-icon"></span><span id="toast-text"></span>
-  <button type="button" id="toast-view">View bag</button>
-</div>
-
 <script src="config.js"></script>
 <script src="layout.js"></script>
-<script src="order.js"></script>
+<script>
+(function () {
+  const cfg = SN.load();
+  const m = SN.money;
+  document.getElementById('lead-days').textContent = cfg.leadDays;
+  document.getElementById('pickup-city').textContent = cfg.pickupCity;
+  document.querySelectorAll('.pickup-city').forEach((el) => { el.textContent = cfg.pickupCity.split(',')[0]; });
+  document.getElementById('p-custom').textContent = m(SN.customPrice(cfg));
+  document.getElementById('p-mini').textContent = m(cfg.miniPerDozen);
+  document.getElementById('p-large').textContent = m(cfg.largePerDozen);
+  document.querySelectorAll('.fpd').forEach((el) => { el.textContent = cfg.flavorsPerDozen; });
+  if (SN.specialActive(cfg)) {
+    document.getElementById('special-wrap').hidden = false;
+    document.getElementById('special-icon').innerHTML = SN_ICONS.star;
+    document.getElementById('special-text').textContent = cfg.specialText;
+  }
+})();
+</script>
 </body>
 </html>
