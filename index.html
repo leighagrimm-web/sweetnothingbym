@@ -19,8 +19,8 @@
     <div class="wrap landing-hero-grid">
       <div>
         <p class="eyebrow">Custom &amp; artisan cookies · <span id="pickup-city">Rosemont, IL</span></p>
-        <h1>Handmade cookies for life’s sweetest moments</h1>
-        <p class="lead">Hand-decorated custom sets for birthdays, showers and celebrations, plus small-batch artisan favorites by the dozen.</p>
+        <h1 id="home-title"></h1>
+        <p class="lead" id="home-intro"></p>
         <div class="row-gap" style="margin-top:26px;gap:12px">
           <a class="btn btn-lg" href="order.html">Start your order</a>
           <a class="btn ghost btn-lg" href="gallery.html">See past creations</a>
@@ -28,10 +28,7 @@
         <p class="hint" style="margin-top:14px">Please order at least <span id="lead-days">8</span> days ahead.</p>
       </div>
       <div class="hero-art" aria-hidden="true">
-        <div class="hero-photo">
-          <span class="tag">[Hero photo of her cookies]</span>
-          <img src="logo.png" alt="" class="hero-logo">
-        </div>
+        <div class="hero-photo" id="hero-photo"></div>
       </div>
     </div>
   </section>
@@ -47,7 +44,7 @@
     <h2 id="make-h">What I make</h2>
     <div class="menu-grid">
       <article class="card">
-        <div class="card-media" style="background:#F7E3DD"><span class="tag">Photo coming soon</span><svg width="110" height="110" viewBox="0 0 120 120" fill="none" aria-hidden="true"><circle cx="60" cy="60" r="46" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="60" cy="60" r="36" stroke="#E8B4A8" stroke-width="2" stroke-dasharray="4 5"/><path d="M60 76s-16-9.5-16-20a8.5 8.5 0 0116-4 8.5 8.5 0 0116 4c0 10.5-16 20-16 20z" fill="#C65A4B"/></svg></div>
+        <div class="card-media" data-photo="custom" style="background:#F7E3DD"><span class="tag">Photo coming soon</span><svg width="110" height="110" viewBox="0 0 120 120" fill="none" aria-hidden="true"><circle cx="60" cy="60" r="46" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="60" cy="60" r="36" stroke="#E8B4A8" stroke-width="2" stroke-dasharray="4 5"/><path d="M60 76s-16-9.5-16-20a8.5 8.5 0 0116-4 8.5 8.5 0 0116 4c0 10.5-16 20-16 20z" fill="#C65A4B"/></svg></div>
         <div class="card-body">
           <h3>Custom Cookies</h3>
           <p class="desc">Hand-decorated to match your theme, colors and celebration. Share your idea and an inspiration photo.</p>
@@ -55,7 +52,7 @@
         </div>
       </article>
       <article class="card">
-        <div class="card-media" style="background:#EDE3DA"><span class="tag">Photo coming soon</span><svg width="130" height="104" viewBox="0 0 140 110" fill="none" aria-hidden="true"><circle cx="42" cy="58" r="26" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="96" cy="44" r="26" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="80" cy="82" r="20" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="36" cy="52" r="3" fill="#1F2A44"/><circle cx="49" cy="63" r="3" fill="#1F2A44"/><circle cx="90" cy="40" r="3" fill="#C65A4B"/><circle cx="102" cy="50" r="3" fill="#E8B4A8"/><circle cx="78" cy="80" r="3" fill="#1F2A44"/></svg></div>
+        <div class="card-media" data-photo="mini" style="background:#EDE3DA"><span class="tag">Photo coming soon</span><svg width="130" height="104" viewBox="0 0 140 110" fill="none" aria-hidden="true"><circle cx="42" cy="58" r="26" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="96" cy="44" r="26" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="80" cy="82" r="20" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="36" cy="52" r="3" fill="#1F2A44"/><circle cx="49" cy="63" r="3" fill="#1F2A44"/><circle cx="90" cy="40" r="3" fill="#C65A4B"/><circle cx="102" cy="50" r="3" fill="#E8B4A8"/><circle cx="78" cy="80" r="3" fill="#1F2A44"/></svg></div>
         <div class="card-body">
           <h3>Mini Artisan</h3>
           <p class="desc">Bite-size classics like chocolate chip and funfetti. Mix up to <span class="fpd">4</span> flavors per dozen.</p>
@@ -63,7 +60,7 @@
         </div>
       </article>
       <article class="card">
-        <div class="card-media" style="background:#E4E7EE"><span class="tag">Photo coming soon</span><svg width="110" height="110" viewBox="0 0 120 120" fill="none" aria-hidden="true"><circle cx="60" cy="60" r="44" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="46" cy="48" r="5" fill="#1F2A44"/><circle cx="70" cy="44" r="4" fill="#1F2A44"/><circle cx="74" cy="70" r="5" fill="#1F2A44"/><circle cx="50" cy="74" r="4" fill="#1F2A44"/><circle cx="60" cy="60" r="3" fill="#C65A4B"/></svg></div>
+        <div class="card-media" data-photo="large" style="background:#E4E7EE"><span class="tag">Photo coming soon</span><svg width="110" height="110" viewBox="0 0 120 120" fill="none" aria-hidden="true"><circle cx="60" cy="60" r="44" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="46" cy="48" r="5" fill="#1F2A44"/><circle cx="70" cy="44" r="4" fill="#1F2A44"/><circle cx="74" cy="70" r="5" fill="#1F2A44"/><circle cx="50" cy="74" r="4" fill="#1F2A44"/><circle cx="60" cy="60" r="3" fill="#C65A4B"/></svg></div>
         <div class="card-body">
           <h3>Large Artisan</h3>
           <p class="desc">Big, bakery-style cookies in your favorite flavors. Mix up to <span class="fpd">4</span> flavors per dozen.</p>
@@ -91,12 +88,7 @@
       <h2 id="gal-h" style="margin:0">Recent creations</h2>
       <a href="gallery.html" style="font-weight:600">View the gallery</a>
     </div>
-    <div class="gallery-grid">
-      <div class="placeholder">[Cookie photo]</div>
-      <div class="placeholder">[Cookie photo]</div>
-      <div class="placeholder">[Cookie photo]</div>
-      <div class="placeholder">[Cookie photo]</div>
-    </div>
+    <div class="gallery-grid" id="recent"></div>
   </section>
 
   <section class="wrap" style="padding-bottom:72px">
@@ -122,6 +114,20 @@
 SN.ready.then(function () {
   const cfg = SN.load();
   const m = SN.money;
+  const p = cfg.pages;
+  // Wording and photos from the Sheet's Pages tab; "Recent creations" = the first 4 Gallery photos.
+  document.getElementById('home-title').textContent = p.homeTitle;
+  document.getElementById('home-intro').textContent = p.homeIntro;
+  const heroUrl = SN.photoUrl(p.homeHeroPhoto);
+  document.getElementById('hero-photo').innerHTML = heroUrl
+    ? '<img src="' + SN.esc(heroUrl) + '" alt="' + SN.esc(p.homeTitle) + '" class="hero-img">'
+    : (SN.photoPlaceholder(p.homeHeroPhoto) ? '<span class="tag">' + SN.esc(SN.photoPlaceholder(p.homeHeroPhoto)) + '</span>' : '') + '<img src="logo.png" alt="" class="hero-logo">';
+  document.querySelectorAll('.card-media[data-photo]').forEach((el) => {
+    const url = SN.photoUrl(cfg.images && cfg.images[el.dataset.photo]);
+    if (url) el.innerHTML = '<img src="' + SN.esc(url) + '" alt="' + SN.esc(el.parentNode.querySelector('h3').textContent) + '">';
+  });
+  document.getElementById('recent').innerHTML = (cfg.gallery || []).slice(0, 4).map((g) => SN.photoHtml(g.photo, g.caption, 'aspect-ratio:1/1;border-radius:14px')).join('');
+  document.getElementById('recent').closest('section').hidden = !(cfg.gallery || []).length;
   document.getElementById('lead-days').textContent = cfg.leadDays;
   document.getElementById('pickup-city').textContent = cfg.pickupCity;
   document.querySelectorAll('.pickup-city').forEach((el) => { el.textContent = cfg.pickupCity.split(',')[0]; });

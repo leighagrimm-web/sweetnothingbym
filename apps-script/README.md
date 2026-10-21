@@ -39,13 +39,24 @@ For PROD, also set `environment` to `PROD` and `siteUrl` to the real domain on t
 |---|---|
 | Settings | Prices, lead time, tax, notes, contact info. `PRIVATE` rows are never sent to the website. |
 | Flavors, Zones, BlockedDates, FAQ | The lists from the admin page. Past blocked dates are ignored automatically. |
+| Pages | Website wording and photo slots: home page heading and photo, menu photos, About page, Events and Gallery headings. The "Where it shows" column says where each one appears. |
+| Events | One card per row on the Special Events page. Untick **Show** to hide a card. **Button** is Order now, Message me, Sign up (uses **Sign-up link**; blank shows "coming soon") or None. |
+| Gallery | One photo per row on the Gallery page, in order. The first 4 shown also appear under "Recent creations" on the home page. |
+
+**Photos:** in any photo cell, paste either:
+- a link to the image, or
+- a Google Drive share link. In Drive, use **Share → General access → Anyone with the link**, then **Copy link**.
+
+`[Bracket text]` shows a placeholder box. A blank cell shows no photo.
+
+**Text:** a blank line starts a new paragraph. To add a line inside a cell in Sheets, press **Alt+Enter** (Ctrl+Enter on a Mac).
 | Orders | One row per order request: `SN-####`, status, customer, date, totals, and whether each email sent. |
 | OrderItems | One row per item in an order. |
 | Messages | Contact page and "Message me" messages. |
 | Draft | Unsaved admin changes for "Preview changes" (used from phase 2). |
 | Counters | Next order number (starts at 1042) and next message ID. |
 
-Editing the Sheet updates the website right away. Settings are cached for up to 10 minutes, and an edit clears that cache.
+Editing the Sheet updates the website right away for new visitors. The script caches settings for up to 10 minutes, and an edit clears that cache. A browser tab that already has the site open keeps its copy for up to 30 seconds.
 
 ## Email
 

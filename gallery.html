@@ -15,8 +15,8 @@
 <main>
   <section class="hero wrap">
     <p class="eyebrow">Gallery</p>
-    <h1>Past creations</h1>
-    <p class="lead">A peek at cookies made for birthdays, showers, weddings and more. See the newest work on Instagram.</p>
+    <h1 id="gallery-title"></h1>
+    <p class="lead" id="gallery-intro"></p>
   </section>
   <section class="section wrap">
     <div class="gallery-grid" id="gallery"></div>
@@ -29,14 +29,15 @@
 <script src="config.js"></script>
 <script src="layout.js"></script>
 <script>
-  // Swap these for real photos: put image files in the repo and list them here.
-  const photos = [];
-  const labels = ['Birthday', 'Baby shower', 'Wedding shower', 'Anniversary', 'Holiday', 'Party', 'Artisan box', 'Custom set'];
-  document.getElementById('gallery').innerHTML = photos.length
-    ? photos.map((p) => '<img src="' + SN.esc(p.src) + '" alt="' + SN.esc(p.alt) + '" style="aspect-ratio:1/1;object-fit:cover;border-radius:14px;width:100%">').join('')
-    : labels.map((l) => '<div class="placeholder">[' + l + ' cookie photo]</div>').join('');
+  // Photos come from the Sheet's Gallery tab (one per row, in order); heading from the Pages tab.
   document.getElementById('ig-link').href = SN.load().instagram;
-  SN.ready.then(() => { document.getElementById('ig-link').href = SN.load().instagram; });
+  SN.ready.then(() => {
+    const cfg = SN.load();
+    document.getElementById('gallery-title').textContent = cfg.pages.galleryTitle;
+    document.getElementById('gallery-intro').textContent = cfg.pages.galleryIntro;
+    document.getElementById('gallery').innerHTML = (cfg.gallery || []).map((g) => SN.photoHtml(g.photo, g.caption, 'aspect-ratio:1/1;border-radius:14px')).join('');
+    document.getElementById('ig-link').href = cfg.instagram;
+  });
 </script>
 </body>
 </html>

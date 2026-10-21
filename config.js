@@ -70,8 +70,35 @@ const SN_DEFAULTS = {
   pickupCity: 'Rosemont, IL',
   instagram: 'https://www.instagram.com/sweet_nothings_by_m/',
   instagramHandle: '@sweet_nothings_by_m',
-  // Swap in real photos by uploading them to the repo and setting the paths here.
-  images: { custom: '', mini: '', large: '' }
+  // Menu photos. In the Sheet these are the photoCustom / photoMini / photoLarge rows on the Pages tab.
+  images: { custom: '', mini: '', large: '' },
+
+  // Website wording and photos, edited on the Sheet's Pages, Events and Gallery tabs (starter copy below matches the Sheet's).
+  // Photos: an image link, a file in this repo, or "[bracket text]" for a placeholder box. Blank lines start new paragraphs.
+  pages: {
+    homeTitle: 'Handmade cookies for life’s sweetest moments',
+    homeIntro: 'Hand-decorated custom sets for birthdays, showers and celebrations, plus small-batch artisan favorites by the dozen.',
+    homeHeroPhoto: '[Hero photo of her cookies]',
+    aboutTitle: 'Hi, I\'m Melissa',
+    aboutIntro: 'Sweet Nothings by M bakes custom decorated and artisan cookies for the moments worth celebrating.',
+    aboutPhoto: '[Photo of M in the kitchen]',
+    aboutStoryHeading: 'The story',
+    aboutStory: '[A few sentences in M\'s own words: how she started baking, what she loves about making cookies for people, and what makes Sweet Nothings special.]\n\n[What customers can expect: how custom orders work, how far ahead to book, and pickup in Rosemont or local drop-off.]',
+    aboutGoodToKnowHeading: 'Good to know',
+    aboutGoodToKnow: '[Allergen note, e.g. "Cookies are made in a kitchen that also handles nuts, dairy, eggs and wheat."]\n\n[Storage tips: how long cookies stay fresh and how to keep them.]',
+    eventsTitle: 'Classes, pop-ups & seasonal specials',
+    eventsIntro: 'Limited-time cookies and cookie decorating classes. Follow along on Instagram for the latest dates.',
+    galleryTitle: 'Past creations',
+    galleryIntro: 'A peek at cookies made for birthdays, showers, weddings and more. See the newest work on Instagram.'
+  },
+  // button: 'Order now' | 'Message me' | 'Sign up' (uses link; no link = "coming soon") | 'None'
+  events: [
+    { photo: '[Class photo]', when: '[Date] · [Time]', title: '[Cookie decorating class]', desc: '[What attendees will make, what\'s included, location, and how many spots are available.]', price: '[$ per person]', button: 'Sign up', link: '' },
+    { photo: '[Seasonal cookie photo]', when: '[Available dates]', title: '[Seasonal special]', desc: '[Holiday or seasonal box description. Specials can also be added to the artisan menu from the admin page.]', price: '', button: 'Order now', link: '' },
+    { photo: '[Event photo]', when: '', title: 'Planning something bigger?', desc: 'For weddings, corporate gifts or large events, start an order and describe what you have in mind, or send me a message.', price: '', button: 'Message me', link: '' }
+  ],
+  gallery: ['Birthday', 'Baby shower', 'Wedding shower', 'Anniversary', 'Holiday', 'Party', 'Artisan box', 'Custom set']
+    .map((l) => ({ photo: '[' + l + ' cookie photo]', caption: l + ' cookies' }))
 };
 
 const SN = {
@@ -118,14 +145,15 @@ const SN = {
     return 'Sorry, that didn’t go through. Please check your connection and try again in a minute. If it keeps happening, message me on Instagram ' + (SN.load().instagramHandle || '') + '.';
   },
 
-  // Loads live settings once per page. Cached for 5 minutes per tab so moving between pages is instant.
+  // Loads live settings once per page. Cached for 30 seconds per tab so clicking between pages is instant,
+  // while Sheet edits still show up within half a minute in a tab that's already open.
   fetchConfig() {
     const preview = SN.isPreview();
     const KEY = 'sn_live_cfg';
     if (!preview) {
       try {
         const c = JSON.parse(sessionStorage.getItem(KEY) || 'null');
-        if (c && Date.now() - c.t < 5 * 60 * 1000) { SN._live = c.cfg; return Promise.resolve(); }
+        if (c && Date.now() - c.t < 30 * 1000) { SN._live = c.cfg; return Promise.resolve(); }
       } catch (e) { /* ignore */ }
     }
     return SN.request({ query: 'action=config' + (preview ? '&preview=1' : '') }, 10000)
@@ -177,6 +205,52 @@ const SN = {
   },
   peekOrderNumber() {
     try { return 'SN-' + (parseInt(localStorage.getItem('sn_next') || '1042', 10) || 1042); } catch (e) { return 'SN-1042'; }
+  },
+
+  /* ---------- Editable page content (Pages / Events / Gallery tabs) ---------- */
+  // A photo cell as a usable image address, or '' when it's blank or a [placeholder].
+  // Google Drive share links ("…/file/d/ID/view" or "…open?id=ID") become a direct image link.
+  photoUrl(v) {
+    const s = String(v || '').trim();
+    if (!s || s[0] === '[') return '';
+    const m = s.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=)([\w-]{10,})/);
+    if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1600';
+    return /^(https?:)?\/\//.test(s) || /^[\w./-]+\.(jpe?g|png|webp|gif|avif)$/i.test(s) ? s : '';
+  },
+  // The [placeholder] label for a photo cell, or ''.
+  photoPlaceholder(v) { const s = String(v || '').trim(); return s[0] === '[' ? s : ''; },
+  // A photo cell as HTML: the image, a placeholder box, or '' when blank. style applies to either.
+  photoHtml(v, alt, style) {
+    const url = SN.photoUrl(v), ph = SN.photoPlaceholder(v);
+    if (url) return '<img src="' + SN.esc(url) + '" alt="' + SN.esc(alt || '') + '" loading="lazy" style="display:block;width:100%;object-fit:cover;' + (style || '') + '">';
+    if (ph) return '<div class="placeholder" style="' + (style || '') + '">' + SN.esc(ph) + '</div>';
+    return '';
+  },
+  // Plain text to paragraphs: blank lines split paragraphs, single line breaks stay as <br>. Text is escaped.
+  paras(text, attrs) {
+    return String(text || '').split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
+      .map((p) => '<p' + (attrs || '') + '>' + SN.esc(p).replace(/\n/g, '<br>') + '</p>').join('');
+  },
+
+  /* ---------- Contact details ---------- */
+  // Rejects things like "a@b", "a@b.c" and "a@b..com". apps-script/Code.gs uses the same check.
+  validEmail(s) { return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[A-Za-z]{2,}$/.test(String(s || '').trim()); },
+  // Just the digits of a US phone number, at most 10. A leading country code 1 is dropped (e.g. pasted "+1 847…").
+  phoneDigits(s) {
+    let d = String(s || '').replace(/\D/g, '');
+    if (d.length === 11 && d[0] === '1') d = d.slice(1);
+    return d.slice(0, 10);
+  },
+  // "8475550100" -> "847-555-0100" (partial numbers are formatted as far as they go).
+  formatPhone(s) {
+    const d = SN.phoneDigits(s);
+    return d.length > 6 ? d.slice(0, 3) + '-' + d.slice(3, 6) + '-' + d.slice(6) : d.length > 3 ? d.slice(0, 3) + '-' + d.slice(3) : d;
+  },
+  validPhone(s) { return SN.phoneDigits(s).length === 10; },
+  // Wire a phone box: digits only, up to 10, dashes added as they type.
+  phoneInput(el) {
+    el.setAttribute('inputmode', 'numeric');   // no maxlength: a pasted "+1 (847) 555-0100" must reach the formatter whole
+    el.addEventListener('input', () => { const v = SN.formatPhone(el.value); if (el.value !== v) el.value = v; });
   },
 
   money(n) { return '$' + (Math.round(n * 100) / 100).toFixed(2); },

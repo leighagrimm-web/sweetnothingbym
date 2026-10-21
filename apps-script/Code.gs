@@ -123,6 +123,40 @@ const STARTER_FAQ = [
   ['How should I store my cookies?', '[Cookies stay fresh for about X days at room temperature in an airtight container. Decorated cookies can be frozen for up to X months. Keep them out of direct sunlight and away from heat.]']
 ];
 
+// Website wording and photos Melissa can change. Mirrors pages/events/gallery in SN_DEFAULTS (config.js).
+// Photo cells take a link to an image (a Google Drive file shared "Anyone with the link" works), a file in the
+// website repo (e.g. photos/hero.jpg), or [bracket text] to show a placeholder box. Blank = no photo.
+// In text cells, a blank line starts a new paragraph (in Sheets, Alt+Enter adds a line inside a cell).
+const STARTER_PAGES = [
+  ['homeTitle', 'Handmade cookies for life’s sweetest moments', 'Home page: big heading'],
+  ['homeIntro', 'Hand-decorated custom sets for birthdays, showers and celebrations, plus small-batch artisan favorites by the dozen.', 'Home page: text under the heading'],
+  ['homeHeroPhoto', '[Hero photo of her cookies]', 'Home page: main photo (photo link)'],
+  ['photoCustom', '', 'Custom Cookies photo on the Home and Order pages (photo link)'],
+  ['photoMini', '', 'Mini Artisan photo on the Home and Order pages (photo link)'],
+  ['photoLarge', '', 'Large Artisan photo on the Home and Order pages (photo link)'],
+  ['aboutTitle', 'Hi, I\'m Melissa', 'About page: big heading'],
+  ['aboutIntro', 'Sweet Nothings by M bakes custom decorated and artisan cookies for the moments worth celebrating.', 'About page: text under the heading'],
+  ['aboutPhoto', '[Photo of M in the kitchen]', 'About page: photo (photo link)'],
+  ['aboutStoryHeading', 'The story', 'About page: first section heading'],
+  ['aboutStory', '[A few sentences in M\'s own words: how she started baking, what she loves about making cookies for people, and what makes Sweet Nothings special.]\n\n[What customers can expect: how custom orders work, how far ahead to book, and pickup in Rosemont or local drop-off.]', 'About page: first section text'],
+  ['aboutGoodToKnowHeading', 'Good to know', 'About page: second section heading'],
+  ['aboutGoodToKnow', '[Allergen note, e.g. "Cookies are made in a kitchen that also handles nuts, dairy, eggs and wheat."]\n\n[Storage tips: how long cookies stay fresh and how to keep them.]', 'About page: second section text'],
+  ['eventsTitle', 'Classes, pop-ups & seasonal specials', 'Special Events page: big heading'],
+  ['eventsIntro', 'Limited-time cookies and cookie decorating classes. Follow along on Instagram for the latest dates.', 'Special Events page: text under the heading'],
+  ['galleryTitle', 'Past creations', 'Gallery page: big heading'],
+  ['galleryIntro', 'A peek at cookies made for birthdays, showers, weddings and more. See the newest work on Instagram.', 'Gallery page: text under the heading']
+];
+const EVENT_BUTTONS = ['Order now', 'Message me', 'Sign up', 'None'];
+// Show, Photo, When, Title, Description, Price, Button, Sign-up link
+const STARTER_EVENTS = [
+  [true, '[Class photo]', '[Date] · [Time]', '[Cookie decorating class]', '[What attendees will make, what\'s included, location, and how many spots are available.]', '[$ per person]', 'Sign up', ''],
+  [true, '[Seasonal cookie photo]', '[Available dates]', '[Seasonal special]', '[Holiday or seasonal box description. Specials can also be added to the artisan menu from the admin page.]', '', 'Order now', ''],
+  [true, '[Event photo]', '', 'Planning something bigger?', 'For weddings, corporate gifts or large events, start an order and describe what you have in mind, or send me a message.', '', 'Message me', '']
+];
+// Show, Photo, Caption. The first 4 shown also appear under "Recent creations" on the home page.
+const STARTER_GALLERY = ['Birthday', 'Baby shower', 'Wedding shower', 'Anniversary', 'Holiday', 'Party', 'Artisan box', 'Custom set']
+  .map((l) => [true, '[' + l + ' cookie photo]', l + ' cookies']);
+
 // Tab layout. text: columns kept as plain text (so Sheets doesn't turn ZIPs, phones or dates into numbers).
 const TABS = {
   Settings: { headers: ['Setting', 'Value', 'What it means'], widths: [170, 380, 460], text: ['Setting', 'Value'] },
@@ -130,6 +164,9 @@ const TABS = {
   Zones: { headers: ['ZIP', 'Area', 'Fee'], widths: [80, 240, 80], text: ['ZIP'], money: ['Fee'] },
   BlockedDates: { headers: ['Date', 'Note'], widths: [120, 260], text: ['Date'] },
   FAQ: { headers: ['Question', 'Answer'], widths: [300, 700] },
+  Pages: { headers: ['Key', 'Text', 'Where it shows'], widths: [170, 560, 380], text: ['Key', 'Text'] },
+  Events: { headers: ['Show', 'Photo', 'When', 'Title', 'Description', 'Price', 'Button', 'Sign-up link'], widths: [60, 220, 160, 220, 420, 120, 110, 220], text: ['Photo', 'When', 'Price', 'Sign-up link'] },
+  Gallery: { headers: ['Show', 'Photo', 'Caption'], widths: [60, 320, 260], text: ['Photo'] },
   Orders: {
     headers: ['Order', 'Received', 'Status', 'Name', 'Email', 'Phone', 'Occasion', 'Date needed', 'Pickup / drop-off',
       'Street', 'City', 'ZIP', 'Allergies', 'Subtotal', 'Tax', 'Tax rate', 'Drop-off fee', 'Estimated total',
@@ -177,6 +214,18 @@ function setupSheet() {
   if (created.Zones) appendRows_(ss.getSheetByName('Zones'), STARTER_ZONES);
   if (created.BlockedDates) appendRows_(ss.getSheetByName('BlockedDates'), STARTER_BLOCKED);
   if (created.FAQ) appendRows_(ss.getSheetByName('FAQ'), STARTER_FAQ);
+  if (created.Pages) appendRows_(ss.getSheetByName('Pages'), STARTER_PAGES);
+  if (created.Events) {
+    const ev = ss.getSheetByName('Events');
+    appendRows_(ev, STARTER_EVENTS);
+    ev.getRange(2, 1, 50, 1).insertCheckboxes();
+    ev.getRange(2, 7, 50, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(EVENT_BUTTONS, true).build());
+  }
+  if (created.Gallery) {
+    const gal = ss.getSheetByName('Gallery');
+    appendRows_(gal, STARTER_GALLERY);
+    gal.getRange(2, 1, 100, 1).insertCheckboxes();
+  }
   if (created.Counters) appendRows_(ss.getSheetByName('Counters'), [['nextOrder', 1042], ['nextMessage', 1]]);
 
   // Remove the blank starter tab Google adds to new spreadsheets.
@@ -200,7 +249,7 @@ function formatTab_(sh, spec) {
   (spec.text || []).forEach((h) => sh.getRange(2, col(h), maxRows, 1).setNumberFormat('@'));
   (spec.money || []).forEach((h) => sh.getRange(2, col(h), maxRows, 1).setNumberFormat('$#,##0.00'));
   (spec.datetime || []).forEach((h) => sh.getRange(2, col(h), maxRows, 1).setNumberFormat('yyyy-mm-dd h:mm am/pm'));
-  if (['Settings', 'FAQ'].indexOf(sh.getName()) !== -1) sh.getRange(1, 1, sh.getMaxRows(), cols).setWrap(true).setVerticalAlignment('top');
+  if (['Settings', 'FAQ', 'Pages', 'Events', 'Gallery'].indexOf(sh.getName()) !== -1) sh.getRange(1, 1, sh.getMaxRows(), cols).setWrap(true).setVerticalAlignment('top');
 }
 
 function appendRows_(sh, rows) {
@@ -271,6 +320,25 @@ function buildConfig_() {
   cfg.faqs = rows_(ss.getSheetByName('FAQ'))
     .filter((r) => String(r[0]).trim())
     .map((r) => ({ q: String(r[0]).trim(), a: String(r[1]).trim() }));
+
+  // Website wording and photos. Rows Melissa deletes fall back to the starter text.
+  cfg.pages = {};
+  STARTER_PAGES.forEach((p) => { cfg.pages[p[0]] = p[1]; });
+  rows_(ss.getSheetByName('Pages')).forEach((r) => {
+    const key = String(r[0]).trim();
+    if (key) cfg.pages[key] = String(r[1] == null ? '' : r[1]).trim();
+  });
+  // Menu photos come from the Pages tab when filled in (the older "images" setting still works otherwise).
+  cfg.images = Object.assign({}, cfg.images || {});
+  [['custom', 'photoCustom'], ['mini', 'photoMini'], ['large', 'photoLarge']].forEach(([k, p]) => { if (cfg.pages[p]) cfg.images[k] = cfg.pages[p]; });
+
+  cfg.events = rows_(ss.getSheetByName('Events'))
+    .filter((r) => truthy_(r[0]) && String(r[3]).trim())
+    .map((r) => ({ photo: String(r[1]).trim(), when: String(r[2]).trim(), title: String(r[3]).trim(), desc: String(r[4]).trim(), price: String(r[5]).trim(), button: String(r[6]).trim() || 'None', link: String(r[7]).trim() }));
+
+  cfg.gallery = rows_(ss.getSheetByName('Gallery'))
+    .filter((r) => truthy_(r[0]) && String(r[1]).trim())
+    .map((r) => ({ photo: String(r[1]).trim(), caption: String(r[2]).trim() }));
 
   return cfg;
 }
@@ -433,10 +501,10 @@ function validateOrder_(cfg, b) {
   }
 
   const c = b.customer || {};
-  const customer = { name: clean_(c.name, 120), email: clean_(c.email, 200), phone: clean_(c.phone, 40) };
+  const customer = { name: clean_(c.name, 120), email: clean_(c.email, 200), phone: formatPhone_(clean_(c.phone, 40)) };
   if (!customer.name) errors.push('name');
   if (!validEmail_(customer.email)) errors.push('a valid email');
-  if (customer.phone.replace(/\D/g, '').length < 10) errors.push('a phone number');
+  if (!customer.phone) errors.push('a 10-digit phone number');
 
   const subtotal = round2_(items.reduce((a, it) => a + it.lineTotal, 0));
   const tax = Math.round(subtotal * Number(cfg.taxRate)) / 100;
@@ -486,6 +554,7 @@ function sendMessage_(b) {
   const errors = [];
   if (!validEmail_(m.email)) errors.push('a valid email');
   if (!m.message) errors.push('a message');
+  if (m.phone) { m.phone = formatPhone_(m.phone); if (!m.phone) errors.push('a 10-digit phone number (or leave it blank)'); }
   if (errors.length) return { ok: false, code: 'invalid', errors };
   if (rateLimited_('msg', m.email, 10)) return { ok: false, code: 'rate', error: 'You’ve sent several messages in the last hour. Please try again a little later.' };
 
@@ -746,7 +815,15 @@ function clean_(v, max) { return String(v == null ? '' : v).trim().slice(0, max 
 // Stop customer text from being treated as a Sheets formula.
 function cell_(v) { return typeof v === 'string' && /^[=+\-@]/.test(v) ? "'" + v : v; }
 
-function validEmail_(s) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s); }
+// Same checks as SN.validEmail / SN.phoneDigits in the site's config.js.
+function validEmail_(s) { return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[A-Za-z]{2,}$/.test(s); }
+
+// "847-555-0100" for a 10-digit US number (a leading country code 1 is dropped), or '' if it isn't one.
+function formatPhone_(s) {
+  let d = String(s || '').replace(/\D/g, '');
+  if (d.length === 11 && d[0] === '1') d = d.slice(1);
+  return d.length === 10 ? d.slice(0, 3) + '-' + d.slice(3, 6) + '-' + d.slice(6) : '';
+}
 
 // Append one row using the tab's header names as keys.
 function appendObject_(sh, obj) {

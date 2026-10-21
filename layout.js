@@ -128,7 +128,7 @@
   // Clear an error as soon as the field is fixed.
   body.addEventListener('input', (e) => {
     const t = e.target;
-    if (t.id === 'qm-email' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t.value.trim())) { document.getElementById('qm-email-err').hidden = true; t.setAttribute('aria-invalid', 'false'); }
+    if (t.id === 'qm-email' && SN.validEmail(t.value)) { document.getElementById('qm-email-err').hidden = true; t.setAttribute('aria-invalid', 'false'); }
     if (t.id === 'qm-msg' && t.value.trim()) { document.getElementById('qm-msg-err').hidden = true; t.setAttribute('aria-invalid', 'false'); }
   });
 
@@ -136,7 +136,7 @@
     e.preventDefault();
     const email = document.getElementById('qm-email');
     const msg = document.getElementById('qm-msg');
-    const eBad = !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim());
+    const eBad = !SN.validEmail(email.value);
     const mBad = !msg.value.trim();
     document.getElementById('qm-email-err').hidden = !eBad;
     document.getElementById('qm-msg-err').hidden = !mBad;

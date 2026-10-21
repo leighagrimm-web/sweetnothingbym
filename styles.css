@@ -75,6 +75,7 @@ button { font: inherit; color: inherit; }
 .card-body h3 { font-size: 28px; }
 .card-body p { margin: 0; }
 .card-body .desc { color: var(--muted); font-size: 15px; flex: 1; }
+.card-body .desc p + p { margin-top: 8px; }
 .card-body .price { margin-top: 6px; font-weight: 600; }
 .card-body .price span { font-weight: 400; color: var(--muted); }
 
@@ -131,6 +132,14 @@ textarea.input { resize: vertical; }
 .panel-body { flex: 1; overflow-y: auto; padding: 20px 24px 28px; }
 .panel-foot { padding: 16px 24px; border-top: 1px solid var(--line); background: var(--white); }
 .sec { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 22px; }
+.sec.first { border-top: 0; padding-top: 0; margin-top: 0; }
+/* Checkout and "request sent" fill the screen, with the content in a centered column. */
+.panel.full { max-width: none; box-shadow: none; }
+.checkout-col { max-width: 680px; margin: 0 auto; width: 100%; }
+.panel.full .panel-head { display: block; }
+.checkout-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.checkout-head-row .link-btn { padding: 0 0 2px; }
+.checkout-grand { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
 .sec h3 { font-size: 24px; margin-bottom: 14px; }
 .flavor-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .flavor-row .badge { font-size: 12px; color: var(--coral); font-weight: 700; letter-spacing: .04em; }
@@ -285,6 +294,7 @@ tr.row-pending td { background: #FFFBF4; }
 .landing-hero .lead { margin: 16px 0 0; font-size: 18px; color: var(--muted); max-width: 540px; }
 .hero-photo { position: relative; aspect-ratio: 5 / 4; border-radius: 28px; background: var(--blush); display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .hero-photo .tag { position: absolute; top: 16px; left: 16px; background: var(--white); font-size: 12px; font-weight: 600; padding: 6px 10px; border-radius: 999px; }
+.hero-photo .hero-img { width: 100%; height: 100%; object-fit: cover; }
 .hero-logo { width: 58%; max-width: 300px; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 50%; box-shadow: 0 18px 40px rgba(31, 42, 68, .14); }
 .band { background: var(--white); padding-top: 52px; padding-bottom: 52px; }
 .how-steps { list-style: none; margin: 0; padding: 0; counter-reset: how; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 22px; }

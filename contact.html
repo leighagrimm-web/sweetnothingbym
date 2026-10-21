@@ -48,7 +48,8 @@
               </div>
               <div class="field">
                 <label class="label" for="m-phone">Phone <span class="muted" style="font-weight:400">(optional)</span></label>
-                <input class="input" id="m-phone" name="phone" type="tel" autocomplete="tel">
+                <input class="input" id="m-phone" name="phone" type="tel" autocomplete="tel" placeholder="847-555-0100" aria-describedby="m-phone-err">
+                <p class="err" id="m-phone-err" hidden>Please enter a 10-digit phone number, or leave it blank.</p>
               </div>
             </div>
             <div class="field" id="order-num-wrap" hidden>
@@ -115,23 +116,31 @@
     $('#m-photo-thumb').innerHTML = f ? '<img src="' + photoUrl + '" alt="">' : SN_ICONS.upload;
   });
 
-  const emailOk = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  SN.phoneInput($('#m-phone'));
+  // Phone is optional, but if they type one it must be a full 10-digit number.
+  const fields = [
+    ['#m-email', '#m-email-err', (v) => SN.validEmail(v)],
+    ['#m-phone', '#m-phone-err', (v) => !v.trim() || SN.validPhone(v)],
+    ['#m-msg', '#m-msg-err', (v) => !!v.trim()]
+  ];
   function check(showAll) {
-    const e = $('#m-email'), m = $('#m-msg');
-    const eBad = !emailOk(e.value), mBad = !m.value.trim();
-    if (showAll || e.dataset.touched) { $('#m-email-err').hidden = !eBad; e.setAttribute('aria-invalid', String(eBad)); }
-    if (showAll || m.dataset.touched) { $('#m-msg-err').hidden = !mBad; m.setAttribute('aria-invalid', String(mBad)); }
-    return !(eBad || mBad);
+    let firstBad = null;
+    fields.forEach(([s, errSel, ok]) => {
+      const el = $(s), bad = !ok(el.value);
+      if (showAll || el.dataset.touched) { $(errSel).hidden = !bad; el.setAttribute('aria-invalid', String(bad)); }
+      if (bad && !firstBad) firstBad = el;
+    });
+    return firstBad;
   }
-  ['#m-email', '#m-msg'].forEach((s) => {
+  fields.forEach(([s]) => {
     $(s).addEventListener('blur', (ev) => { ev.target.dataset.touched = '1'; check(false); });
     $(s).addEventListener('input', () => check(false));
   });
 
   $('#contact-form').addEventListener('submit', (e) => {
     e.preventDefault();
-    $('#m-email').dataset.touched = '1'; $('#m-msg').dataset.touched = '1';
-    if (!check(true)) { (emailOk($('#m-email').value) ? $('#m-msg') : $('#m-email')).focus(); return; }
+    const firstBad = check(true);
+    if (firstBad) { firstBad.focus(); return; }
     const msg = {
       name: $('#m-name').value.trim(),
       email: $('#m-email').value.trim(),

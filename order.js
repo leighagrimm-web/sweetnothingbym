@@ -8,6 +8,7 @@ SN.ready.then(function () {
   let tried = false;
   let lastOrder = null;
   let sending = false;
+  const touched = {};         // checkout boxes the customer has typed in and left
   let opener = null;
   let toastTimer = null;
   const checkout = {
@@ -44,7 +45,7 @@ SN.ready.then(function () {
     { kind: 'large', title: 'Large Artisan', desc: 'Big, bakery-style cookies. Mix up to ' + cfg.flavorsPerDozen + ' flavors per dozen, then add extras one at a time.', price: money(cfg.largePerDozen) + ' / dozen', small: money(SN.perCookie(cfg, 'large')) + ' each', cta: 'Choose flavors' }
   ];
   $('#menu').innerHTML = menuItems.map((m) => {
-    const img = cfg.images && cfg.images[m.kind];
+    const img = SN.photoUrl(cfg.images && cfg.images[m.kind]);   // photo links from the Sheet's Pages tab
     return '<article class="card">' +
       '<div class="card-media" style="background:' + bg[m.kind] + '">' +
         (img ? '<img src="' + esc(img) + '" alt="' + esc(m.title) + '">' : art[m.kind] + '<span class="tag">Photo coming soon</span>') +
@@ -80,6 +81,7 @@ SN.ready.then(function () {
   }
   function closePanel() {
     mode = null;
+    if (history.state && history.state.snCheckout) history.back();   // drop the checkout history entry
     panel.classList.remove('open');
     scrim.classList.remove('open');
     document.body.classList.remove('locked');
@@ -110,9 +112,37 @@ SN.ready.then(function () {
     if (mode === 'custom') panel.innerHTML = renderCustom();
     else if (mode === 'mini' || mode === 'large') panel.innerHTML = renderArtisan();
     else if (mode === 'bag') panel.innerHTML = renderBag();
+    else if (mode === 'checkout') panel.innerHTML = renderCheckout();
     else if (mode === 'done') panel.innerHTML = renderDone();
+    panel.classList.toggle('full', mode === 'checkout' || mode === 'done');
     if (mode === 'custom' || mode === 'mini' || mode === 'large') updateDraftUI();
-    if (mode === 'bag') updateCheckoutUI();
+    if (mode === 'checkout') updateCheckoutUI();
+  }
+
+  // Bag -> checkout and back. Checkout adds a browser history entry so the phone's Back button returns to the bag.
+  function goCheckout() {
+    mode = 'checkout';
+    history.pushState({ snCheckout: true }, '');
+    renderPanel();
+    focusTop();
+  }
+  function backToBag() {
+    if (history.state && history.state.snCheckout) { history.back(); return; }   // popstate below re-renders
+    mode = 'bag';
+    renderPanel();
+    focusTop();
+  }
+  window.addEventListener('popstate', () => {
+    if (mode !== 'checkout') return;
+    mode = 'bag';
+    renderPanel();
+    focusTop();
+  });
+  function focusTop() {
+    const body = $('.panel-body', panel);
+    if (body) body.scrollTop = 0;
+    const t = $('#panel-title', panel);
+    if (t) { t.setAttribute('tabindex', '-1'); t.focus(); }
   }
 
   // Dropdown options for quantities. Dozens are labeled so they're easy to spot.
@@ -246,18 +276,45 @@ SN.ready.then(function () {
         '<div class="panel-body"><div class="done"><p style="font-size:17px;margin:0">Your bag is empty.</p>' +
         '<button type="button" class="btn" data-act="close" style="margin-top:18px">Browse the menu</button></div></div>';
     }
-    const items = bag.map((it) =>
+    const subtotal = bag.reduce((a, it) => a + SN.itemTotal(cfg, it), 0);
+    return head('Your bag') +
+      '<div class="panel-body">' +
+        bagItems(true) +
+        '<button type="button" class="btn dashed" data-act="close" style="margin-top:14px">+ Add more cookies</button>' +
+      '</div>' +
+      '<div class="panel-foot">' +
+        '<div class="grand"><strong>Subtotal</strong><strong>' + (bag.some((it) => it.kind === 'custom') ? 'from ' : '') + money(subtotal) + '</strong></div>' +
+        '<p class="hint" style="margin:-4px 0 12px">Next: your date, pickup or drop-off, and contact details. Tax and any drop-off fee are added at checkout.</p>' +
+        '<button type="button" class="btn block" data-act="checkout">Begin checkout</button>' +
+      '</div>';
+  }
+
+  function bagItems(removable) {
+    return bag.map((it) =>
       '<div class="bag-item"><div class="top"><strong>' + it.qty + ' ' + esc(SN.itemLabel(it.kind)) + '</strong><strong>' + (it.kind === 'custom' ? 'from ' : '') + money(SN.itemTotal(cfg, it)) + '</strong></div>' +
       '<div class="detail">' + esc(SN.describeItem(cfg, it)) + '</div>' +
       (it.desc ? '<div class="note">“' + esc(it.desc) + '”</div>' : '') +
-      '<button type="button" class="link-btn" data-act="remove" data-id="' + it.id + '">Remove</button></div>').join('');
+      (removable ? '<button type="button" class="link-btn" data-act="remove" data-id="' + it.id + '">Remove</button>' : '') + '</div>').join('');
+  }
+
+  // Full-page header for checkout and the "request sent" screen: content sits in a centered column.
+  function fullHead(title, back) {
+    return '<div class="panel-head"><div class="checkout-col checkout-head-row"><div>' +
+        (back ? '<button type="button" class="link-btn" data-act="to-bag">← Back to bag</button>' : '') +
+        '<h2 id="panel-title" tabindex="-1">' + esc(title) + '</h2></div>' +
+      '<button type="button" class="x-btn" data-act="close" aria-label="Close">' + SN_ICONS.close + '</button></div></div>';
+  }
+
+  // Checkout takes the whole screen; "Send order request" comes after every section, so it's reached by scrolling through them.
+  function renderCheckout() {
+    if (!bag.length) return renderBag();
     const minISO = SN.isoDate(SN.minDate(cfg));
     const events = ['Birthday', 'Baby Shower', 'Wedding Shower', 'Anniversary', 'Party', 'Other'];
     const isDel = checkout.fulfillment === 'delivery';
-    return head('Your bag') +
-      '<div class="panel-body">' +
-        items +
-        '<button type="button" class="btn dashed" data-act="close" style="margin-top:14px">+ Add more cookies</button>' +
+    return fullHead('Checkout', true) +
+      '<div class="panel-body"><div class="checkout-col">' +
+        '<div class="sec first"><h3>Your order</h3>' + bagItems(false) +
+          '<button type="button" class="link-btn" data-act="to-bag" style="margin-top:6px">Edit bag</button></div>' +
 
         '<div class="sec"><h3>Your event</h3><div class="stack">' +
           '<div class="field"><label class="label" for="c-event">What are the cookies for?</label>' +
@@ -288,8 +345,10 @@ SN.ready.then(function () {
         '<div class="sec"><h3>Your details</h3><div class="stack">' +
           '<div class="field"><label class="label" for="c-name">Full name</label><input class="input" id="c-name" type="text" autocomplete="name" data-co="name" value="' + esc(checkout.name) + '"></div>' +
           '<div class="grid-2">' +
-            '<div class="field"><label class="label" for="c-email">Email</label><input class="input" id="c-email" type="email" autocomplete="email" data-co="email" value="' + esc(checkout.email) + '"></div>' +
-            '<div class="field"><label class="label" for="c-phone">Phone</label><input class="input" id="c-phone" type="tel" autocomplete="tel" data-co="phone" value="' + esc(checkout.phone) + '"></div>' +
+            '<div class="field"><label class="label" for="c-email">Email</label><input class="input" id="c-email" type="email" autocomplete="email" data-co="email" aria-describedby="c-email-err" value="' + esc(checkout.email) + '">' +
+              '<p class="err" id="c-email-err" hidden>Please enter a valid email, like name@example.com.</p></div>' +
+            '<div class="field"><label class="label" for="c-phone">Phone</label><input class="input" id="c-phone" type="tel" inputmode="numeric" autocomplete="tel" data-co="phone" aria-describedby="c-phone-err" placeholder="847-555-0100" value="' + esc(checkout.phone) + '">' +
+              '<p class="err" id="c-phone-err" hidden>Please enter a 10-digit phone number.</p></div>' +
           '</div>' +
           '<div class="hp" aria-hidden="true"><label>Website <input type="text" id="c-website" tabindex="-1" autocomplete="off"></label></div>' +
         '</div></div>' +
@@ -299,13 +358,11 @@ SN.ready.then(function () {
           '<div><span class="muted">Grocery tax (' + cfg.taxRate + '%)</span><span id="t-tax"></span></div>' +
           '<div><span class="muted" id="t-fee-label"></span><span id="t-fee"></span></div>' +
         '</div>' +
-      '</div>' +
-      '<div class="panel-foot">' +
-        '<div class="grand"><strong>Estimated total</strong><strong id="t-total"></strong></div>' +
+        '<div class="grand checkout-grand"><strong>Estimated total</strong><strong id="t-total"></strong></div>' +
         '<div class="missing" id="missing" hidden></div>' +
         '<button type="button" class="btn block" data-act="submit"' + (sending ? ' aria-disabled="true">Sending…' : '>Send order request') + '</button>' +
         '<p class="hint" style="text-align:center;margin-top:10px">No payment today. M will review your request, confirm the final price, and email you an invoice to pay.</p>' +
-      '</div>';
+      '</div></div>';
   }
 
   function feeRange() {
@@ -338,8 +395,8 @@ SN.ready.then(function () {
       if (!q.zone) m.push('a ZIP in our drop-off area');
     }
     if (!checkout.name.trim()) m.push('name');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkout.email.trim())) m.push('a valid email');
-    if (checkout.phone.replace(/\D/g, '').length < 10) m.push('a phone number');
+    if (!SN.validEmail(checkout.email)) m.push('a valid email');
+    if (!SN.validPhone(checkout.phone)) m.push('a 10-digit phone number');
     return m;
   }
 
@@ -370,12 +427,23 @@ SN.ready.then(function () {
     const box = $('#missing');
     box.hidden = !(tried && miss.length);
     box.innerHTML = '<strong>Still needed:</strong> ' + esc(miss.join(', '));
+    // Email / phone errors show under the box once they've left it (or tried to send), and clear as soon as it's fixed.
+    [['email', SN.validEmail], ['phone', SN.validPhone]].forEach(([k, ok]) => {
+      const input = $('#c-' + k), err = $('#c-' + k + '-err');
+      if (!input || !err) return;
+      const bad = (tried || touched[k]) && !ok(checkout[k]);
+      err.hidden = !bad;
+      input.setAttribute('aria-invalid', String(bad));
+    });
+    // Grayed out until every detail is filled in (still clickable, to show what's missing), like "Add to bag".
+    const send = $('[data-act="submit"]', panel);
+    if (send && !sending) send.setAttribute('aria-disabled', String(miss.length > 0));
   }
 
   function renderDone() {
     const o = lastOrder;
-    return head('Request sent') +
-      '<div class="panel-body"><div class="done">' +
+    return fullHead('Request sent', false) +
+      '<div class="panel-body"><div class="checkout-col done">' +
         '<div class="check">' + SN_ICONS.check + '</div>' +
         '<h3>Thanks, we got your request!</h3>' +
         '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(o.number) + '</strong></p>' +
@@ -406,6 +474,8 @@ SN.ready.then(function () {
 
     // bag
     if (act === 'remove') { bag = bag.filter((it) => String(it.id) !== b.dataset.id); saveBag(); renderPanel(); return; }
+    if (act === 'checkout') { goCheckout(); return; }
+    if (act === 'to-bag') { backToBag(); return; }
     if (act === 'pickup' || act === 'delivery') {
       checkout.fulfillment = act;
       $$('[data-act="pickup"],[data-act="delivery"]', panel).forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.act === act)));
@@ -422,10 +492,15 @@ SN.ready.then(function () {
     if (t.dataset.co) {
       let v = t.value;
       if (t.dataset.co === 'zip') { v = v.replace(/\D/g, '').slice(0, 5); if (t.value !== v) t.value = v; }
+      if (t.dataset.co === 'phone') { v = SN.formatPhone(v); if (t.value !== v) t.value = v; }
       checkout[t.dataset.co] = v;
       if (t.dataset.co === 'eventType') $('#other-wrap').hidden = v !== 'Other';
       updateCheckoutUI();
     }
+  });
+  panel.addEventListener('focusout', (e) => {
+    const k = e.target.dataset && e.target.dataset.co;
+    if ((k === 'email' || k === 'phone') && checkout[k] && !touched[k]) { touched[k] = true; updateCheckoutUI(); }
   });
   panel.addEventListener('change', (e) => {
     const t = e.target;
@@ -503,7 +578,7 @@ SN.ready.then(function () {
     })
       .then((r) => { if (!r || !r.ok || !r.order) throw r; orderSent(r.order); })
       .catch((r) => {
-        if (mode !== 'bag') return;
+        if (mode !== 'checkout') return;
         const b = $('[data-act="submit"]', panel);
         b.removeAttribute('aria-disabled');
         b.textContent = 'Send order request';

@@ -15,19 +15,17 @@
 <main>
   <section class="hero wrap">
     <p class="eyebrow">About</p>
-    <h1>Hi, I'm Melissa</h1>
-    <p class="lead">Sweet Nothings by M bakes custom decorated and artisan cookies for the moments worth celebrating.</p>
+    <h1 id="about-title"></h1>
+    <p class="lead" id="about-intro"></p>
   </section>
   <section class="section wrap">
     <div class="two-col">
-      <div class="placeholder" style="aspect-ratio:4/5">[Photo of M in the kitchen]</div>
+      <div id="about-photo"></div>
       <div class="content-card">
-        <h2 style="font-size:32px;margin-bottom:14px">The story</h2>
-        <p>[A few sentences in M's own words: how she started baking, what she loves about making cookies for people, and what makes Sweet Nothings special.]</p>
-        <p>[What customers can expect: how custom orders work, how far ahead to book, and pickup in Rosemont or local drop-off.]</p>
-        <h3 style="font-size:24px;margin:22px 0 10px">Good to know</h3>
-        <p>[Allergen note, e.g. "Cookies are made in a kitchen that also handles nuts, dairy, eggs and wheat."]</p>
-        <p>[Storage tips: how long cookies stay fresh and how to keep them.]</p>
+        <h2 id="about-story-h" style="font-size:32px;margin-bottom:14px"></h2>
+        <div id="about-story"></div>
+        <h3 id="about-good-h" style="font-size:24px;margin:22px 0 10px"></h3>
+        <div id="about-good"></div>
         <a class="btn" href="order.html" style="margin-top:8px">Start your order</a>
       </div>
     </div>
@@ -36,5 +34,21 @@
 <div id="site-footer"></div>
 <script src="config.js"></script>
 <script src="layout.js"></script>
+<script>
+// Wording and photo come from the Sheet's Pages tab.
+SN.ready.then(function () {
+  const p = SN.load().pages;
+  const $ = (id) => document.getElementById(id);
+  $('about-title').textContent = p.aboutTitle;
+  $('about-intro').textContent = p.aboutIntro;
+  $('about-photo').innerHTML = SN.photoHtml(p.aboutPhoto, p.aboutTitle, 'aspect-ratio:4/5;border-radius:14px');
+  $('about-photo').hidden = !$('about-photo').innerHTML;   // no photo: the story card takes the full width
+  $('about-story-h').textContent = p.aboutStoryHeading;
+  $('about-story').innerHTML = SN.paras(p.aboutStory);
+  $('about-good-h').textContent = p.aboutGoodToKnowHeading;
+  $('about-good-h').hidden = !p.aboutGoodToKnowHeading;
+  $('about-good').innerHTML = SN.paras(p.aboutGoodToKnow);
+});
+</script>
 </body>
 </html>
