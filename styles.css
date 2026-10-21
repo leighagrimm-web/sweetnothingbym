@@ -214,6 +214,8 @@ textarea.input { resize: vertical; }
   .admin-nav a { white-space: nowrap; flex: none; padding: 10px 14px; }
   .admin-nav a[aria-current="page"] { box-shadow: inset 0 -3px 0 var(--coral); }
 }
+/* The admin uses more of a wide screen than the public site (tables and forms need the room). */
+.admin-header .wrap, .wrap.admin-layout { max-width: 1440px; }
 .admin-main { flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 22px; }
 .admin-title { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; }
 .admin-title h1 { font-size: 44px; }

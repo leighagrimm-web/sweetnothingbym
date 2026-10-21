@@ -118,7 +118,9 @@
       '<h3 style="font-size:22px;margin:26px 0 12px" id="code-form-h">Add a code</h3>' +
       '<form id="code-form" class="fields">' +
         field('cf-type', 'Type', '<select class="input" id="cf-type"><option>Percent off</option><option>Gift card</option></select>') +
-        field('cf-code', 'Code', '<div style="display:flex;gap:8px"><input class="input" id="cf-code" type="text" autocomplete="off" placeholder="e.g. HOLIDAY10" style="text-transform:uppercase"><button type="button" class="btn ghost small" id="cf-generate">Make one up</button></div>', 'Letters, numbers and dashes.') +
+        '<div class="field"><label class="label" for="cf-code">Code</label>' +
+          '<input class="input" id="cf-code" type="text" autocomplete="off" placeholder="e.g. HOLIDAY10" style="text-transform:uppercase">' +
+          '<p class="hint">Letters, numbers and dashes. <button type="button" class="link-btn" id="cf-generate" style="padding:0;font-size:inherit">Make one up for me</button></p></div>' +
         field('cf-amount', '<span id="cf-amount-label">Percent off</span>', '<div class="input-wrap"><span id="cf-amount-pre" hidden>$</span><input id="cf-amount" type="number" min="0" step="0.01"><span id="cf-amount-post">%</span></div>') +
         '<div class="field" id="cf-balance-wrap" hidden><label class="label" for="cf-balance">Balance left</label><div class="input-wrap"><span>$</span><input id="cf-balance" type="number" min="0" step="0.01"></div></div>' +
         field('cf-expires', 'Expires (optional)', '<input class="input" id="cf-expires" type="date">') +
