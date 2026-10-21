@@ -25,7 +25,7 @@ const SN_ENV = (function () {
   };
   // The owner's admin page: the admin deployment's web app URL (only the Sheet's owner can open it).
   const ADMIN = {
-    uat: '',
+    uat: 'https://script.google.com/macros/s/AKfycbxIlsPvvCXdZEUW72DQ_Qh7UkpTSrBSYm--QMPMPvolX2ofes9MoHmu9Zt0B-s1JxPo/exec',
     prod: ''
   };
   const PROD_HOSTS = [];   // e.g. ['sweetnothingsbym.com', 'www.sweetnothingsbym.com']
