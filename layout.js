@@ -52,7 +52,7 @@
             '<a href="' + SN.esc(cfg.instagram) + '" target="_blank" rel="noopener">Instagram ' + SN.esc(cfg.instagramHandle) + '</a>' +
             '<a href="faq.html">FAQ</a>' +
             '<a href="contact.html">Contact</a>' +
-            '<a href="admin.html">Owner admin (prototype)</a>' +
+            '<a href="admin.html">Owner admin</a>' +
           '</nav>' +
         '</div></footer>';
     }

@@ -1,7 +1,16 @@
 # Apps Script backend
 
-`Code.gs` is the whole backend: the Google Sheet layout, the public web app the website talks to, and the emails.
-It is pasted into the Sheet's Apps Script editor by hand. Each environment (UAT, PROD) has its own Sheet and script.
+Two files are pasted into the Sheet's Apps Script editor by hand. Each environment (UAT, PROD) has its own Sheet and script.
+
+- **`Code.gs`** is the whole backend: the Google Sheet layout, the public web app the website talks to, the owner's admin functions, and the emails.
+- **`Admin.html`** is a small loader for the owner's admin page. The admin's look and logic (`styles.css`, `config.js`, `admin.js`) load from the website, so admin changes ship with the website and this file rarely changes.
+
+The same script has **two deployments**:
+
+| Deployment | Execute as | Who has access | Used for |
+|---|---|---|---|
+| Public | Me | Anyone | The website: settings, order requests, messages |
+| Admin | User accessing the web app | Only myself | The owner's admin page, behind Google sign-in |
 
 ## Set up a new environment (one time, about 10 minutes)
 
@@ -22,16 +31,30 @@ Type the addresses below yourself rather than clicking links in emails. Before y
 
    Click **Deploy** and copy the **Web app URL** (it ends in `/exec`).
 7. **Point the website at it.** Paste the URL into `config.js` → `SN_ENV` → `API.uat` (or `API.prod`).
+8. **Add the admin page.**
+   1. In the editor's **Files** list, click **+ → HTML**, name it `Admin`, and paste in `apps-script/Admin.html`. Save.
+   2. Click **Deploy → New deployment → Web app**:
+      - Description: `admin`
+      - Execute as: **User accessing the web app**
+      - Who has access: **Only myself**
+   3. Click **Deploy** and copy its URL.
+9. **Point everything at the admin.** Paste the admin URL in two places:
+   - the Sheet's Settings tab, `adminUrl` (used in the "New order to review" emails)
+   - `config.js` → `SN_ENV` → `ADMIN.uat` (or `ADMIN.prod`), used by the website's admin.html link
 
 For PROD, also set `environment` to `PROD` and `siteUrl` to the real domain on the Settings tab. Leave `ownerEmail` blank to send alerts to the account that runs the script, and set `replyToEmail` to the business inbox.
 
 ## Updating the code later
 
-1. Paste the new `Code.gs` over the old one and save.
+1. Paste the new `Code.gs` (and `Admin.html`, if it changed) over the old one and save.
 2. If the update added tabs or settings, run **setupSheet** again. It only adds what's missing.
-3. Click **Deploy → Manage deployments**. Click the pencil, set **Version** to **New version**, and click **Deploy**.
+3. Click **Deploy → Manage deployments**. For **each** deployment (public and admin), click the pencil, set **Version** to **New version**, and click **Deploy**.
 
    Don't use "New deployment" for updates: that creates a new URL and the website would stop reaching the script.
+
+Changes to `admin.js`, `config.js` or `styles.css` only need publishing the website; the admin picks them up on its next load.
+
+**Testing the admin locally:** run `node .claude/serve.js` and open `http://localhost:5500/admin.html?dev=1`. It uses fake data from `.claude/admin-dev.js`, not the Sheet.
 
 ## What's in the Sheet
 

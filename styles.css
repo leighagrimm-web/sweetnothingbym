@@ -145,6 +145,9 @@ textarea.input { resize: vertical; }
 .panel-foot { padding: 16px 24px; border-top: 1px solid var(--line); background: var(--white); }
 .sec { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 22px; }
 .sec.first { border-top: 0; padding-top: 0; margin-top: 0; }
+/* Admin: small preview next to a photo link box. */
+.photo-thumb { width: 46px; height: 46px; border-radius: 8px; background: var(--oat); display: inline-flex; align-items: center; justify-content: center; overflow: hidden; flex: none; color: var(--muted); font-size: 12px; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
 /* Checkout and "request sent" fill the screen, with the content in a centered column. */
 .panel.full { max-width: none; box-shadow: none; }
 .checkout-col { max-width: 680px; margin: 0 auto; width: 100%; }

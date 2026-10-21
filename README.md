@@ -26,11 +26,21 @@ Settings live in `js/config.js` (`SN_DEFAULTS`). Shared look is in `css/styles.c
 
 ## Publishing updates
 
-Every page loads `styles.css` and the scripts with a version number, for example `styles.css?v=20261021`. Phones and browsers otherwise keep the old file for up to 10 minutes. When you change CSS or JS, change that number on every page: use the date, and find-and-replace across the `.html` files.
+Every page loads `styles.css` and the scripts with a version number, for example `styles.css?v=20261022`. Phones and browsers otherwise keep the old file for up to 10 minutes. When you change CSS or JS, change that number on every page: use the date, and find-and-replace across the `.html` files.
 
-## Still prototype (later phases)
+## Owner admin (phase 2)
 
-- **Admin page** (`admin.html`) still works only in the browser it's opened in. It moves to Apps Script with Google sign-in in phase 2. Until then, edit settings directly in the Sheet.
+- The admin runs on Apps Script behind the owner's Google sign-in. `admin.html` on the website just links to it.
+- Melissa uses it to:
+  - review orders and approve them (as-is or with changes) or decline them, which emails the customer
+  - set statuses after approval
+  - manage messages
+  - edit every setting, including the Home, About, Events and Gallery pages
+  - preview changes before saving
+- Days with `maxOrdersPerDay` approved orders (Invoice sent and later) are blocked on the site automatically.
+
+## Still to come (later phases)
+
 - **Photos** aren't uploaded yet (phase 4). Only the file name is recorded.
 - **Payments / QuickBooks** come in phase 3.
 

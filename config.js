@@ -23,9 +23,14 @@ const SN_ENV = (function () {
     uat: 'https://script.google.com/macros/s/AKfycbxevgGnDBQn2XUOqY3J9Ou873czPs7xWOH3sj7nPriq3K_vPAxeNw1acPVDgPCJhalw/exec',
     prod: ''
   };
+  // The owner's admin page: the admin deployment's web app URL (only the Sheet's owner can open it).
+  const ADMIN = {
+    uat: '',
+    prod: ''
+  };
   const PROD_HOSTS = [];   // e.g. ['sweetnothingsbym.com', 'www.sweetnothingsbym.com']
   const name = PROD_HOSTS.indexOf(location.hostname) !== -1 ? 'prod' : 'uat';
-  return { name, api: API[name] };
+  return { name, api: API[name], admin: ADMIN[name] };
 })();
 
 const SN_DEFAULTS = {
@@ -319,7 +324,8 @@ const SN = {
   // Starting invoice lines built from the customer's request.
   linesFromOrder(cfg, o) {
     return o.items.map((it) => {
-      const unit = it.kind === 'custom' ? SN.customPrice(cfg) : SN.perCookie(cfg, it.kind);
+      // Orders from the Sheet carry the unit price they were quoted at; otherwise use today's prices.
+      const unit = it.unit != null ? it.unit : it.kind === 'custom' ? SN.customPrice(cfg) : SN.perCookie(cfg, it.kind);
       return { desc: it.qty + ' ' + SN.itemLabel(it.kind) + (it.summary ? ' (' + it.summary.replace(/ · estimated at .*?each/, '') + ')' : ''), qty: it.qty, unit: Math.round(unit * 100) / 100 };
     });
   },
@@ -333,7 +339,8 @@ const SN = {
 };
 
 // Pages wait on this before reading settings: SN.ready.then(() => { const cfg = SN.load(); ... })
-SN.ready = SN.fetchConfig();
+// The admin page (window.SN_ADMIN) gets its data from Apps Script directly, so it skips this.
+SN.ready = window.SN_ADMIN ? Promise.resolve() : SN.fetchConfig();
 
 // Shared inline icons (stroke SVG, decorative).
 const SN_ICONS = {

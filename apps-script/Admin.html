@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<!--
+  Sweet Nothings by M - admin page loader (Apps Script file "Admin").
+  The admin's look and logic load from the website (siteUrl on the Settings tab): styles.css, config.js, admin.js.
+  So admin changes ship with the website; this file rarely changes. Code.gs only serves it to the Sheet's owner.
+-->
+<html lang="en">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="<?= siteUrl ?>styles.css?v=<?= v ?>">
+</head>
+<body>
+<div id="admin-app"><p style="padding:32px;font-family:sans-serif;color:#5E6577">Loading your admin…</p></div>
+<? if (!siteUrl) { ?>
+<p style="padding:0 32px;font-family:sans-serif;color:#B23A2B">The <strong>siteUrl</strong> setting on the Sheet's Settings tab is blank, so the admin can't load. Set it to the website address (ending in /).</p>
+<? } ?>
+<script>window.SN_ADMIN = { siteUrl: <?!= JSON.stringify(siteUrl) ?> };</script>
+<script src="<?= siteUrl ?>config.js?v=<?= v ?>"></script>
+<script src="<?= siteUrl ?>admin.js?v=<?= v ?>"></script>
+</body>
+</html>

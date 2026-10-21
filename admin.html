@@ -9,160 +9,37 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261021">
+<link rel="stylesheet" href="styles.css?v=20261022">
 </head>
 <body>
-<div class="proto-banner">Prototype admin: no login yet, and changes are saved in this browser only. In the real site this is locked to the owner's Google account and saves to the Google Sheet.</div>
-<header class="admin-header">
-  <div class="wrap">
-    <a class="brand" href="admin.html"><img src="logo.png" alt=""><span>Sweet Nothings · Admin</span></a>
-    <a class="btn ghost small" href="index.html">View site</a>
-  </div>
-</header>
-
-<div class="wrap admin-layout">
-  <nav class="admin-nav" aria-label="Admin sections">
-    <a href="#orders">Orders</a>
-    <a href="#messages">Messages</a>
-    <a href="#custom">Custom pricing</a>
-    <a href="#artisan">Artisan &amp; flavors</a>
-    <a href="#rules">Ordering rules</a>
-    <a href="#zones">Drop-off zones</a>
-    <a href="#faq">FAQ</a>
-    <a href="#settings">Tax &amp; contact</a>
-  </nav>
-
-  <main class="admin-main">
-    <div class="admin-title">
-      <div>
-        <h1>Shop settings</h1>
-        <p>Use <strong>Preview changes</strong> to see the site with your edits before anything goes live. Customers only see changes after you save.</p>
-      </div>
-      <div class="row-gap" style="gap:10px">
-        <a class="btn ghost" href="index.html?preview=1" target="_blank" data-preview>Preview changes</a>
-        <button type="button" class="btn" id="save-top">Save changes</button>
-      </div>
-    </div>
-
-    <section class="panel-card" id="orders" aria-labelledby="orders-h">
-      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-start">
-        <div><h2 id="orders-h">Orders</h2><p class="sub">New requests come in as <strong>Pending review</strong>. Click <strong>Review</strong> to approve as-is or with changes. Either way, the QuickBooks invoice goes to the customer.</p></div>
-        <button type="button" class="btn ghost small" id="clear-orders">Clear demo orders</button>
-      </div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Order</th><th>Customer</th><th>Needed by</th><th>Event</th><th>Cookies</th><th>Pickup / drop-off</th><th>Total</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
-        <tbody id="orders-body"></tbody>
-      </table></div>
-    </section>
-
-    <section class="panel-card" id="messages" aria-labelledby="messages-h">
-      <h2 id="messages-h">Messages</h2>
-      <p class="sub">Questions sent from the Contact page. In the real site these also land in your email inbox, so you can just hit reply.</p>
-      <div class="stack" id="msg-list"></div>
-    </section>
-
-    <section class="panel-card" id="custom" aria-labelledby="custom-h">
-      <h2 id="custom-h">Custom cookie pricing</h2>
-      <p class="sub">Customers see a starting price and an estimate. You set the final price when you approve each order.</p>
-      <div class="fields">
-        <div class="field"><label class="label" for="customBasePrice">Starting price</label><div class="input-wrap"><span>$</span><input id="customBasePrice" type="number" min="0" step="0.25" data-path="customBasePrice" data-type="num"><span>/ cookie</span></div></div>
-        <div class="field"><label class="label" for="minQty">Minimum order</label><div class="input-wrap"><input id="minQty" type="number" min="1" data-path="minQty" data-type="int"><span>cookies</span></div></div>
-        <div class="field"><label class="label" for="maxDesigns">Most designs a customer can pick</label><div class="input-wrap"><input id="maxDesigns" type="number" min="1" max="24" data-path="maxDesigns" data-type="int"><span>designs</span></div></div>
-        <div class="field" style="grid-column:1 / -1"><label class="label" for="customNote">Pricing note shown to customers</label><textarea class="input" id="customNote" rows="2" data-path="customNote"></textarea></div>
-      </div>
-    </section>
-
-    <section class="panel-card" id="artisan" aria-labelledby="artisan-h">
-      <h2 id="artisan-h">Artisan cookies &amp; flavors</h2>
-      <p class="sub">Set prices, add new flavors, hide ones you're not baking, and mark a special.</p>
-      <div class="fields">
-        <div class="field"><label class="label" for="miniPerDozen">Mini, per dozen</label><div class="input-wrap"><span>$</span><input id="miniPerDozen" type="number" min="0" step="0.5" data-path="miniPerDozen" data-type="num"></div></div>
-        <div class="field"><label class="label" for="largePerDozen">Large, per dozen</label><div class="input-wrap"><span>$</span><input id="largePerDozen" type="number" min="0" step="0.5" data-path="largePerDozen" data-type="num"></div></div>
-        <div class="field"><label class="label" for="flavorsPerDozen">Flavors allowed per dozen</label><div class="input-wrap"><input id="flavorsPerDozen" type="number" min="1" max="12" data-path="flavorsPerDozen" data-type="int"><span>flavors</span></div></div>
-      </div>
-
-      <h3 style="font-size:22px;margin:26px 0 6px">Flavors</h3>
-      <div id="flavor-list" style="border-top:1px solid var(--line)"></div>
-      <form id="add-flavor" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;align-items:flex-end">
-        <div class="field" style="flex:1 1 240px"><label class="label" for="new-flavor">Add a new flavor</label><input class="input" id="new-flavor" type="text" placeholder="e.g. Salted Caramel" autocomplete="off"></div>
-        <button type="submit" class="btn navy">+ Add flavor</button>
-      </form>
-      <p class="hint" style="margin-top:8px">New flavors show on both the Mini and Large Artisan menus. Hide a flavor to take it off the menu without deleting it.</p>
-
-      <h3 style="font-size:22px;margin:26px 0 12px">Special banner</h3>
-      <div class="fields">
-        <div class="field" style="grid-column:1 / -1"><label class="label" for="specialText">Banner text (leave blank to hide)</label><input class="input" id="specialText" type="text" data-path="specialText"></div>
-        <div class="field"><label class="label" for="specialUntil">Show until</label><input class="input" id="specialUntil" type="date" data-path="specialUntil"></div>
-      </div>
-    </section>
-
-    <section class="panel-card" id="rules" aria-labelledby="rules-h">
-      <h2 id="rules-h">Ordering rules</h2>
-      <p class="sub">Control how far ahead customers must order and which days are closed.</p>
-      <div class="fields">
-        <div class="field"><label class="label" for="leadDays">Minimum notice</label><div class="input-wrap"><input id="leadDays" type="number" min="0" max="90" data-path="leadDays" data-type="int"><span>days</span></div></div>
-        <div class="field"><label class="label" for="maxOrdersPerDay">Max orders per day</label><div class="input-wrap"><input id="maxOrdersPerDay" type="number" min="1" data-path="maxOrdersPerDay" data-type="int"><span>orders</span></div><p class="hint">Full days get blocked automatically in the real build.</p></div>
-        <div class="field"><span class="label" id="accepting-label">Accepting orders</span><button type="button" class="switch" role="switch" id="accepting" aria-labelledby="accepting-label" aria-checked="true"><span class="track" aria-hidden="true"></span><span id="accepting-text">Open</span></button></div>
-      </div>
-      <span class="label" style="display:block;margin-top:20px">Blocked dates</span>
-      <div class="row-gap" id="blocked" style="margin-top:8px"></div>
-      <form id="add-block" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;align-items:flex-end">
-        <div class="field"><label class="label" for="new-block">Block a date</label><input class="input" id="new-block" type="date">
-        <p class="hint">Dates that have passed are removed automatically.</p></div>
-        <button type="submit" class="btn navy">+ Block date</button>
-      </form>
-    </section>
-
-    <section class="panel-card" id="zones" aria-labelledby="zones-h">
-      <h2 id="zones-h">Drop-off zones</h2>
-      <p class="sub">Drop-off is offered only to these ZIP codes. Everyone else sees pickup in Rosemont.</p>
-      <div class="table-wrap"><table>
-        <thead><tr><th>ZIP</th><th>Area name</th><th>Fee</th><th><span class="sr-only">Delete</span></th></tr></thead>
-        <tbody id="zones-body"></tbody>
-      </table></div>
-      <button type="button" class="btn dashed" data-act="add-zone" style="margin-top:14px">+ Add a ZIP code</button>
-    </section>
-
-    <section class="panel-card" id="faq" aria-labelledby="faq-h">
-      <h2 id="faq-h">FAQ</h2>
-      <p class="sub">These show on the FAQ page in this order. Replace anything in [brackets] with your own details.</p>
-      <div class="stack" id="faq-editor"></div>
-      <button type="button" class="btn dashed" data-act="add-faq" style="margin-top:14px">+ Add a question</button>
-    </section>
-
-    <section class="panel-card" id="settings" aria-labelledby="settings-h">
-      <h2 id="settings-h">Tax &amp; contact</h2>
-      <p class="sub">Who gets notified about new orders, and what customers see.</p>
-      <div class="fields">
-        <div class="field"><label class="label" for="taxRate">Grocery tax</label><div class="input-wrap"><input id="taxRate" type="number" min="0" step="0.01" data-path="taxRate" data-type="num"><span>%</span></div><p class="hint">Applied to cookies, not the drop-off fee.</p></div>
-        <div class="field"><label class="label" for="ownerEmail">New-order alerts go to</label><input class="input" id="ownerEmail" type="email" data-path="ownerEmail" placeholder="owner@gmail.com"></div>
-        <div class="field"><label class="label" for="pickupCity">Pickup area (shown on site)</label><input class="input" id="pickupCity" type="text" data-path="pickupCity"></div>
-        <div class="field"><label class="label" for="pickupAddress">Pickup address (emailed only)</label><input class="input" id="pickupAddress" type="text" data-path="pickupAddress"></div>
-        <div class="field"><label class="label" for="instagram">Instagram link</label><input class="input" id="instagram" type="url" data-path="instagram"></div>
-        <div class="field"><label class="label" for="instagramHandle">Instagram handle</label><input class="input" id="instagramHandle" type="text" data-path="instagramHandle"></div>
-      </div>
-      <button type="button" class="link-btn" id="reset-defaults" style="margin-top:18px">Reset all settings to the starting defaults</button>
-    </section>
-  </main>
-</div>
-
-<div class="scrim" id="scrim"></div>
-<aside class="panel review-panel" id="review" role="dialog" aria-modal="true" aria-labelledby="review-title" tabindex="-1"></aside>
-
-<div class="save-bar" id="save-bar" role="region" aria-label="Unsaved changes">
-  <div class="wrap">
-    <span>You have unsaved changes.</span>
-    <div class="row-gap">
-      <button type="button" class="btn ghost small" id="discard">Discard</button>
-      <a class="btn ghost small" href="index.html?preview=1" target="_blank" data-preview>Preview changes</a>
-      <button type="button" class="btn small" id="save-bottom">Save changes</button>
-    </div>
+<!--
+  The owner admin lives on Google Apps Script now (apps-script/Admin.html), behind the owner's Google sign-in.
+  This page just links there. On localhost, admin.html?dev=1 runs the admin against fake data for testing
+  (.claude/admin-dev.js, not part of the website).
+-->
+<div id="admin-app">
+  <div class="wrap" style="padding:64px 0;max-width:560px">
+    <p class="eyebrow">Owner admin</p>
+    <h1>The admin has moved</h1>
+    <p class="lead">It now opens with your Google account, so only you can see orders and change settings.</p>
+    <p style="margin-top:24px"><a class="btn btn-lg" id="admin-link" href="#">Open the admin</a></p>
+    <p class="hint" id="admin-missing" hidden>The admin link hasn't been set up yet.</p>
   </div>
 </div>
-
-<div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-text"></span></div>
-
-<script src="config.js?v=20261021"></script>
-<script src="admin.js?v=20261021"></script>
+<script src="config.js?v=20261022"></script>
+<script>
+(function () {
+  const dev = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && new URLSearchParams(location.search).has('dev');
+  if (dev) {
+    window.SN_ADMIN = { siteUrl: location.origin + '/' };
+    ['.claude/admin-dev.js', 'admin.js?v=' + Date.now()].reduce((p, src) => p.then(() => new Promise((res) => {
+      const s = document.createElement('script'); s.src = src; s.onload = res; document.body.appendChild(s);
+    })), Promise.resolve());
+    return;
+  }
+  if (SN_ENV.admin) document.getElementById('admin-link').href = SN_ENV.admin;
+  else { document.getElementById('admin-link').hidden = true; document.getElementById('admin-missing').hidden = false; }
+})();
+</script>
 </body>
 </html>

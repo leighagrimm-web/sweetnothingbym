@@ -14,10 +14,14 @@
  *   POST {"action":"sendMessage", ...}
  *
  * The site POSTs with Content-Type text/plain and a JSON string body so the browser skips the CORS preflight.
+ *
+ * Admin web app: a second deployment of this same script (Execute as: User accessing the web app,
+ * Access: Only myself), opened with no parameters. It serves Admin.html to the Sheet's owner only.
  */
 
 function doGet(e) {
   const p = (e && e.parameter) || {};
+  if (!p.action) return adminPage_();
   try {
     if (p.action === 'config') {
       const live = getConfig_();
@@ -91,9 +95,10 @@ const SETTINGS_SPEC = [
   ['replyToEmail', '', 'text', 'PRIVATE. Where customer replies go. Blank = ownerEmail.'],
   ['senderName', 'Sweet Nothings by M', 'text', 'PRIVATE. Name shown as the email sender.'],
   ['siteUrl', 'https://leighagrimm-web.github.io/sweetnothingbym/', 'text', 'PRIVATE. Website address, used for the logo and links in emails. End with /'],
-  ['environment', 'UAT', 'text', 'PRIVATE. UAT or PROD. UAT adds [TEST] to email subjects.']
+  ['environment', 'UAT', 'text', 'PRIVATE. UAT or PROD. UAT adds [TEST] to email subjects.'],
+  ['adminUrl', '', 'text', 'PRIVATE. Link to the admin page (the admin deployment\'s web app URL). Used in "New order to review" emails.']
 ];
-const PRIVATE_SETTINGS = ['pickupAddress', 'pickupInstructions','ownerEmail', 'replyToEmail', 'senderName', 'siteUrl', 'environment'];
+const PRIVATE_SETTINGS = ['pickupAddress', 'pickupInstructions','ownerEmail', 'replyToEmail', 'senderName', 'siteUrl', 'environment', 'adminUrl'];
 
 const STARTER_FLAVORS = [
   ['cc', 'Chocolate Chip', true, false],
@@ -278,11 +283,18 @@ function getConfig_() {
   return cfg;
 }
 
-// Settings safe to send to the website.
+// Settings safe to send to the website. Days that hit the order limit go out as blocked dates.
 function publicConfig_(cfg) {
   const out = {};
-  Object.keys(cfg).forEach((k) => { if (PRIVATE_SETTINGS.indexOf(k) === -1) out[k] = cfg[k]; });
+  Object.keys(cfg).forEach((k) => { if (PRIVATE_SETTINGS.indexOf(k) === -1 && k !== 'fullDates') out[k] = cfg[k]; });
+  out.blockedDates = unavailableDates_(cfg);
   return out;
+}
+
+// Blocked dates plus days already holding maxOrdersPerDay approved orders.
+function unavailableDates_(cfg) {
+  const all = (cfg.blockedDates || []).concat(cfg.fullDates || []);
+  return all.filter((d, i) => all.indexOf(d) === i).sort();
 }
 
 function clearConfigCache_() { CacheService.getScriptCache().remove(CONFIG_CACHE_KEY); }
@@ -290,7 +302,9 @@ function clearConfigCache_() { CacheService.getScriptCache().remove(CONFIG_CACHE
 // Simple trigger: Melissa (or the admin) editing the Sheet makes the website pick up changes right away.
 function onEdit() { clearConfigCache_(); }
 
-function buildConfig_() {
+// admin: the admin page's copy, which keeps hidden events/gallery photos (with a show flag) and
+// leaves ownerEmail / replyToEmail blank when they're blank in the Sheet.
+function buildConfig_(admin) {
   const ss = SpreadsheetApp.getActive();
   const cfg = {};
 
@@ -301,8 +315,10 @@ function buildConfig_() {
     if (!key) return;
     cfg[key] = parseSetting_(r[1], types[key] || 'text');
   });
-  if (!cfg.ownerEmail) cfg.ownerEmail = Session.getEffectiveUser().getEmail();
-  if (!cfg.replyToEmail) cfg.replyToEmail = cfg.ownerEmail;
+  if (!admin) {
+    if (!cfg.ownerEmail) cfg.ownerEmail = Session.getEffectiveUser().getEmail();
+    if (!cfg.replyToEmail) cfg.replyToEmail = cfg.ownerEmail;
+  }
 
   cfg.flavors = rows_(ss.getSheetByName('Flavors'))
     .filter((r) => String(r[0]).trim() && String(r[1]).trim())
@@ -334,14 +350,47 @@ function buildConfig_() {
   [['custom', 'photoCustom'], ['mini', 'photoMini'], ['large', 'photoLarge']].forEach(([k, p]) => { if (cfg.pages[p]) cfg.images[k] = cfg.pages[p]; });
 
   cfg.events = rows_(ss.getSheetByName('Events'))
-    .filter((r) => truthy_(r[0]) && String(r[3]).trim())
-    .map((r) => ({ photo: String(r[1]).trim(), when: String(r[2]).trim(), title: String(r[3]).trim(), desc: String(r[4]).trim(), price: String(r[5]).trim(), button: String(r[6]).trim() || 'None', link: String(r[7]).trim() }));
+    .filter((r) => (admin || truthy_(r[0])) && String(r[3]).trim())
+    .map((r) => {
+      const ev = { photo: String(r[1]).trim(), when: String(r[2]).trim(), title: String(r[3]).trim(), desc: String(r[4]).trim(), price: String(r[5]).trim(), button: String(r[6]).trim() || 'None', link: String(r[7]).trim() };
+      if (admin) ev.show = truthy_(r[0]);
+      return ev;
+    });
 
   cfg.gallery = rows_(ss.getSheetByName('Gallery'))
-    .filter((r) => truthy_(r[0]) && String(r[1]).trim())
-    .map((r) => ({ photo: String(r[1]).trim(), caption: String(r[2]).trim() }));
+    .filter((r) => (admin || truthy_(r[0])) && String(r[1]).trim())
+    .map((r) => {
+      const g = { photo: String(r[1]).trim(), caption: String(r[2]).trim() };
+      if (admin) g.show = truthy_(r[0]);
+      return g;
+    });
+
+  // Days already holding maxOrdersPerDay approved orders (Invoice sent and later). Pending and declined don't count.
+  const max = Number(cfg.maxOrdersPerDay) || 0;
+  const counts = dayCounts_();
+  cfg.fullDates = max > 0 ? Object.keys(counts).filter((d) => d >= today && counts[d].approved >= max).sort() : [];
 
   return cfg;
+}
+
+const COUNTED_STATUSES = ['Invoice sent', 'Paid', 'Baking', 'Ready', 'Completed'];
+
+// { '2026-11-07': { approved: 2, pending: 1 }, ... } from the Orders tab.
+function dayCounts_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
+  const out = {};
+  if (!sh || sh.getLastRow() < 2) return out;
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  const ci = headers.indexOf('Date needed'), si = headers.indexOf('Status');
+  rows_(sh).forEach((r) => {
+    const d = toISODate_(r[ci]);
+    const st = String(r[si]).trim();
+    if (!d) return;
+    out[d] = out[d] || { approved: 0, pending: 0 };
+    if (COUNTED_STATUSES.indexOf(st) !== -1) out[d].approved++;
+    else if (st === 'Pending review') out[d].pending++;
+  });
+  return out;
 }
 
 // The admin's unsaved "Preview changes" draft (Draft tab, key "config"), or null.
@@ -494,7 +543,7 @@ function validateOrder_(cfg, b) {
   const minISO = addDaysISO_(todayISO_(), Number(cfg.leadDays) || 0);
   if (!dateNeeded) errors.push('date needed');
   else if (dateNeeded < minISO) errors.push('a date at least ' + cfg.leadDays + ' days out');
-  else if (cfg.blockedDates.indexOf(dateNeeded) !== -1) errors.push('a different date (that day is booked)');
+  else if (unavailableDates_(cfg).indexOf(dateNeeded) !== -1) errors.push('a different date (that day is booked)');
 
   const fulfillment = b.fulfillment === 'delivery' ? 'delivery' : 'pickup';
   let address = null, deliveryFee = 0;
@@ -586,6 +635,333 @@ function sendMessage_(b) {
 }
 
 
+/* ============================== Admin ============================== */
+
+/*
+ * The owner's admin page. Admin.html is a small loader: it pulls the page's look and logic (styles.css,
+ * config.js, admin.js) from the website (siteUrl on the Settings tab), so admin changes ship with the site.
+ * Every function below the page checks that the caller is the Sheet's owner before doing anything.
+ */
+
+function adminPage_() {
+  if (!isOwner_()) {
+    return HtmlService.createHtmlOutput('<p style="font-family:sans-serif;padding:24px">This page is only for the shop owner. ' +
+      'Sign in to Google with the account that owns the Sweet Nothings Sheet, then open the admin link again.</p>').setTitle('Sweet Nothings admin');
+  }
+  const t = HtmlService.createTemplateFromFile('Admin');
+  t.siteUrl = String(getConfig_().siteUrl || '');
+  t.v = String(Date.now());
+  return t.evaluate().setTitle('Admin · Sweet Nothings by M').addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+// True only for the Google account that owns this Sheet (the email is blank for anonymous visitors).
+function isOwner_() {
+  const me = String(Session.getActiveUser().getEmail() || '').toLowerCase();
+  if (!me) return false;
+  const owner = SpreadsheetApp.getActive().getOwner();
+  const ownerEmail = String(owner ? owner.getEmail() : Session.getEffectiveUser().getEmail()).toLowerCase();
+  return me === ownerEmail;
+}
+function requireOwner_() { if (!isOwner_()) throw new Error('Only the shop owner can do that.'); }
+
+// Everything the admin page shows.
+function adminLoad() {
+  requireOwner_();
+  const cfg = buildConfig_(true);
+  const draft = getDraft_();
+  return {
+    config: cfg, stamp: settingsStamp_(cfg), draft: draft,
+    orders: readOrders_(), messages: readMessages_(), dayCounts: dayCounts_(),
+    sheetUrl: SpreadsheetApp.getActive().getUrl(), today: todayISO_()
+  };
+}
+
+// Fingerprint of the editable settings, to notice edits made in the Sheet while the admin page was open.
+function settingsStamp_(cfg) {
+  const c = Object.assign({}, cfg);
+  delete c.fullDates;
+  return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(c), Utilities.Charset.UTF_8));
+}
+
+// Save settings. stamp is what adminLoad returned; if the Sheet changed since then, nothing is saved
+// unless force is true.
+function adminSaveSettings(c, stamp, force) {
+  requireOwner_();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const current = settingsStamp_(buildConfig_(true));
+    if (!force && stamp && stamp !== current) return { ok: false, conflict: true };
+    writeSettings_(c);
+    clearDraft_();
+    SpreadsheetApp.flush();
+    clearConfigCache_();
+    const fresh = buildConfig_(true);
+    return { ok: true, config: fresh, stamp: settingsStamp_(fresh) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function adminSaveDraft(c) {
+  requireOwner_();
+  const sh = SpreadsheetApp.getActive().getSheetByName('Draft');
+  const rows = rows_(sh);
+  const i = rows.findIndex((r) => String(r[0]) === 'config');
+  const row = ['config', JSON.stringify(c), new Date()];
+  if (i === -1) appendRows_(sh, [row]); else sh.getRange(i + 2, 1, 1, 3).setValues([row]);
+  return { ok: true };
+}
+function adminClearDraft() { requireOwner_(); clearDraft_(); return { ok: true }; }
+function clearDraft_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Draft');
+  const i = rows_(sh).findIndex((r) => String(r[0]) === 'config');
+  if (i !== -1) sh.getRange(i + 2, 2, 1, 2).clearContent();
+}
+
+function writeSettings_(c) {
+  const ss = SpreadsheetApp.getActive();
+
+  // Settings tab: one row per setting, matched by name.
+  const st = ss.getSheetByName('Settings');
+  const keys = rows_(st).map((r) => String(r[0]).trim());
+  SETTINGS_SPEC.forEach(([key, , type, note]) => {
+    if (key === 'images' || c[key] === undefined) return;   // menu photos are saved on the Pages tab
+    const v = type === 'json' ? JSON.stringify(c[key]) : type === 'bool' ? (c[key] ? 'TRUE' : 'FALSE') : String(c[key] == null ? '' : c[key]);
+    const i = keys.indexOf(key);
+    if (i === -1) { appendRows_(st, [[key, cell_(v), note]]); keys.push(key); } else st.getRange(i + 2, 2).setValue(cell_(v));
+  });
+
+  replaceRows_(ss.getSheetByName('Flavors'), (c.flavors || []).map((f) => [f.id || ('f' + Date.now().toString(36)), f.name, !!f.on, !!f.special]), [3, 4]);
+  replaceRows_(ss.getSheetByName('Zones'), (c.zones || []).filter((z) => /^\d{5}$/.test(z.zip)).map((z) => [z.zip, z.area, Number(z.fee) || 0]));
+
+  // Keep any notes typed next to blocked dates in the Sheet.
+  const bd = ss.getSheetByName('BlockedDates');
+  const notes = {};
+  rows_(bd).forEach((r) => { const d = toISODate_(r[0]); if (d) notes[d] = r[1]; });
+  replaceRows_(bd, (c.blockedDates || []).map((d) => [d, notes[d] || '']));
+
+  replaceRows_(ss.getSheetByName('FAQ'), (c.faqs || []).filter((f) => (f.q || '').trim() || (f.a || '').trim()).map((f) => [f.q, f.a]));
+
+  // Pages tab: update each Text by key, keeping the "Where it shows" column.
+  const pg = ss.getSheetByName('Pages');
+  const pkeys = rows_(pg).map((r) => String(r[0]).trim());
+  Object.keys(c.pages || {}).forEach((key) => {
+    const i = pkeys.indexOf(key);
+    if (i !== -1) { pg.getRange(i + 2, 2).setValue(cell_(String(c.pages[key] || ''))); return; }
+    const starter = STARTER_PAGES.find((p) => p[0] === key);
+    appendRows_(pg, [[key, cell_(String(c.pages[key] || '')), starter ? starter[2] : '']]);
+    pkeys.push(key);
+  });
+
+  const ev = ss.getSheetByName('Events');
+  replaceRows_(ev, (c.events || []).filter((e) => (e.title || '').trim())
+    .map((e) => [e.show !== false, e.photo || '', e.when || '', e.title, e.desc || '', e.price || '', EVENT_BUTTONS.indexOf(e.button) !== -1 ? e.button : 'None', e.link || '']), [1]);
+  const n = Math.max(1, (c.events || []).length);
+  ev.getRange(2, 7, n, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(EVENT_BUTTONS, true).build());
+
+  replaceRows_(ss.getSheetByName('Gallery'), (c.gallery || []).filter((g) => (g.photo || '').trim())
+    .map((g) => [g.show !== false, g.photo, g.caption || '']), [1]);
+}
+
+// Replace a list tab's rows (below the header) with new ones. checkboxCols: 1-based columns to show as checkboxes.
+function replaceRows_(sh, rows, checkboxCols) {
+  const last = sh.getLastRow();
+  if (last > 1) {
+    const old = sh.getRange(2, 1, last - 1, sh.getLastColumn());
+    old.clearDataValidations();
+    old.clearContent();
+  }
+  if (!rows.length) return;
+  sh.getRange(2, 1, rows.length, rows[0].length).setValues(rows.map((r) => r.map(cell_)));
+  (checkboxCols || []).forEach((col) => sh.getRange(2, col, rows.length, 1).insertCheckboxes());
+}
+
+/* ----- Orders ----- */
+
+function readOrders_() {
+  const ss = SpreadsheetApp.getActive();
+  const items = {};
+  const ish = ss.getSheetByName('OrderItems');
+  const ih = ish.getRange(1, 1, 1, ish.getLastColumn()).getValues()[0];
+  rows_(ish).forEach((r) => {
+    const g = (h) => r[ih.indexOf(h)];
+    const num = String(g('Order')).trim();
+    if (!num) return;
+    const kind = String(g('Kind'));
+    let fq = {};
+    try { fq = JSON.parse(g('Flavors (data)') || '{}'); } catch (e) { /* ignore */ }
+    const unit = Number(g('Unit price')) || 0;
+    const designs = Number(g('Designs')) || 0;
+    (items[num] = items[num] || []).push({
+      kind, qty: Number(g('Qty')) || 0, designs, desc: String(g('Description') || ''), photoName: String(g('Photo') || ''), fq,
+      unit, lineTotal: Number(g('Line total')) || 0,
+      summary: kind === 'custom'
+        ? designs + ' design' + (designs > 1 ? 's' : '') + ' · estimated at ' + money_(unit) + ' each' + (g('Photo') ? ' · photo attached' : '')
+        : String(g('Flavors') || '')
+    });
+  });
+  const sh = ss.getSheetByName('Orders');
+  const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  return rows_(sh).map((r) => orderFromRow_(h, r, items)).filter((o) => o.number).reverse();   // newest first
+}
+
+function orderFromRow_(h, r, items) {
+  const g = (k) => r[h.indexOf(k)];
+  const iso = (v) => (v instanceof Date ? v.toISOString() : String(v || ''));
+  const delivery = String(g('Pickup / drop-off')) === 'Drop-off';
+  let invoice = null;
+  try { invoice = g('Invoice') ? JSON.parse(g('Invoice')) : null; } catch (e) { /* ignore */ }
+  const num = String(g('Order')).trim();
+  return {
+    number: num, createdAt: iso(g('Received')), status: String(g('Status') || 'Pending review'),
+    customer: { name: String(g('Name') || ''), email: String(g('Email') || ''), phone: String(g('Phone') || '') },
+    eventType: String(g('Occasion') || ''), dateNeeded: toISODate_(g('Date needed')), allergies: String(g('Allergies') || ''),
+    fulfillment: delivery ? 'delivery' : 'pickup',
+    address: delivery ? { street: String(g('Street') || ''), city: String(g('City') || ''), zip: String(g('ZIP') || '') } : null,
+    subtotal: Number(g('Subtotal')) || 0, tax: Number(g('Tax')) || 0, taxRate: Number(g('Tax rate')) || 0,
+    deliveryFee: Number(g('Drop-off fee')) || 0, total: Number(g('Estimated total')) || 0,
+    items: items[num] || [], invoice, declineNote: String(g('Decline note') || ''),
+    emailStatus: String(g('Customer email') || ''), updatedAt: iso(g('Updated'))
+  };
+}
+
+// Row number (1-based) of an order on the Orders tab, or -1.
+function findOrderRow_(sh, number) {
+  const col = sh.getRange(2, 1, Math.max(1, sh.getLastRow() - 1), 1).getValues();
+  const i = col.findIndex((r) => String(r[0]).trim() === number);
+  return i === -1 ? -1 : i + 2;
+}
+
+function loadOrder_(number) {
+  const o = readOrders_().find((x) => x.number === number);
+  if (!o) throw new Error('Order ' + number + ' not found.');
+  return o;
+}
+
+// The invoice lines an approval starts from (same wording as the admin page shows).
+function startingLines_(o) {
+  return o.items.map((it) => ({
+    desc: it.qty + ' ' + itemLabel_(it.kind) + (it.summary ? ' (' + it.summary.replace(/ · estimated at .*?each/, '') + ')' : ''),
+    qty: it.qty, unit: round2_(it.unit)
+  }));
+}
+
+// Approve a pending order: save the final invoice, mark it "Invoice sent" and email the confirmation (email #2).
+function adminApprove(number, inv) {
+  requireOwner_();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  let o;
+  try {
+    o = loadOrder_(number);
+    if (o.status !== 'Pending review') return { ok: false, error: number + ' is already ' + o.status + '.' };
+    const lines = (inv.lines || []).map((l) => ({ desc: clean_(l.desc, 300), qty: Number(l.qty), unit: round2_(Number(l.unit)) }));
+    if (!lines.length || lines.some((l) => !l.desc || !(l.qty > 0) || !isFinite(l.unit))) return { ok: false, error: 'Every invoice line needs a description and a quantity.' };
+    const fee = o.fulfillment === 'delivery' ? Math.max(0, Number(inv.fee) || 0) : 0;
+    const subtotal = round2_(lines.reduce((a, l) => a + l.qty * l.unit, 0));
+    const tax = Math.round(Math.max(0, subtotal) * o.taxRate) / 100;
+    const total = round2_(subtotal + tax + fee);
+    if (total <= 0) return { ok: false, error: 'The invoice total has to be more than $0.' };
+    const changed = JSON.stringify(lines) !== JSON.stringify(startingLines_(o)) || fee !== (o.fulfillment === 'delivery' ? o.deliveryFee : 0);
+    o.invoice = { lines, fee, subtotal, tax, total, note: clean_(inv.note, 2000), changed, sentAt: new Date().toISOString() };
+    o.status = 'Invoice sent';
+    const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
+    const row = findOrderRow_(sh, number);
+    setCell_(sh, row, 'Status', o.status);
+    setCell_(sh, row, 'Updated', new Date());
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  return finishApproval_(o);
+}
+
+// Send (or resend) the confirmation email and record how it went in the invoice.
+function finishApproval_(o) {
+  const cfg = getConfig_();
+  o.invoice.emailStatus = sendSafely_(() => sendConfirmationEmail_(cfg, o));
+  const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
+  setCell_(sh, findOrderRow_(sh, o.number), 'Invoice', JSON.stringify(o.invoice));
+  clearConfigCache_();   // the date may now be full
+  return { ok: true, order: o, dayCounts: dayCounts_() };
+}
+
+function adminResendConfirmation(number) {
+  requireOwner_();
+  const o = loadOrder_(number);
+  if (!o.invoice) return { ok: false, error: number + ' has not been approved yet.' };
+  o.invoice.sentAt = new Date().toISOString();
+  return finishApproval_(o);
+}
+
+function adminDecline(number, note) {
+  requireOwner_();
+  const o = loadOrder_(number);
+  if (o.status !== 'Pending review') return { ok: false, error: number + ' is already ' + o.status + '.' };
+  o.status = 'Declined';
+  o.declineNote = clean_(note, 2000);
+  const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
+  const row = findOrderRow_(sh, number);
+  setCell_(sh, row, 'Status', 'Declined');
+  setCell_(sh, row, 'Decline note', o.declineNote);
+  setCell_(sh, row, 'Updated', new Date());
+  const emailStatus = sendSafely_(() => sendDeclineEmail_(getConfig_(), o));
+  clearConfigCache_();
+  return { ok: true, order: o, emailStatus, dayCounts: dayCounts_() };
+}
+
+// Status changes after approval (Paid, Baking, Ready, Completed). QuickBooks sets "Paid" automatically in phase 3.
+function adminSetStatus(number, status) {
+  requireOwner_();
+  if (COUNTED_STATUSES.indexOf(status) === -1) return { ok: false, error: 'Unknown status.' };
+  const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
+  const row = findOrderRow_(sh, number);
+  if (row === -1) return { ok: false, error: 'Order ' + number + ' not found.' };
+  setCell_(sh, row, 'Status', status);
+  setCell_(sh, row, 'Updated', new Date());
+  clearConfigCache_();
+  return { ok: true };
+}
+
+/* ----- Messages ----- */
+
+function readMessages_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Messages');
+  const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  return rows_(sh).map((r) => {
+    const g = (k) => r[h.indexOf(k)];
+    const when = g('Received');
+    return {
+      id: Number(g('ID')) || 0, createdAt: when instanceof Date ? when.toISOString() : String(when || ''), status: String(g('Status') || 'New'),
+      topic: String(g('Topic') || ''), name: String(g('Name') || ''), email: String(g('Email') || ''), phone: String(g('Phone') || ''),
+      orderNumber: String(g('Order') || ''), message: String(g('Message') || ''), photoName: String(g('Photo') || ''), source: String(g('Source') || '')
+    };
+  }).filter((m) => m.id).reverse();
+}
+
+function messageRow_(sh, id) {
+  const col = sh.getRange(2, 1, Math.max(1, sh.getLastRow() - 1), 1).getValues();
+  const i = col.findIndex((r) => Number(r[0]) === Number(id));
+  return i === -1 ? -1 : i + 2;
+}
+
+function adminSetMessageStatus(id, status) {
+  requireOwner_();
+  const sh = SpreadsheetApp.getActive().getSheetByName('Messages');
+  const row = messageRow_(sh, id);
+  if (row !== -1) setCell_(sh, row, 'Status', status === 'Replied' ? 'Replied' : 'New');
+  return { ok: true };
+}
+
+function adminDeleteMessage(id) {
+  requireOwner_();
+  const sh = SpreadsheetApp.getActive().getSheetByName('Messages');
+  const row = messageRow_(sh, id);
+  if (row !== -1) sh.deleteRow(row);
+  return { ok: true };
+}
+
 /* ============================== Emails ============================== */
 
 /*
@@ -634,14 +1010,14 @@ function sendOwnerOrderAlert_(cfg, o) {
     '<a href="mailto:' + esc_(o.customer.email) + '" style="color:' + C.navy + '">' + esc_(o.customer.email) + '</a><br>' + esc_(o.customer.phone) + '</div>';
   const html = shell_(cfg, 'New order to review', o.number,
     allergy + contact + facts_(o, true) + itemsBlock_(o, 'Request') + totalsBlock_(o, 'Estimated total') +
-    button_(SpreadsheetApp.getActive().getUrl(), 'Open the orders sheet') +
-    p_('Reply to this email to write to the customer. Review and approval move to the admin page in the next update.', 13));
+    (cfg.adminUrl ? button_(cfg.adminUrl, 'Review in admin') : button_(SpreadsheetApp.getActive().getUrl(), 'Open the orders sheet')) +
+    p_('Approve or decline it in the admin page. Reply to this email to write to the customer.', 13));
   const text = [
     'New order to review: ' + o.number, '', o.customer.name, o.customer.email, o.customer.phone, '',
     o.allergies ? 'ALLERGIES / DIETARY NEEDS: ' + o.allergies + '\n' : '',
     'Needed by: ' + prettyDate_(o.dateNeeded), 'Occasion: ' + occasion_(o),
     o.address ? 'Drop-off to: ' + o.address.street + ', ' + o.address.city + ' ' + o.address.zip : 'Pickup',
-    '', itemsText_(o), '', totalsText_(o, 'Estimated total'), '', 'Orders sheet: ' + SpreadsheetApp.getActive().getUrl()
+    '', itemsText_(o), '', totalsText_(o, 'Estimated total'), '', cfg.adminUrl ? 'Review in admin: ' + cfg.adminUrl : 'Orders sheet: ' + SpreadsheetApp.getActive().getUrl()
   ].join('\n');
   MailApp.sendEmail({
     to: cfg.ownerEmail,
@@ -672,6 +1048,68 @@ function sendOwnerMessageAlert_(cfg, m) {
     body: ['New message (' + m.source + ')', 'From: ' + (m.name ? m.name + ' ' : '') + '<' + m.email + '>' + (m.phone ? ' ' + m.phone : ''),
       'Topic: ' + m.topic, m.orderNumber ? 'Order: ' + m.orderNumber : '', m.photoName ? 'Photo: ' + m.photoName + ' (not saved yet)' : '', '', m.message].filter((l) => l !== null).join('\n'),
     name: cfg.senderName, replyTo: m.email
+  });
+}
+
+/* ---------- Email #2: confirmed (customer), sent when Melissa approves ---------- */
+function sendConfirmationEmail_(cfg, o) {
+  const inv = o.invoice;
+  const first = (o.customer.name || '').split(' ')[0];
+  const isDel = o.fulfillment === 'delivery';
+  const note = inv.note
+    ? '<div style="font-size:15px;border-left:3px solid ' + C.coral + ';padding:4px 0 4px 14px;margin-bottom:18px"><em>“' + esc_(inv.note) + '”</em><br><span style="color:' + C.muted + ';font-size:13px">— M</span></div>'
+    : '';
+  const pickup = isDel ? '' :
+    '<div style="border:1px solid ' + C.line + ';border-radius:12px;padding:14px 18px;font-size:15px;margin-bottom:18px">' +
+      '<div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em">Pickup address</div>' +
+      '<div style="font-weight:600;margin-top:2px">' + esc_(cfg.pickupAddress) + '</div>' +
+      (cfg.pickupInstructions ? '<div style="color:' + C.muted + ';margin-top:6px;font-size:14px">' + esc_(cfg.pickupInstructions) + '</div>' : '') +
+    '</div>';
+  const lines = '<div style="border-top:1px solid ' + C.line + ';padding-top:14px;margin-bottom:18px">' + h2_('Your invoice') +
+    inv.lines.map((l) => '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:15px;padding:6px 0"><tr>' +
+      '<td>' + esc_(l.desc) + '<br><span style="color:' + C.muted + ';font-size:13px">' + l.qty + ' × ' + money_(l.unit) + '</span></td>' +
+      '<td align="right" style="vertical-align:top">' + money_(l.qty * l.unit) + '</td></tr></table>').join('') + '</div>';
+  const totals = totalsBlock_({ fulfillment: o.fulfillment, subtotal: inv.subtotal, tax: inv.tax, taxRate: o.taxRate, deliveryFee: inv.fee, total: inv.total }, 'Amount due') +
+    (inv.changed ? p_('Your original estimate was ' + money_(o.total) + '.', 13) : '');
+  // Phase 3 replaces this with the QuickBooks Pay button.
+  const pay = '<div style="border:2px dashed ' + C.field + ';border-radius:12px;padding:14px 18px;text-align:center;font-size:14px;color:' + C.muted + ';margin-bottom:18px">' +
+    '[Pay button: your QuickBooks invoice with a secure Pay button goes here. Connected in the next update.]</div>';
+  const html = shell_(cfg, 'You’re confirmed' + (first ? ', ' + esc_(first) : '') + '!', o.number,
+    '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">' +
+      (inv.changed ? 'I’ve reviewed your order and updated the price. ' : 'I’ve reviewed your order and it’s all set. ') + 'Pay the invoice below to lock in your date.</div>' +
+    note + pickup + facts_(o, 'confirmed') + lines + totals + pay +
+    p_('Questions or changes? Just reply to this email and mention your order number.', 14));
+  const text = [
+    'You’re confirmed' + (first ? ', ' + first : '') + '!', 'Order number ' + o.number, '',
+    (inv.changed ? 'I’ve reviewed your order and updated the price.' : 'I’ve reviewed your order and it’s all set.') + ' Pay the invoice to lock in your date.',
+    inv.note ? '\n"' + inv.note + '" — M' : '', '',
+    isDel ? 'Drop-off to: ' + o.address.street + ', ' + o.address.city + ' ' + o.address.zip : 'Pickup address: ' + cfg.pickupAddress + (cfg.pickupInstructions ? '\n' + cfg.pickupInstructions : ''),
+    'Needed by: ' + prettyDate_(o.dateNeeded), '',
+    inv.lines.map((l) => l.desc + ' – ' + l.qty + ' × ' + money_(l.unit) + ' = ' + money_(l.qty * l.unit)).join('\n'), '',
+    'Subtotal: ' + money_(inv.subtotal), 'Grocery tax (' + o.taxRate + '%): ' + money_(inv.tax), isDel ? 'Drop-off: ' + money_(inv.fee) : 'Pickup: Free',
+    'Amount due: ' + money_(inv.total), '', 'Questions or changes? Just reply to this email and mention your order number.'
+  ].join('\n');
+  MailApp.sendEmail({
+    to: o.customer.email,
+    subject: subjectPrefix_(cfg) + 'Order confirmed – please pay your invoice – Sweet Nothings ' + o.number,
+    htmlBody: html, body: text, name: cfg.senderName, replyTo: cfg.replyToEmail
+  });
+}
+
+/* ---------- Declined (customer) ---------- */
+function sendDeclineEmail_(cfg, o) {
+  const first = (o.customer.name || '').split(' ')[0];
+  const html = shell_(cfg, 'Thank you for thinking of us' + (first ? ', ' + esc_(first) : ''), o.number,
+    '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">Unfortunately I’m not able to take this order. You haven’t been charged anything.</div>' +
+    (o.declineNote ? '<div style="font-size:15px;border-left:3px solid ' + C.coral + ';padding:4px 0 4px 14px;margin-bottom:18px"><em>“' + esc_(o.declineNote) + '”</em><br><span style="color:' + C.muted + ';font-size:13px">— M</span></div>' : '') +
+    p_('Questions? Just reply to this email and mention your order number.', 14));
+  MailApp.sendEmail({
+    to: o.customer.email,
+    subject: subjectPrefix_(cfg) + 'About your Sweet Nothings order request ' + o.number,
+    htmlBody: html,
+    body: 'Thank you for thinking of us' + (first ? ', ' + first : '') + '.\n\nUnfortunately I’m not able to take order ' + o.number + '. You haven’t been charged anything.' +
+      (o.declineNote ? '\n\n"' + o.declineNote + '" — M' : '') + '\n\nQuestions? Just reply to this email.',
+    name: cfg.senderName, replyTo: cfg.replyToEmail
   });
 }
 
@@ -717,15 +1155,16 @@ function nextSteps_() {
     }).join('') + '</table></div>';
 }
 
+// forOwner: true for the owner alert; 'confirmed' for email #2 (the pickup address is shown above the facts there).
 function facts_(o, forOwner) {
   const where = o.fulfillment === 'delivery' && o.address
     ? ['Drop-off to', esc_(o.address.street) + ', ' + esc_(o.address.city) + ' ' + esc_(o.address.zip)]
-    : ['Pickup', forOwner ? 'Pickup' : esc_(getConfig_().pickupCity) + ' (address sent once confirmed)'];
+    : ['Pickup', forOwner === true ? 'Pickup' : esc_(getConfig_().pickupCity) + (forOwner === 'confirmed' ? ' (address above)' : ' (address sent once confirmed)')];
   const cell = (k, v) => '<td style="width:50%;vertical-align:top;padding:0 12px 14px 0"><div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em">' + k + '</div><div style="font-weight:600;margin-top:2px;font-size:14px">' + v + '</div></td>';
   return '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:4px">' +
     '<tr>' + cell('Needed by', esc_(prettyDate_(o.dateNeeded))) + cell('Occasion', esc_(occasion_(o))) + '</tr>' +
     '<tr>' + cell(where[0], where[1]) + cell('Contact', esc_(o.customer.name) + '<br>' + esc_(o.customer.phone)) + '</tr>' +
-    (o.allergies && !forOwner ? '<tr><td colspan="2" style="padding:0 0 14px"><div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em">Allergies / dietary needs</div><div style="font-weight:600;margin-top:2px;font-size:14px">' + esc_(o.allergies) + '</div></td></tr>' : '') +
+    (o.allergies && forOwner !== true ? '<tr><td colspan="2" style="padding:0 0 14px"><div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em">Allergies / dietary needs</div><div style="font-weight:600;margin-top:2px;font-size:14px">' + esc_(o.allergies) + '</div></td></tr>' : '') +
   '</table>';
 }
 
