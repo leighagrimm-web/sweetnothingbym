@@ -115,6 +115,11 @@ textarea.input { resize: vertical; }
 @supports (-webkit-touch-callout: none) {   /* iPhone / iPad only */
   .input[type="date"] { -webkit-appearance: none; appearance: none; }
 }
+.date-wrap { position: relative; max-width: 100%; }
+.date-ph { display: none; }
+/* iPhone / iPad (html.ios is set in config.js): Safari shows an empty date box with no "mm/dd/yyyy" hint, so add one. */
+.ios .date-ph { display: block; position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; font-size: 16px; }
+.ios .date-wrap.has-value .date-ph { display: none; }
 .input:focus { outline: 2px solid var(--coral); outline-offset: 1px; border-color: var(--coral); }
 .input[aria-invalid="true"] { border-color: var(--error); }
 .hint { font-size: 13px; color: var(--muted); margin: 0; }

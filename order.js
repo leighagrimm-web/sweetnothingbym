@@ -323,7 +323,7 @@ SN.ready.then(function () {
           '<div class="field" id="other-wrap"' + (checkout.eventType === 'Other' ? '' : ' hidden') + '><label class="label" for="c-other">Tell us the occasion</label>' +
             '<input class="input" id="c-other" type="text" data-co="eventOther" placeholder="e.g. Graduation, corporate gift" value="' + esc(checkout.eventOther) + '"></div>' +
           '<div class="field"><label class="label" for="c-date">Date you need them</label>' +
-            '<input class="input" id="c-date" type="date" data-co="date" min="' + minISO + '" value="' + esc(checkout.date) + '">' +
+            '<div class="date-wrap' + (checkout.date ? ' has-value' : '') + '"><input class="input" id="c-date" type="date" data-co="date" min="' + minISO + '" value="' + esc(checkout.date) + '"><span class="date-ph" aria-hidden="true">Tap to choose a date</span></div>' +
             '<p class="hint" id="date-msg">Earliest available: ' + esc(SN.prettyDate(minISO)) + '</p></div>' +
           '<div class="field"><label class="label" for="c-allergies">Allergies or dietary needs <span class="muted" style="font-weight:400">(optional)</span></label>' +
             '<textarea class="input" id="c-allergies" rows="2" data-co="allergies" placeholder="e.g. one guest has a nut allergy, need 6 gluten-free">' + esc(checkout.allergies) + '</textarea></div>' +
@@ -419,6 +419,8 @@ SN.ready.then(function () {
       else if (q.zone) { zipMsg.textContent = 'Drop-off to ' + checkout.zip + ' (' + q.zone.area + '): ' + money(q.fee); zipMsg.style.color = ''; }
       else { zipMsg.textContent = 'Sorry, ' + checkout.zip + ' is outside our drop-off area. Pickup in ' + cfg.pickupCity + ' is free.'; zipMsg.style.color = 'var(--error)'; }
     }
+    const dateWrap = $('.date-wrap', panel);
+    if (dateWrap) dateWrap.classList.toggle('has-value', !!checkout.date);   // hides the iPhone "Tap to choose a date" hint
     const dateMsg = $('#date-msg');
     if (dateMsg) {
       const minISO = SN.isoDate(SN.minDate(cfg));

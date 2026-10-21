@@ -24,6 +24,10 @@ Settings live in `js/config.js` (`SN_DEFAULTS`). Shared look is in `css/styles.c
 - Sending an order request saves it as `SN-####`, emails the customer "request received (not yet confirmed)", and emails the owner "New order to review". Contact and "Message me" messages are saved and emailed to the owner, with reply-to set to the customer.
 - If the Sheet can't be reached, pages show the built-in defaults, and sending shows a friendly error.
 
+## Publishing updates
+
+Every page loads `styles.css` and the scripts with a version number, for example `styles.css?v=20261021`. Phones and browsers otherwise keep the old file for up to 10 minutes. When you change CSS or JS, change that number on every page: use the date, and find-and-replace across the `.html` files.
+
 ## Still prototype (later phases)
 
 - **Admin page** (`admin.html`) still works only in the browser it's opened in. It moves to Apps Script with Google sign-in in phase 2. Until then, edit settings directly in the Sheet.

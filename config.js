@@ -12,6 +12,12 @@
 //   uat  = the GitHub Pages test site, in Leigha's Google account
 //   prod = Melissa's own domain, in her Google account (fill in at launch)
 // Paste each web app URL (ends in /exec) below. Any address not listed in PROD_HOSTS uses UAT.
+// iPhone / iPad (including iPads that report themselves as a Mac): styles.css uses html.ios to show a hint in
+// Safari's otherwise blank date box.
+if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+  document.documentElement.classList.add('ios');
+}
+
 const SN_ENV = (function () {
   const API = {
     uat: 'https://script.google.com/macros/s/AKfycbxevgGnDBQn2XUOqY3J9Ou873czPs7xWOH3sj7nPriq3K_vPAxeNw1acPVDgPCJhalw/exec',
