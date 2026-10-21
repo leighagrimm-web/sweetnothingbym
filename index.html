@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261022c">
+<link rel="stylesheet" href="styles.css?v=20261023">
 </head>
 <body data-page="home">
 <div id="site-header"></div>
@@ -55,7 +55,7 @@
         <div class="card-media" data-photo="mini" style="background:#EDE3DA"><span class="tag">Photo coming soon</span><svg width="130" height="104" viewBox="0 0 140 110" fill="none" aria-hidden="true"><circle cx="42" cy="58" r="26" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="96" cy="44" r="26" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="80" cy="82" r="20" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="36" cy="52" r="3" fill="#1F2A44"/><circle cx="49" cy="63" r="3" fill="#1F2A44"/><circle cx="90" cy="40" r="3" fill="#C65A4B"/><circle cx="102" cy="50" r="3" fill="#E8B4A8"/><circle cx="78" cy="80" r="3" fill="#1F2A44"/></svg></div>
         <div class="card-body">
           <h3>Mini Artisan</h3>
-          <p class="desc">Bite-size classics like chocolate chip and funfetti. Mix up to <span class="fpd">4</span> flavors per dozen.</p>
+          <p class="desc">Bite-size classics like chocolate chip and funfetti. Mix up to <span class="fpd">4</span> flavors, or up to <span class="fmax">6</span> with 2 dozen or more.</p>
           <p class="price"><span id="p-mini" style="font-weight:600;color:var(--navy)">$24.00</span> / dozen</p>
         </div>
       </article>
@@ -63,7 +63,7 @@
         <div class="card-media" data-photo="large" style="background:#E4E7EE"><span class="tag">Photo coming soon</span><svg width="110" height="110" viewBox="0 0 120 120" fill="none" aria-hidden="true"><circle cx="60" cy="60" r="44" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="46" cy="48" r="5" fill="#1F2A44"/><circle cx="70" cy="44" r="4" fill="#1F2A44"/><circle cx="74" cy="70" r="5" fill="#1F2A44"/><circle cx="50" cy="74" r="4" fill="#1F2A44"/><circle cx="60" cy="60" r="3" fill="#C65A4B"/></svg></div>
         <div class="card-body">
           <h3>Large Artisan</h3>
-          <p class="desc">Big, bakery-style cookies in your favorite flavors. Mix up to <span class="fpd">4</span> flavors per dozen.</p>
+          <p class="desc">Big, bakery-style cookies in your favorite flavors. Mix up to <span class="fpd">4</span> flavors, or up to <span class="fmax">6</span> with 2 dozen or more.</p>
           <p class="price"><span id="p-large" style="font-weight:600;color:var(--navy)">$36.00</span> / dozen</p>
         </div>
       </article>
@@ -93,7 +93,7 @@
 
   <section class="wrap" style="padding-bottom:72px">
     <div class="cta-split">
-      <div class="content-card">
+      <div class="content-card" data-page-link>
         <h2 style="font-size:28px;margin-bottom:8px">Have a question?</h2>
         <p class="muted">Ingredients, allergies, pickup and more.</p>
         <a class="btn ghost" href="faq.html">Read the FAQ</a>
@@ -108,8 +108,8 @@
 </main>
 
 <div id="site-footer"></div>
-<script src="config.js?v=20261022c"></script>
-<script src="layout.js?v=20261022c"></script>
+<script src="config.js?v=20261023"></script>
+<script src="layout.js?v=20261023"></script>
 <script>
 SN.ready.then(function () {
   const cfg = SN.load();
@@ -135,6 +135,7 @@ SN.ready.then(function () {
   document.getElementById('p-mini').textContent = m(cfg.miniPerDozen);
   document.getElementById('p-large').textContent = m(cfg.largePerDozen);
   document.querySelectorAll('.fpd').forEach((el) => { el.textContent = cfg.flavorsPerDozen; });
+  document.querySelectorAll('.fmax').forEach((el) => { el.textContent = cfg.flavorsMax; });
   if (SN.specialActive(cfg)) {
     document.getElementById('special-wrap').hidden = false;
     document.getElementById('special-icon').innerHTML = SN_ICONS.star;

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page not found · Sweet Nothings by M</title>
+<meta name="robots" content="noindex">
+<script>
+  // This page is shown for any missing address, at any folder depth, so links point at the site's root:
+  // "/sweetnothingbym/" on the GitHub test site, "/" on the real domain.
+  (function () {
+    var root = /\.github\.io$/.test(location.hostname) ? '/' + location.pathname.split('/')[1] + '/' : '/';
+    document.write('<base href="' + root + '">');
+  })();
+</script>
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=20261023">
+</head>
+<body data-page="404">
+<div id="site-header"></div>
+<main>
+  <section class="hero wrap" style="text-align:center;padding-bottom:72px">
+    <p class="eyebrow">Page not found</p>
+    <h1>Oops, this cookie crumbled</h1>
+    <p class="lead" style="margin-left:auto;margin-right:auto">We couldn't find that page. It may have moved, or the link might have a typo.</p>
+    <div class="row-gap" style="justify-content:center;gap:12px;margin-top:26px">
+      <a class="btn btn-lg" href="index.html">Go to the home page</a>
+      <a class="btn ghost btn-lg" href="order.html">Start your order</a>
+    </div>
+  </section>
+</main>
+<div id="site-footer"></div>
+<script src="config.js?v=20261023"></script>
+<script src="layout.js?v=20261023"></script>
+</body>
+</html>

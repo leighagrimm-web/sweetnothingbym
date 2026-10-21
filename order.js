@@ -6,15 +6,20 @@ SN.ready.then(function () {
   let draft = null;
   let draftTried = false;
   let tried = false;
-  let lastOrder = null;
+  let lastOrders = [];        // what the server sent back: a cookie request and/or a class booking
   let sending = false;
+  let submissionId = '';      // one per checkout, so a retry can't place the order twice (see SN.newSubmissionId)
+  let appliedCode = null;     // { code, type: 'percent' | 'gift', amount } once "Apply" accepts it
+  let codeChecking = false;
   const touched = {};         // checkout boxes the customer has typed in and left
   let opener = null;
   let toastTimer = null;
   const checkout = {
     eventType: '', eventOther: '', date: '', fulfillment: 'pickup',
-    address: '', city: '', zip: '', name: '', email: '', phone: '', allergies: ''
+    address: '', city: '', zip: '', name: '', email: '', phone: '', allergies: '', code: ''
   };
+  // The Sheet couldn't be reached: built-in prices and flavors may be out of date, so ordering pauses.
+  const paused = SN.configFailed;
 
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
@@ -41,9 +46,14 @@ SN.ready.then(function () {
   const customEach = SN.customPrice(cfg);
   const menuItems = [
     { kind: 'custom', title: 'Custom Cookies', desc: 'Hand-decorated to your theme. Tell us your vision and share an inspiration photo. ' + (cfg.customNote || ''), price: 'Starting at ' + money(customEach) + ' / cookie', small: '1 dozen min.', cta: 'Customize & add' },
-    { kind: 'mini', title: 'Mini Artisan', desc: 'Bite-size classics. Mix up to ' + cfg.flavorsPerDozen + ' flavors per dozen, then add extras one at a time.', price: money(cfg.miniPerDozen) + ' / dozen', small: money(SN.perCookie(cfg, 'mini')) + ' each', cta: 'Choose flavors' },
-    { kind: 'large', title: 'Large Artisan', desc: 'Big, bakery-style cookies. Mix up to ' + cfg.flavorsPerDozen + ' flavors per dozen, then add extras one at a time.', price: money(cfg.largePerDozen) + ' / dozen', small: money(SN.perCookie(cfg, 'large')) + ' each', cta: 'Choose flavors' }
+    { kind: 'mini', title: 'Mini Artisan', desc: 'Bite-size classics. ' + flavorRule() + ' Add extras one at a time.', price: money(cfg.miniPerDozen) + ' / dozen', small: money(SN.perCookie(cfg, 'mini')) + ' each', cta: 'Choose flavors' },
+    { kind: 'large', title: 'Large Artisan', desc: 'Big, bakery-style cookies. ' + flavorRule() + ' Add extras one at a time.', price: money(cfg.largePerDozen) + ' / dozen', small: money(SN.perCookie(cfg, 'large')) + ' each', cta: 'Choose flavors' }
   ];
+  // "Mix up to 4 flavors, or up to 6 with 2 dozen or more."
+  function flavorRule() {
+    const at = Number(cfg.flavorsMaxAt) || 24;
+    return 'Mix up to ' + cfg.flavorsPerDozen + ' flavors, or up to ' + cfg.flavorsMax + ' with ' + (at % 12 === 0 ? at / 12 + ' dozen' : at + ' cookies') + ' or more.';
+  }
   $('#menu').innerHTML = menuItems.map((m) => {
     const img = SN.photoUrl(cfg.images && cfg.images[m.kind]);   // photo links from the Sheet's Pages tab
     return '<article class="card">' +
@@ -54,14 +64,17 @@ SN.ready.then(function () {
         '<h3>' + esc(m.title) + '</h3>' +
         '<p class="desc">' + esc(m.desc) + '</p>' +
         '<p class="price">' + esc(m.price) + ' <span>· ' + esc(m.small) + '</span></p>' +
-        '<button type="button" class="btn" data-open="' + m.kind + '"' + (cfg.acceptingOrders ? '' : ' aria-disabled="true"') + '>' + esc(m.cta) + '</button>' +
+        '<button type="button" class="btn" data-open="' + m.kind + '"' + (cfg.acceptingOrders && !paused ? '' : ' aria-disabled="true"') + '>' + esc(m.cta) + '</button>' +
       '</div></article>';
   }).join('');
-  if (!cfg.acceptingOrders) $('#closed-note').hidden = false;
+  if (paused) {
+    $('#closed-note').textContent = 'We’re having trouble loading the menu right now. Please try again in a few minutes.';
+    $('#closed-note').hidden = false;
+  } else if (!cfg.acceptingOrders) $('#closed-note').hidden = false;
 
   $('#menu').addEventListener('click', (e) => {
     const b = e.target.closest('[data-open]');
-    if (!b || !cfg.acceptingOrders) return;
+    if (!b || !cfg.acceptingOrders || paused) return;
     openItem(b.dataset.open, b);
   });
   const bagBtn = $('#bag-btn');
@@ -172,7 +185,8 @@ SN.ready.then(function () {
             '<button type="button" class="step" data-act="qty-inc" aria-label="One more cookie">' + SN_ICONS.plus + '</button>' +
             '<span class="muted" style="font-size:14px">× <span id="d-each"></span> each (starting price)</span>' +
           '</div><p class="hint">Minimum ' + cfg.minQty + '. Pick a number or use the + and − buttons.</p></div>' +
-        '<div class="note-box">' + esc(cfg.customNote || '') + ' M will confirm your final price before you pay.</div>' +
+        '<div class="note-box">' + esc(cfg.customNote || '') + ' M will confirm your final price before you pay.' +
+          (cfg.allergyNote ? '<br><span style="display:block;margin-top:8px">* ' + esc(cfg.allergyNote) + '</span>' : '') + '</div>' +
         '<div class="field"><label class="label" for="d-desc">Describe your cookies</label>' +
           '<textarea class="input" id="d-desc" rows="5" data-draft="desc" placeholder="Theme, colors, names or wording, and how many of each design…"></textarea></div>' +
         '<div class="field"><span class="label">Inspiration photo (optional)</span>' +
@@ -200,7 +214,7 @@ SN.ready.then(function () {
     const dozen = mode === 'mini' ? cfg.miniPerDozen : cfg.largePerDozen;
     return head(title, money(dozen) + ' per dozen · ' + money(per) + ' each') +
       '<div class="panel-body">' +
-        '<p style="margin:0 0 6px">Pick your flavors. Mix up to ' + cfg.flavorsPerDozen + ' flavors per dozen (' + cfg.flavorsPerDozen * 2 + ' flavors for 2 dozen, and so on).</p>' +
+        '<p style="margin:0 0 6px">Pick your flavors. ' + esc(flavorRule()) + '</p>' +
         '<div style="border-top:1px solid var(--line);margin-top:10px">' + (rows || '<p class="hint" style="padding:14px 0">No flavors are available right now.</p>') + '</div>' +
         '<div class="row-gap" style="margin-top:16px"><button type="button" class="btn ghost small" data-act="f-clear">Clear</button></div>' +
         '<p class="hint" id="art-msg" style="margin-top:14px;font-size:14px" aria-live="polite"></p>' +
@@ -251,14 +265,14 @@ SN.ready.then(function () {
         $('select[data-fq]', row).disabled = locked;
         $('.lock-note', row).hidden = !locked;
       });
-      const perDozen = cfg.flavorsPerDozen;
-      const nextDozen = (Math.max(1, Math.floor(c.qty / 12)) + 1) * 12;
+      const unlockAt = Number(cfg.flavorsMaxAt) || 24;
       const msg = $('#art-msg');
       if (c.err) {
         msg.textContent = c.err;
         msg.style.color = draftTried || c.used > c.max ? 'var(--error)' : 'var(--muted)';
       } else if (atLimit) {
-        msg.textContent = c.qty + ' cookies · ' + c.used + ' of ' + c.max + ' flavors used. Reach ' + nextDozen + ' cookies to unlock ' + perDozen + ' more flavors.';
+        msg.textContent = c.qty + ' cookies · ' + c.used + ' of ' + c.max + ' flavors used.' +
+          (c.qty < unlockAt && cfg.flavorsMax > c.max ? ' Reach ' + unlockAt + ' cookies to pick up to ' + cfg.flavorsMax + ' flavors.' : '');
         msg.style.color = 'var(--muted)';
       } else {
         msg.textContent = c.qty + ' cookies · ' + c.used + ' of ' + c.max + ' flavors used';
@@ -269,6 +283,11 @@ SN.ready.then(function () {
     add.textContent = 'Add to bag · ' + (draft.kind === 'custom' ? 'from ' : '') + money(st.total);
     add.setAttribute('aria-disabled', String(!!st.err));
   }
+
+  // A bag can hold cookies (sent to M for review) and classes (booked right away).
+  const hasCookies = () => bag.some((it) => it.kind !== 'class');
+  const hasClasses = () => bag.some((it) => it.kind === 'class');
+  const round2 = (n) => Math.round(n * 100) / 100;
 
   function renderBag() {
     if (!bag.length) {
@@ -284,14 +303,18 @@ SN.ready.then(function () {
       '</div>' +
       '<div class="panel-foot">' +
         '<div class="grand"><strong>Subtotal</strong><strong>' + (bag.some((it) => it.kind === 'custom') ? 'from ' : '') + money(subtotal) + '</strong></div>' +
-        '<p class="hint" style="margin:-4px 0 12px">Next: your date, pickup or drop-off, and contact details. Tax and any drop-off fee are added at checkout.</p>' +
-        '<button type="button" class="btn block" data-act="checkout">Begin checkout</button>' +
+        '<p class="hint" style="margin:-4px 0 12px">' + (hasCookies()
+          ? 'Next: your date, pickup or drop-off, and contact details. Tax and any drop-off fee are added at checkout.'
+          : 'Next: your contact details.') + '</p>' +
+        (paused
+          ? '<div class="missing">We’re having trouble reaching our order system right now. Please try again in a few minutes.</div>'
+          : '<button type="button" class="btn block" data-act="checkout">Begin checkout</button>') +
       '</div>';
   }
 
   function bagItems(removable) {
     return bag.map((it) =>
-      '<div class="bag-item"><div class="top"><strong>' + it.qty + ' ' + esc(SN.itemLabel(it.kind)) + '</strong><strong>' + (it.kind === 'custom' ? 'from ' : '') + money(SN.itemTotal(cfg, it)) + '</strong></div>' +
+      '<div class="bag-item"><div class="top"><strong>' + esc(SN.itemHeading(it)) + '</strong><strong>' + (it.kind === 'custom' ? 'from ' : '') + money(SN.itemTotal(cfg, it)) + '</strong></div>' +
       '<div class="detail">' + esc(SN.describeItem(cfg, it)) + '</div>' +
       (it.desc ? '<div class="note">“' + esc(it.desc) + '”</div>' : '') +
       (removable ? '<button type="button" class="link-btn" data-act="remove" data-id="' + it.id + '">Remove</button>' : '') + '</div>').join('');
@@ -305,17 +328,19 @@ SN.ready.then(function () {
       '<button type="button" class="x-btn" data-act="close" aria-label="Close">' + SN_ICONS.close + '</button></div></div>';
   }
 
-  // Checkout takes the whole screen; "Send order request" comes after every section, so it's reached by scrolling through them.
+  function submitLabel() {
+    if (sending) return 'Sending…';
+    return hasCookies() && hasClasses() ? 'Send order & book class' : hasCookies() ? 'Send order request' : 'Book class';
+  }
+
+  // Checkout takes the whole screen; the send button comes after every section, so it's reached by scrolling through them.
+  // A classes-only bag skips the cookie sections (occasion, date, allergies, pickup or drop-off).
   function renderCheckout() {
     if (!bag.length) return renderBag();
     const minISO = SN.isoDate(SN.minDate(cfg));
     const events = ['Birthday', 'Baby Shower', 'Wedding Shower', 'Anniversary', 'Party', 'Other'];
     const isDel = checkout.fulfillment === 'delivery';
-    return fullHead('Checkout', true) +
-      '<div class="panel-body"><div class="checkout-col">' +
-        '<div class="sec first"><h3>Your order</h3>' + bagItems(false) +
-          '<button type="button" class="link-btn" data-act="to-bag" style="margin-top:6px">Edit bag</button></div>' +
-
+    const cookieSections =
         '<div class="sec"><h3>Your event</h3><div class="stack">' +
           '<div class="field"><label class="label" for="c-event">What are the cookies for?' + (needsOccasion() ? '' : ' <span class="muted" style="font-weight:400">(optional)</span>') + '</label>' +
             '<select class="input" id="c-event" data-co="eventType"><option value="">Choose one…</option>' +
@@ -326,9 +351,9 @@ SN.ready.then(function () {
             '<div class="date-wrap' + (checkout.date ? ' has-value' : '') + '"><input class="input" id="c-date" type="date" data-co="date" min="' + minISO + '" value="' + esc(checkout.date) + '"><span class="date-ph" aria-hidden="true">Tap to choose a date</span></div>' +
             '<p class="hint" id="date-msg">Earliest available: ' + esc(SN.prettyDate(minISO)) + '</p></div>' +
           '<div class="field"><label class="label" for="c-allergies">Allergies or dietary needs <span class="muted" style="font-weight:400">(optional)</span></label>' +
-            '<textarea class="input" id="c-allergies" rows="2" data-co="allergies" placeholder="e.g. one guest has a nut allergy, need 6 gluten-free">' + esc(checkout.allergies) + '</textarea></div>' +
+            '<textarea class="input" id="c-allergies" rows="2" data-co="allergies" placeholder="e.g. one guest has a nut allergy, need 6 gluten-free">' + esc(checkout.allergies) + '</textarea>' +
+            (cfg.allergyNote ? '<p class="hint">* ' + esc(cfg.allergyNote) + '</p>' : '') + '</div>' +
         '</div></div>' +
-
         '<div class="sec"><h3>Pickup or drop-off</h3>' +
           '<div class="grid-2" role="group" aria-label="Pickup or drop-off">' +
             '<button type="button" class="choice" data-act="pickup" aria-pressed="' + !isDel + '"><strong>Pickup · Free</strong><span>' + esc(cfg.pickupCity) + '</span></button>' +
@@ -341,8 +366,15 @@ SN.ready.then(function () {
             '<div class="field"><label class="label" for="c-zip">ZIP code</label><input class="input" id="c-zip" type="text" inputmode="numeric" autocomplete="postal-code" maxlength="5" data-co="zip" value="' + esc(checkout.zip) + '"></div>' +
             '<p class="hint full" id="zip-msg" aria-live="polite"></p>' +
           '</div>' +
-        '</div>' +
-
+        '</div>';
+    const notes = [];
+    if (hasCookies()) notes.push('No payment for cookies today. M will review your request, confirm the final price, and email you an invoice to pay.');
+    if (hasClasses()) notes.push('Classes are booked as soon as you send this. Your invoice will follow by email.');
+    return fullHead('Checkout', true) +
+      '<div class="panel-body"><div class="checkout-col">' +
+        '<div class="sec first"><h3>Your order</h3>' + bagItems(false) +
+          '<button type="button" class="link-btn" data-act="to-bag" style="margin-top:6px">Edit bag</button></div>' +
+        (hasCookies() ? cookieSections : '') +
         '<div class="sec"><h3>Your details</h3><div class="stack">' +
           '<div class="field"><label class="label" for="c-name">Full name</label><input class="input" id="c-name" type="text" autocomplete="name" data-co="name" value="' + esc(checkout.name) + '"></div>' +
           '<div class="grid-2">' +
@@ -353,16 +385,25 @@ SN.ready.then(function () {
           '</div>' +
           '<div class="hp" aria-hidden="true"><label>Website <input type="text" id="c-website" tabindex="-1" autocomplete="off"></label></div>' +
         '</div></div>' +
-
+        '<div class="sec"><h3>Promo or gift code</h3>' +
+          '<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">' +
+            '<div class="field" style="flex:1 1 200px"><label class="sr-only" for="c-code">Promo or gift code</label>' +
+              '<input class="input" id="c-code" type="text" autocomplete="off" autocapitalize="characters" data-co="code" placeholder="Enter a code" value="' + esc(checkout.code) + '"></div>' +
+            '<button type="button" class="btn ghost" data-act="apply-code">' + (appliedCode ? 'Remove' : 'Apply') + '</button>' +
+          '</div>' +
+          '<p class="hint" id="code-msg" aria-live="polite"></p>' +
+        '</div>' +
         '<div class="sec totals">' +
           '<div><span class="muted">Subtotal</span><span id="t-sub"></span></div>' +
-          '<div><span class="muted">Grocery tax (' + cfg.taxRate + '%)</span><span id="t-tax"></span></div>' +
-          '<div><span class="muted" id="t-fee-label"></span><span id="t-fee"></span></div>' +
+          '<div id="t-disc-row" hidden><span class="muted" id="t-disc-label"></span><span id="t-disc"></span></div>' +
+          (hasCookies() ? '<div><span class="muted">Tax (' + cfg.taxRate + '%' + (hasClasses() ? ', cookies only' : '') + ')</span><span id="t-tax"></span></div>' +
+            '<div><span class="muted" id="t-fee-label"></span><span id="t-fee"></span></div>' : '') +
+          '<div id="t-gift-row" hidden><span class="muted">Gift card</span><span id="t-gift"></span></div>' +
         '</div>' +
-        '<div class="grand checkout-grand"><strong>Estimated total</strong><strong id="t-total"></strong></div>' +
+        '<div class="grand checkout-grand"><strong>' + (hasCookies() ? 'Estimated total' : 'Total') + '</strong><strong id="t-total"></strong></div>' +
         '<div class="missing" id="missing" hidden></div>' +
-        '<button type="button" class="btn block" data-act="submit"' + (sending ? ' aria-disabled="true">Sending…' : '>Send order request') + '</button>' +
-        '<p class="hint" style="text-align:center;margin-top:10px">No payment today. M will review your request, confirm the final price, and email you an invoice to pay.</p>' +
+        '<button type="button" class="btn block" data-act="submit"' + (sending ? ' aria-disabled="true"' : '') + '>' + submitLabel() + '</button>' +
+        notes.map((n) => '<p class="hint" style="text-align:center;margin-top:10px">' + esc(n) + '</p>').join('') +
       '</div></div>';
   }
 
@@ -373,44 +414,90 @@ SN.ready.then(function () {
     return lo === hi ? money(lo) : '$' + lo + '–$' + hi;
   }
 
+  // Same math as validateOrder_ in Code.gs: a percent code comes off before tax, tax is on cookies only,
+  // and a gift card comes off last (classes first, since they're paid now).
   function quote() {
-    const subtotal = bag.reduce((a, it) => a + SN.itemTotal(cfg, it), 0);
-    const tax = Math.round(subtotal * cfg.taxRate) / 100;
-    const isDel = checkout.fulfillment === 'delivery';
+    const cookieSub = round2(bag.filter((it) => it.kind !== 'class').reduce((a, it) => a + SN.itemTotal(cfg, it), 0));
+    const classSub = round2(bag.filter((it) => it.kind === 'class').reduce((a, it) => a + SN.itemTotal(cfg, it), 0));
+    const pct = appliedCode && appliedCode.type === 'percent' ? appliedCode.amount : 0;
+    const cookieDisc = round2(cookieSub * pct / 100), classDisc = round2(classSub * pct / 100);
+    const tax = Math.round((cookieSub - cookieDisc) * cfg.taxRate) / 100;
+    const isDel = hasCookies() && checkout.fulfillment === 'delivery';
     const zone = cfg.zones.find((z) => z.zip === checkout.zip);
     const fee = isDel && zone ? Number(zone.fee) : 0;
-    return { subtotal, tax, fee, zone, isDel, total: subtotal + tax + fee };
+    let gift = appliedCode && appliedCode.type === 'gift' ? appliedCode.amount : 0;
+    const classCredit = round2(Math.min(gift, classSub - classDisc));
+    gift -= classCredit;
+    const cookieCredit = hasCookies() ? round2(Math.min(gift, cookieSub - cookieDisc + tax + fee)) : 0;
+    const credit = round2(classCredit + cookieCredit);
+    const subtotal = round2(cookieSub + classSub), discount = round2(cookieDisc + classDisc);
+    return { subtotal, discount, tax, fee, zone, isDel, credit, total: round2(subtotal - discount + tax + fee - credit) };
   }
 
-  // The occasion is required when the bag has custom cookies (it shapes the design), optional for artisan-only orders.
+  // The occasion is required when the bag has custom cookies (it shapes the design), optional otherwise.
   function needsOccasion() { return bag.some((it) => it.kind === 'custom'); }
 
+  // Cookies in the bag would push the chosen week past its cap: "that week only has room for 10 more custom cookies".
+  function weekProblem(date) {
+    const room = SN.weekRoom(cfg, date);
+    const qty = (custom) => bag.filter((it) => it.kind !== 'class' && (it.kind === 'custom') === custom).reduce((a, it) => a + it.qty, 0);
+    const msgs = [];
+    [['custom', true], ['artisan', false]].forEach(([type, custom]) => {
+      const n = qty(custom);
+      if (room[type] === null || !n || n <= room[type]) return;
+      msgs.push(room[type] ? 'that week only has room for ' + room[type] + ' more ' + type + ' cookies' : type + ' cookies are fully booked that week');
+    });
+    return msgs.join(' and ');
+  }
+
+  // Classes in the bag that have since filled up or been removed.
+  function classProblems() {
+    return bag.filter((it) => it.kind === 'class').map((it) => {
+      const ev = SN.classEvent(cfg, it);
+      if (!ev || ev.button !== 'Add to bag') return it.title + ' is no longer available (please remove it)';
+      if (ev.spotsLeft !== undefined && it.qty > ev.spotsLeft) return ev.spotsLeft ? 'only ' + ev.spotsLeft + ' spots left in ' + ev.title : ev.title + ' is sold out (please remove it)';
+      return '';
+    }).filter(Boolean);
+  }
+
   function missingList() {
-    const m = [];
-    const minISO = SN.isoDate(SN.minDate(cfg));
-    if (!checkout.eventType) { if (needsOccasion()) m.push('event type'); }
-    else if (checkout.eventType === 'Other' && !checkout.eventOther.trim()) m.push('the occasion');
-    if (!checkout.date) m.push('date needed');
-    else if (checkout.date < minISO) m.push('a date at least ' + cfg.leadDays + ' days out');
-    else if (cfg.blockedDates.includes(checkout.date)) m.push('a different date (that day is booked)');
-    const q = quote();
-    if (q.isDel) {
-      if (!checkout.address.trim() || !checkout.city.trim()) m.push('drop-off address');
-      if (!q.zone) m.push('a ZIP in our drop-off area');
+    const m = classProblems();
+    if (hasCookies()) {
+      const minISO = SN.isoDate(SN.minDate(cfg));
+      if (!cfg.acceptingOrders) m.push('cookie orders are paused right now (remove the cookies to book a class)');
+      if (!checkout.eventType) { if (needsOccasion()) m.push('event type'); }
+      else if (checkout.eventType === 'Other' && !checkout.eventOther.trim()) m.push('the occasion');
+      if (!checkout.date) m.push('date needed');
+      else if (checkout.date < minISO) m.push('a date at least ' + cfg.leadDays + ' days out');
+      else if (cfg.blockedDates.includes(checkout.date)) m.push('a different date (that day is booked)');
+      else if (weekProblem(checkout.date)) m.push('a different week (' + weekProblem(checkout.date) + ')');
+      const q = quote();
+      if (q.isDel) {
+        if (!checkout.address.trim() || !checkout.city.trim()) m.push('drop-off address');
+        if (!q.zone) m.push('a ZIP in our drop-off area');
+      }
     }
     if (!checkout.name.trim()) m.push('name');
     if (!SN.validEmail(checkout.email)) m.push('a valid email');
     if (!SN.validPhone(checkout.phone)) m.push('a 10-digit phone number');
+    if (checkout.code.trim() && !appliedCode) m.push('apply your promo code (or clear it)');
     return m;
   }
 
   function updateCheckoutUI() {
-    if (!bag.length) return;
+    if (!bag.length || mode !== 'checkout') return;
     const q = quote();
     $('#t-sub').textContent = money(q.subtotal);
-    $('#t-tax').textContent = money(q.tax);
-    $('#t-fee-label').textContent = q.isDel ? 'Drop-off' : 'Pickup (' + cfg.pickupCity + ')';
-    $('#t-fee').textContent = q.isDel ? (q.zone ? money(q.fee) : '—') : 'Free';
+    $('#t-disc-row').hidden = !q.discount;
+    $('#t-disc-label').textContent = appliedCode ? 'Promo code ' + appliedCode.code + ' (' + appliedCode.amount + '% off)' : '';
+    $('#t-disc').textContent = '−' + money(q.discount);
+    if ($('#t-tax')) {
+      $('#t-tax').textContent = money(q.tax);
+      $('#t-fee-label').textContent = q.isDel ? 'Drop-off' : 'Pickup (' + cfg.pickupCity + ')';
+      $('#t-fee').textContent = q.isDel ? (q.zone ? money(q.fee) : '—') : 'Free';
+    }
+    $('#t-gift-row').hidden = !q.credit;
+    $('#t-gift').textContent = '−' + money(q.credit);
     $('#t-total').textContent = money(q.total);
 
     const zipMsg = $('#zip-msg');
@@ -424,10 +511,19 @@ SN.ready.then(function () {
     const dateMsg = $('#date-msg');
     if (dateMsg) {
       const minISO = SN.isoDate(SN.minDate(cfg));
+      const week = checkout.date ? weekProblem(checkout.date) : '';
       if (checkout.date && checkout.date < minISO) { dateMsg.textContent = 'Please choose ' + SN.prettyDate(minISO) + ' or later.'; dateMsg.style.color = 'var(--error)'; }
       else if (checkout.date && cfg.blockedDates.includes(checkout.date)) { dateMsg.textContent = 'Sorry, ' + SN.prettyDate(checkout.date) + ' is fully booked. Please pick another day.'; dateMsg.style.color = 'var(--error)'; }
+      else if (week) { dateMsg.textContent = 'Sorry, ' + week + ' (the week of ' + SN.prettyDate(SN.mondayOf(checkout.date), { month: 'long', day: 'numeric' }) + '). Please choose another week.'; dateMsg.style.color = 'var(--error)'; }
       else if (checkout.date) { dateMsg.textContent = SN.prettyDate(checkout.date); dateMsg.style.color = ''; }
       else { dateMsg.textContent = 'Earliest available: ' + SN.prettyDate(minISO); dateMsg.style.color = ''; }
+    }
+    const codeMsg = $('#code-msg');
+    if (codeMsg && !codeChecking) {
+      codeMsg.style.color = '';
+      codeMsg.textContent = !appliedCode ? '' : appliedCode.type === 'percent'
+        ? appliedCode.code + ' applied: ' + appliedCode.amount + '% off.'
+        : 'Gift card ' + appliedCode.code + ' applied (balance ' + money(appliedCode.amount) + ').';
     }
     const miss = missingList();
     const box = $('#missing');
@@ -446,17 +542,41 @@ SN.ready.then(function () {
     if (send && !sending) send.setAttribute('aria-disabled', String(miss.length > 0));
   }
 
+  // "Apply" checks the code with the server; "Remove" takes it off.
+  function applyCode() {
+    if (appliedCode) { appliedCode = null; checkout.code = ''; renderPanel(); return; }
+    const code = checkout.code.trim();
+    const msg = $('#code-msg');
+    if (!code) { msg.textContent = 'Enter a code first.'; return; }
+    codeChecking = true;
+    msg.style.color = '';
+    msg.textContent = 'Checking…';
+    SN.post('checkCode', { code }).then((r) => {
+      codeChecking = false;
+      if (!r || !r.ok) { msg.textContent = (r && r.error) || 'That code isn’t valid.'; msg.style.color = 'var(--error)'; return; }
+      appliedCode = { code: r.code, type: r.type, amount: Number(r.amount) };
+      checkout.code = r.code;
+      renderPanel();
+    }).catch((r) => { codeChecking = false; msg.textContent = SN.sendErrorText(r); msg.style.color = 'var(--error)'; });
+  }
+
   function renderDone() {
-    const o = lastOrder;
-    return fullHead('Request sent', false) +
+    const cookieOrder = lastOrders.find((o) => o.type === 'Cookies');
+    const classOrder = lastOrders.find((o) => o.type === 'Class');
+    const email = (cookieOrder || classOrder).customer.email;
+    return fullHead(cookieOrder ? 'Request sent' : 'You’re booked', false) +
       '<div class="panel-body"><div class="checkout-col done">' +
         '<div class="check">' + SN_ICONS.check + '</div>' +
-        '<h3>Thanks, we got your request!</h3>' +
-        '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(o.number) + '</strong></p>' +
-        '<p class="muted" style="margin:12px 0 0"><strong>This is not a final order yet.</strong> We sent a copy of your request to ' + esc(o.customer.email) + '. M will review it and send a second email with your confirmation, final price and invoice. Your date is reserved once the invoice is paid.</p>' +
-        '<p style="margin:20px 0 0;font-family:var(--serif);font-size:30px;font-weight:600">Estimated total ' + money(o.total) + '</p>' +
+        (classOrder ? '<h3>' + (cookieOrder ? 'Your class is booked!' : 'You’re booked!') + '</h3>' +
+          '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(classOrder.number) + '</strong></p>' +
+          '<p class="muted" style="margin:12px 0 0">Your spot is saved. We sent the details to ' + esc(email) + '. Your invoice will follow by email.</p>' +
+          '<p style="margin:16px 0 0;font-family:var(--serif);font-size:26px;font-weight:600">Total ' + money(classOrder.total) + '</p>' : '') +
+        (cookieOrder ? '<h3' + (classOrder ? ' style="margin-top:28px"' : '') + '>Thanks, we got your cookie request!</h3>' +
+          '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(cookieOrder.number) + '</strong></p>' +
+          '<p class="muted" style="margin:12px 0 0"><strong>This is not a final order yet.</strong> We sent a copy of your request to ' + esc(email) + '. M will review it and send a second email with your confirmation, final price and invoice. Your date is reserved once the invoice is paid.</p>' +
+          '<p style="margin:20px 0 0;font-family:var(--serif);font-size:30px;font-weight:600">Estimated total ' + money(cookieOrder.total) + '</p>' : '') +
         '<div class="stack" style="margin-top:24px;align-items:center">' +
-          (SN_ENV.name === 'uat' ? '<a class="btn ghost" href="email.html?o=' + encodeURIComponent(o.number) + '" target="_blank" rel="noopener">Preview the request email</a>' : '') +
+          (SN_ENV.name === 'uat' && cookieOrder ? '<a class="btn ghost" href="email.html?o=' + encodeURIComponent(cookieOrder.number) + '" target="_blank" rel="noopener">Preview the request email</a>' : '') +
           '<button type="button" class="btn" data-act="close">Back to the menu</button>' +
         '</div>' +
       '</div></div>';
@@ -490,6 +610,7 @@ SN.ready.then(function () {
       updateCheckoutUI();
       return;
     }
+    if (act === 'apply-code') { applyCode(); return; }
     if (act === 'submit') { submitOrder(); }
   });
 
@@ -500,6 +621,10 @@ SN.ready.then(function () {
       let v = t.value;
       if (t.dataset.co === 'zip') { v = v.replace(/\D/g, '').slice(0, 5); if (t.value !== v) t.value = v; }
       if (t.dataset.co === 'phone') { v = SN.formatPhone(v); if (t.value !== v) t.value = v; }
+      if (t.dataset.co === 'code' && appliedCode && v.trim().toUpperCase() !== appliedCode.code.toUpperCase()) {
+        appliedCode = null;   // editing an applied code un-applies it
+        $('[data-act="apply-code"]', panel).textContent = 'Apply';
+      }
       checkout[t.dataset.co] = v;
       if (t.dataset.co === 'eventType') $('#other-wrap').hidden = v !== 'Other';
       updateCheckoutUI();
@@ -533,10 +658,11 @@ SN.ready.then(function () {
   /* ---------------- Actions ---------------- */
   function saveBag() {
     SN.setBag(bag);
+    submissionId = '';   // a different bag is a different checkout
     const n = bag.reduce((a, it) => a + it.qty, 0);
     const c = $('#bag-count');
     if (c) c.textContent = n;
-    if (bagBtn) bagBtn.setAttribute('aria-label', 'Open bag, ' + n + ' cookies');
+    if (bagBtn) bagBtn.setAttribute('aria-label', 'Open bag, ' + n + ' items');
   }
 
   function addToBag() {
@@ -566,14 +692,25 @@ SN.ready.then(function () {
     const miss = missingList();
     if (miss.length) { tried = true; updateCheckoutUI(); $('#missing').scrollIntoView({ block: 'nearest' }); return; }
     const btn = $('[data-act="submit"]', panel);
+    const box = $('#missing');
     if (sending) return;
+    if (navigator.onLine === false) {
+      box.hidden = false;
+      box.textContent = 'You appear to be offline. Check your internet connection and try again. Your bag is saved.';
+      box.scrollIntoView({ block: 'nearest' });
+      return;
+    }
     sending = true;
     btn.setAttribute('aria-disabled', 'true');
     btn.textContent = 'Sending…';
-    $('#missing').hidden = true;
+    box.hidden = true;
+    // Kept across retries: if the first try actually went through, the server returns that same order.
+    if (!submissionId) submissionId = SN.newSubmissionId();
     // Prices aren't sent: the Sheet re-prices every line and re-checks every rule.
     SN.post('submitOrder', {
-      items: bag.map((it) => ({ kind: it.kind, qty: it.qty, designs: it.designs, desc: it.desc, photoName: it.photoName, fq: it.fq })),
+      items: bag.map((it) => (it.kind === 'class'
+        ? { kind: 'class', eventId: it.eventId, qty: it.qty }
+        : { kind: it.kind, qty: it.qty, designs: it.designs, desc: it.desc, photoName: it.photoName, fq: it.fq })),
       eventType: checkout.eventType,
       eventOther: checkout.eventOther.trim(),
       dateNeeded: checkout.date,
@@ -581,28 +718,34 @@ SN.ready.then(function () {
       fulfillment: checkout.fulfillment,
       address: { street: checkout.address.trim(), city: checkout.city.trim(), zip: checkout.zip },
       customer: { name: checkout.name.trim(), email: checkout.email.trim(), phone: checkout.phone.trim() },
+      code: appliedCode ? appliedCode.code : '',
+      submissionId,
       website: $('#c-website').value
     })
-      .then((r) => { if (!r || !r.ok || !r.order) throw r; orderSent(r.order); })
+      .then((r) => { if (!r || !r.ok || !(r.orders || r.order)) throw r; orderSent(r.orders || [r.order]); })
       .catch((r) => {
         if (mode !== 'checkout') return;
+        sending = false;
         const b = $('[data-act="submit"]', panel);
         b.removeAttribute('aria-disabled');
-        b.textContent = 'Send order request';
-        const box = $('#missing');
-        box.hidden = false;
-        box.innerHTML = r && r.code === 'invalid' && r.errors
+        b.textContent = submitLabel();
+        const box2 = $('#missing');
+        box2.hidden = false;
+        box2.innerHTML = r && r.code === 'invalid' && r.errors
           ? '<strong>Still needed:</strong> ' + esc(r.errors.join(', '))
           : esc(SN.sendErrorText(r));
-        box.scrollIntoView({ block: 'nearest' });
+        box2.scrollIntoView({ block: 'nearest' });
       })
       .finally(() => { sending = false; });
   }
 
-  function orderSent(order) {
-    // Test site only: keep a copy in this browser so the prototype admin page and the email preview link still work.
-    if (SN_ENV.name === 'uat') { const orders = SN.getOrders(); orders.unshift(order); SN.setOrders(orders); }
-    lastOrder = order;
+  function orderSent(orders) {
+    // Test site only: keep a copy in this browser so the email preview link still works.
+    if (SN_ENV.name === 'uat') { const saved = SN.getOrders(); orders.forEach((o) => saved.unshift(o)); SN.setOrders(saved); }
+    lastOrders = orders;
+    appliedCode = null;
+    checkout.code = '';
+    try { sessionStorage.removeItem('sn_live_cfg'); } catch (e) { /* ignore */ }   // class spots changed
     bag = [];
     saveBag();
     tried = false;

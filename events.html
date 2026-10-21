@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261022c">
+<link rel="stylesheet" href="styles.css?v=20261023">
 </head>
 <body data-page="events">
 <div id="site-header"></div>
@@ -23,38 +23,79 @@
   </section>
 </main>
 <div id="site-footer"></div>
-<script src="config.js?v=20261022c"></script>
-<script src="layout.js?v=20261022c"></script>
+<script src="config.js?v=20261023"></script>
+<script src="layout.js?v=20261023"></script>
 <script>
-// Heading from the Sheet's Pages tab; one card per row on the Events tab.
+// Heading from the Sheet's Pages tab; one card per row on the Events tab. Anything left blank doesn't show.
+// Classes ("Add to bag") show spots left and go in the bag, booked and paid at checkout with no approval needed.
 SN.ready.then(function () {
   const cfg = SN.load();
   const esc = SN.esc;
+  const today = SN.isoDate(new Date());
   document.getElementById('events-title').textContent = cfg.pages.eventsTitle;
   document.getElementById('events-intro').textContent = cfg.pages.eventsIntro;
-  function button(ev) {
-    if (ev.button === 'Order now') return '<a class="btn" href="order.html">Order now</a>';
-    if (ev.button === 'Message me') return '<button type="button" class="btn ghost" data-quick-message="Special events or classes">Message me</button>';
-    if (ev.button === 'Sign up') {
-      return /^https?:\/\//.test(ev.link)
-        ? '<a class="btn" href="' + esc(ev.link) + '" target="_blank" rel="noopener">Sign up</a>'
-        : '<a class="btn ghost" href="#" aria-disabled="true">Sign-up details coming soon</a>';
-    }
-    return '';
+
+  const inBag = (id) => SN.getBag().filter((it) => it.kind === 'class' && it.eventId === id).reduce((a, it) => a + it.qty, 0);
+  const isClass = (ev) => ev.button === 'Add to bag';
+  const canBook = (ev) => isClass(ev) && Number(ev.price) > 0 && !(ev.date && ev.date < today);
+
+  function bookArea(ev) {
+    if (!isClass(ev)) return '';
+    if (ev.date && ev.date < today) return '<p class="hint">This class has already happened.</p>';
+    if (!(Number(ev.price) > 0)) return '<a class="btn ghost" href="#" aria-disabled="true">Booking opens soon</a>';
+    const left = ev.spotsLeft === undefined ? 10 : ev.spotsLeft - inBag(ev.id);
+    if (ev.spotsLeft === 0) return '<a class="btn ghost" href="#" aria-disabled="true">Sold out</a>';
+    const have = inBag(ev.id);
+    const opts = Array.from({ length: Math.max(0, Math.min(10, left)) }, (_, i) => '<option>' + (i + 1) + '</option>').join('');
+    return (opts
+      ? '<div class="row-gap" style="gap:8px;align-items:center">' +
+          '<label class="sr-only" for="spots-' + esc(ev.id) + '">Spots for ' + esc(ev.title) + '</label>' +
+          '<select class="input" id="spots-' + esc(ev.id) + '" style="width:auto;min-height:44px">' + opts + '</select>' +
+          '<button type="button" class="btn" data-add-class="' + esc(ev.id) + '">Add to bag</button></div>'
+      : '') +
+      (have ? '<p class="hint" style="margin-top:8px">' + have + ' in your bag · <a href="order.html?bag=1">View bag</a></p>' : '');
   }
-  const cards = (cfg.events || []).map((ev) =>
-    '<article class="card">' +
+
+  function card(ev) {
+    const when = SN.classWhen(ev);
+    const spots = isClass(ev) && ev.spotsLeft !== undefined && canBook(ev)
+      ? (ev.spotsLeft ? ev.spotsLeft + ' of ' + ev.max + ' spots left' : 'Sold out') : '';
+    const price = ev.price === '' || ev.price == null ? '' : isNaN(Number(ev.price)) ? String(ev.price) : SN.money(ev.price) + (isClass(ev) ? ' per person' : '');
+    return '<article class="card">' +
       SN.photoHtml(ev.photo, ev.title, 'height:200px;border-radius:0') +
       '<div class="card-body">' +
-        (ev.when ? '<p class="eyebrow" style="margin:0">' + esc(ev.when) + '</p>' : '') +
+        (ev.when || when ? '<p class="eyebrow" style="margin:0">' + esc(ev.when || when) + '</p>' : '') +
         '<h3>' + esc(ev.title) + '</h3>' +
+        (ev.when && when ? '<p class="hint">' + esc(when) + '</p>' : '') +
+        (ev.address ? '<p class="hint">' + esc(ev.address) + '</p>' : '') +
         (ev.desc ? '<div class="desc">' + SN.paras(ev.desc) + '</div>' : '') +
-        (ev.price ? '<p class="price">' + esc(ev.price) + '</p>' : '') +
-        button(ev) +
+        (price || spots ? '<p class="price">' + esc(price) + (spots ? ' <span>· ' + esc(spots) + '</span>' : '') + '</p>' : '') +
+        (ev.button === 'Order now' ? '<a class="btn" href="order.html">Order now</a>' : '') +
+        (ev.button === 'Message me' ? '<button type="button" class="btn ghost" data-quick-message="Special events or classes">Message me</button>' : '') +
+        '<div data-book="' + esc(ev.id) + '">' + bookArea(ev) + '</div>' +
       '</div>' +
-    '</article>').join('');
-  document.getElementById('events').innerHTML = cards || '<p class="muted">No events right now. Follow along on Instagram for the next one.</p>';
-  document.querySelectorAll('#events a[aria-disabled="true"]').forEach((a) => a.addEventListener('click', (e) => e.preventDefault()));
+    '</article>';
+  }
+
+  const list = document.getElementById('events');
+  list.innerHTML = (cfg.events || []).map(card).join('') || '<p class="muted">No events right now. Follow along on Instagram for the next one.</p>';
+
+  list.addEventListener('click', (e) => {
+    if (e.target.closest('a[aria-disabled="true"]')) { e.preventDefault(); return; }
+    const b = e.target.closest('[data-add-class]');
+    if (!b) return;
+    const ev = cfg.events.find((x) => x.id === b.dataset.addClass);
+    const qty = Number(document.getElementById('spots-' + ev.id).value) || 1;
+    const bag = SN.getBag();
+    const existing = bag.find((it) => it.kind === 'class' && it.eventId === ev.id);
+    if (existing) existing.qty += qty;
+    else bag.push({ id: Date.now(), kind: 'class', eventId: ev.id, qty, title: ev.title, price: Number(ev.price), summary: SN.classWhen(ev) });
+    SN.setBag(bag);
+    document.querySelectorAll('.bag-count').forEach((c) => { c.textContent = bag.reduce((a, it) => a + it.qty, 0); });
+    const area = list.querySelector('[data-book="' + ev.id + '"]');
+    area.innerHTML = bookArea(ev);
+    area.insertAdjacentHTML('afterbegin', '<p class="hint" role="status" style="margin:0 0 8px;color:var(--ok)">Added to your bag.</p>');
+  });
 });
 </script>
 </body>

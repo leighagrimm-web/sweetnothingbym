@@ -35,7 +35,8 @@ const SN_ENV = (function () {
 
 const SN_DEFAULTS = {
   leadDays: 8,                // minimum days between ordering and the date needed
-  maxOrdersPerDay: 3,         // shown in admin; enforced in the real build
+  capCustomPerWeek: 50,       // most custom cookies per Mon-Sun week (approved orders); 0 = no limit
+  capArtisanPerWeek: 75,      // most artisan cookies per week
   acceptingOrders: true,
   minQty: 12,                 // 1 dozen minimum for every item
   maxDesigns: 6,              // most custom designs a customer can pick (info for M's quote)
@@ -43,7 +44,10 @@ const SN_DEFAULTS = {
   customNote: 'Pricing may vary based on the complexity of the design and the number of different designs.',
   miniPerDozen: 24,
   largePerDozen: 36,
-  flavorsPerDozen: 4,
+  flavorsPerDozen: 4,         // most artisan flavors below flavorsMaxAt cookies...
+  flavorsMax: 6,              // ...and from flavorsMaxAt cookies on
+  flavorsMaxAt: 24,
+  allergyNote: 'Need allergy-friendly swaps, like gluten-free or dairy-free? Happy to help! Ingredient changes for allergies or dietary needs add an extra cost, which I’ll include in your final price.',
   flavors: [
     { id: 'cc', name: 'Chocolate Chip', on: true, special: false },
     { id: 'ff', name: 'Funfetti', on: true, special: false },
@@ -54,7 +58,8 @@ const SN_DEFAULTS = {
   ],
   specialText: 'Pumpkin Spice is back in the artisan lineup through the end of the month.',
   specialUntil: '2026-10-31',
-  taxRate: 2.25,              // grocery tax, percent, applied to cookies (not drop-off)
+  taxRate: 2.25,              // tax percent, applied to cookies (not drop-off fees or classes)
+  showAbout: true, showEvents: true, showGallery: true, showFaq: true,   // pages in the menu
   zones: [                    // drop-off ZIP codes and fees
     { zip: '60018', area: 'Rosemont / Des Plaines', fee: 5 },
     { zip: '60016', area: 'Des Plaines', fee: 5 },
@@ -64,7 +69,8 @@ const SN_DEFAULTS = {
     { zip: '60056', area: 'Mount Prospect', fee: 10 },
     { zip: '60004', area: 'Arlington Heights', fee: 10 }
   ],
-  blockedDates: ['2026-11-26', '2026-11-27', '2026-12-24', '2026-12-25', '2026-12-26'],
+  blockedDates: ['2026-11-26', '2026-11-27', '2026-12-24', '2026-12-25', '2026-12-26'],   // every blocked day (the Sheet stores ranges)
+  weekLoads: {},              // { monday 'yyyy-mm-dd': { custom, artisan } } cookies already approved that week
   // FAQ shown on faq.html, editable from the admin page. Bracketed text is for M to fill in.
   faqs: [
     { q: 'What ingredients do you use?', a: 'I bake everything from scratch with [real butter, pure vanilla, unbleached flour, cane sugar, farm eggs]. Custom cookies are a [vanilla sugar cookie] decorated with [royal icing]. [Add any brands or sourcing you want to mention.]' },
@@ -103,11 +109,12 @@ const SN_DEFAULTS = {
     galleryTitle: 'Past creations',
     galleryIntro: 'A peek at cookies made for birthdays, showers, weddings and more. See the newest work on Instagram.'
   },
-  // button: 'Order now' | 'Message me' | 'Sign up' (uses link; no link = "coming soon") | 'None'
+  // button: 'Add to bag' (a class: needs a price; booked and paid at checkout) | 'Order now' | 'Message me' | 'None'.
+  // Blank fields don't show. spotsLeft comes from the Sheet when max (attendees) is set.
   events: [
-    { photo: '[Class photo]', when: '[Date] · [Time]', title: '[Cookie decorating class]', desc: '[What attendees will make, what\'s included, location, and how many spots are available.]', price: '[$ per person]', button: 'Sign up', link: '' },
-    { photo: '[Seasonal cookie photo]', when: '[Available dates]', title: '[Seasonal special]', desc: '[Holiday or seasonal box description. Specials can also be added to the artisan menu from the admin page.]', price: '', button: 'Order now', link: '' },
-    { photo: '[Event photo]', when: '', title: 'Planning something bigger?', desc: 'For weddings, corporate gifts or large events, start an order and describe what you have in mind, or send me a message.', price: '', button: 'Message me', link: '' }
+    { id: 'e1', title: '[Cookie decorating class]', date: '', start: '', end: '', address: '', price: '', max: '', desc: '[What attendees will make and what\'s included.]', photo: '[Class photo]', when: '', button: 'Add to bag' },
+    { id: 'e2', title: '[Seasonal special]', date: '', start: '', end: '', address: '', price: '', max: '', desc: '[Holiday or seasonal box description. Specials can also be added to the artisan menu from the admin page.]', photo: '[Seasonal cookie photo]', when: '[Available dates]', button: 'Order now' },
+    { id: 'e3', title: 'Planning something bigger?', date: '', start: '', end: '', address: '', price: '', max: '', desc: 'For weddings, corporate gifts or large events, start an order and describe what you have in mind, or send me a message.', photo: '[Event photo]', when: '', button: 'Message me' }
   ],
   gallery: ['Birthday', 'Baby shower', 'Wedding shower', 'Anniversary', 'Holiday', 'Party', 'Artisan box', 'Custom set']
     .map((l) => ({ photo: '[' + l + ' cookie photo]', caption: l + ' cookies' }))
@@ -175,8 +182,12 @@ const SN = {
         SN._serverDraft = !!r.hasDraft;
         if (!preview) { try { sessionStorage.setItem(KEY, JSON.stringify({ t: Date.now(), cfg: r.config })); } catch (e) { /* ignore */ } }
       })
-      .catch(() => { /* Sheet unreachable: pages fall back to SN_DEFAULTS */ });
+      .catch(() => { /* Sheet unreachable: pages fall back to SN_DEFAULTS */ })
+      .then(() => { SN.configFailed = !SN._live; });
   },
+  // True when the Sheet couldn't be reached: pages show the built-in wording, and the order page pauses ordering
+  // (the built-in prices and flavors may be out of date).
+  configFailed: false,
   // Blocked dates in the past are removed automatically so the list doesn't get cluttered.
   dropPastDates(cfg) {
     const today = SN.isoDate(new Date());
@@ -273,20 +284,48 @@ const SN = {
   customPrice(cfg) { return Number(cfg.customBasePrice) || 0; },
   perCookie(cfg, kind) { return (kind === 'mini' ? cfg.miniPerDozen : cfg.largePerDozen) / 12; },
 
+  // Artisan flavor limit: flavorsPerDozen (4) below flavorsMaxAt cookies (24), then flavorsMax (6). Same rule in Code.gs.
+  flavorLimit(cfg, qty) { return qty >= (Number(cfg.flavorsMaxAt) || 24) ? (Number(cfg.flavorsMax) || 6) : (Number(cfg.flavorsPerDozen) || 4); },
   artisanCheck(cfg, fq) {
     const qty = Object.values(fq || {}).reduce((a, b) => a + b, 0);
     const used = Object.values(fq || {}).filter((v) => v > 0).length;
-    const max = cfg.flavorsPerDozen * Math.max(1, Math.floor(qty / 12));
+    const max = SN.flavorLimit(cfg, qty);
+    const atMost = qty >= (Number(cfg.flavorsMaxAt) || 24);
     let err = '';
     if (qty < cfg.minQty) err = qty === 0 ? 'Add at least ' + cfg.minQty + ' cookies.' : (cfg.minQty - qty) + ' more to reach the 1 dozen minimum.';
-    else if (used > max) err = 'Up to ' + max + ' flavors for ' + qty + ' cookies. Remove a flavor or add another dozen.';
+    else if (used > max) err = 'Up to ' + max + ' flavors for ' + qty + ' cookies. Remove a flavor' + (atMost ? '.' : ' or reach ' + cfg.flavorsMaxAt + ' cookies for up to ' + cfg.flavorsMax + '.');
     return { qty, used, max, err };
   },
 
+  // A class in the bag: today's price from the Events settings (or the price when it was added).
+  classEvent(cfg, it) { return (cfg.events || []).find((e) => e.id === it.eventId) || null; },
   itemTotal(cfg, it) {
+    if (it.kind === 'class') { const ev = SN.classEvent(cfg, it); return it.qty * (ev ? Number(ev.price) || 0 : Number(it.price) || 0); }
     if (it.kind === 'custom') return it.qty * SN.customPrice(cfg);
     return SN.artisanCheck(cfg, it.fq).qty * SN.perCookie(cfg, it.kind);
   },
+
+  /* ---------- Weekly cookie caps (Mon-Sun) ---------- */
+  mondayOf(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+    return SN.isoDate(dt);
+  },
+  // Cookies still available that week: { custom, artisan } (null = no limit).
+  weekRoom(cfg, iso) {
+    const load = (cfg.weekLoads || {})[SN.mondayOf(iso)] || { custom: 0, artisan: 0 };
+    const room = (cap, used) => (Number(cap) > 0 ? Math.max(0, Number(cap) - used) : null);
+    return { custom: room(cfg.capCustomPerWeek, load.custom), artisan: room(cfg.capArtisanPerWeek, load.artisan) };
+  },
+  // "Sat, Dec 6 · 2:00 PM–4:00 PM"
+  classWhen(ev) {
+    const day = ev.date ? SN.prettyDate(ev.date, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+    const time = ev.start ? ev.start + (ev.end ? '–' + ev.end : '') : '';
+    return [day, time].filter(Boolean).join(' · ');
+  },
+  // A one-time ID per checkout, so a retry after a dropped connection doesn't place the order twice.
+  newSubmissionId() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); },
 
   isoDate(d) {
     const p = (n) => String(n).padStart(2, '0');
@@ -305,9 +344,12 @@ const SN = {
     return SN.isoDate(new Date()) <= cfg.specialUntil;
   },
 
-  itemLabel(kind) { return kind === 'custom' ? 'Custom Cookies' : kind === 'mini' ? 'Mini Artisan' : 'Large Artisan'; },
+  itemLabel(kind) { return kind === 'custom' ? 'Custom Cookies' : kind === 'mini' ? 'Mini Artisan' : kind === 'class' ? 'Class' : 'Large Artisan'; },
+  // "24 Custom Cookies", or for a class "2 spots · Holiday decorating"
+  itemHeading(it) { return it.kind === 'class' ? it.qty + ' spot' + (it.qty > 1 ? 's' : '') + ' · ' + it.title : it.qty + ' ' + SN.itemLabel(it.kind); },
 
   describeItem(cfg, it) {
+    if (it.kind === 'class') { const ev = SN.classEvent(cfg, it) || it; return [it.summary || SN.classWhen(ev), ev.address].filter(Boolean).join(' · '); }
     if (it.kind === 'custom') {
       return it.designs + ' design' + (it.designs > 1 ? 's' : '') + ' · estimated at ' + SN.money(SN.customPrice(cfg)) + ' each' + (it.photoName ? ' · photo attached' : '');
     }
@@ -321,20 +363,27 @@ const SN = {
   STATUSES: ['Pending review', 'Invoice sent', 'Paid', 'Baking', 'Ready', 'Completed', 'Declined'],
   normStatus(s) { return s === 'New' || !s ? 'Pending review' : s; },
 
-  // Starting invoice lines built from the customer's request.
+  // Starting invoice lines built from the customer's request (same wording as startingLines_ in Code.gs).
+  // A percent promo code becomes its own discount line.
   linesFromOrder(cfg, o) {
-    return o.items.map((it) => {
+    const lines = o.items.map((it) => {
       // Orders from the Sheet carry the unit price they were quoted at; otherwise use today's prices.
       const unit = it.unit != null ? it.unit : it.kind === 'custom' ? SN.customPrice(cfg) : SN.perCookie(cfg, it.kind);
-      return { desc: it.qty + ' ' + SN.itemLabel(it.kind) + (it.summary ? ' (' + it.summary.replace(/ · estimated at .*?each/, '') + ')' : ''), qty: it.qty, unit: Math.round(unit * 100) / 100 };
+      const desc = it.kind === 'class'
+        ? 'Class: ' + it.title + (it.summary ? ' (' + it.summary + ')' : '')
+        : it.qty + ' ' + SN.itemLabel(it.kind) + (it.summary ? ' (' + it.summary.replace(/ · estimated at .*?each/, '') + ')' : '');
+      return { desc, qty: it.qty, unit: Math.round(unit * 100) / 100 };
     });
+    if (o.discount) lines.push({ desc: 'Promo code ' + o.promoCode, qty: 1, unit: -Math.round(o.discount * 100) / 100 });
+    return lines;
   },
-  // Totals for a set of invoice lines. Tax applies to cookie lines, not the drop-off fee.
-  invoiceTotals(lines, fee, taxRate) {
+  // Totals for a set of invoice lines. Tax applies to the lines, not the drop-off fee; a gift card credit comes off last.
+  invoiceTotals(lines, fee, taxRate, credit) {
     const subtotal = lines.reduce((a, l) => a + (Number(l.qty) || 0) * (Number(l.unit) || 0), 0);
     const tax = Math.round(Math.max(0, subtotal) * Number(taxRate)) / 100;
     const f = Number(fee) || 0;
-    return { subtotal, tax, fee: f, total: subtotal + tax + f };
+    const c = Math.min(Number(credit) || 0, Math.max(0, subtotal + tax + f));
+    return { subtotal, tax, fee: f, credit: c, total: subtotal + tax + f - c };
   }
 };
 

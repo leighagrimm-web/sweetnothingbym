@@ -47,6 +47,7 @@ function doPost(e) {
     if (body.website) return json_({ ok: true, ignored: true });
     if (body.action === 'submitOrder') return json_(submitOrder_(body));
     if (body.action === 'sendMessage') return json_(sendMessage_(body));
+    if (body.action === 'checkCode') return json_(checkCode_(body));
     return json_({ ok: false, error: 'Unknown action.' });
   } catch (err) {
     console.error('doPost failed', body && body.action, err && err.stack || err);
@@ -74,17 +75,25 @@ function json_(x) {
 const SETTINGS_SPEC = [
   ['acceptingOrders', true, 'bool', 'TRUE to take orders. FALSE shows "not taking orders right now" on the order page.'],
   ['leadDays', 8, 'number', 'Minimum days between ordering and the date needed.'],
-  ['maxOrdersPerDay', 3, 'number', 'Most orders per day (shown in admin).'],
+  ['capCustomPerWeek', 50, 'number', 'Most custom cookies per week (Mon-Sun), counting approved orders. 0 = no limit.'],
+  ['capArtisanPerWeek', 75, 'number', 'Most artisan cookies per week (Mon-Sun), counting approved orders. 0 = no limit.'],
   ['minQty', 12, 'number', 'Minimum cookies per item.'],
   ['maxDesigns', 6, 'number', 'Most custom designs a customer can pick.'],
   ['customBasePrice', 5, 'number', 'Custom cookies "starting at" price per cookie.'],
   ['customNote', 'Pricing may vary based on the complexity of the design and the number of different designs.', 'text', 'Note shown with custom cookies.'],
+  ['allergyNote', 'Need allergy-friendly swaps, like gluten-free or dairy-free? Happy to help! Ingredient changes for allergies or dietary needs add an extra cost, which I\'ll include in your final price.', 'text', 'Shown with an asterisk on custom cookies and under "Allergies" at checkout.'],
   ['miniPerDozen', 24, 'number', 'Mini Artisan price per dozen.'],
   ['largePerDozen', 36, 'number', 'Large Artisan price per dozen.'],
-  ['flavorsPerDozen', 4, 'number', 'Most artisan flavors per dozen.'],
+  ['flavorsPerDozen', 4, 'number', 'Most artisan flavors for an order under flavorsMaxAt cookies.'],
+  ['flavorsMax', 6, 'number', 'Most artisan flavors once an order reaches flavorsMaxAt cookies.'],
+  ['flavorsMaxAt', 24, 'number', 'Cookie count where flavorsMax kicks in (24 = 2 dozen).'],
   ['specialText', 'Pumpkin Spice is back in the artisan lineup through the end of the month.', 'text', 'Monthly special message (leave blank for none).'],
   ['specialUntil', '2026-10-31', 'date', 'Last day to show the special (YYYY-MM-DD).'],
-  ['taxRate', 2.25, 'number', 'Grocery tax percent, on cookies only (not drop-off).'],
+  ['taxRate', 2.25, 'number', 'Tax percent, on cookies only (not drop-off fees or classes).'],
+  ['showAbout', true, 'bool', 'Show the About page in the menu. FALSE hides it (visits go to the home page).'],
+  ['showEvents', true, 'bool', 'Show the Special Events page in the menu.'],
+  ['showGallery', true, 'bool', 'Show the Gallery page in the menu.'],
+  ['showFaq', true, 'bool', 'Show the FAQ page in the menu.'],
   ['pickupCity', 'Rosemont, IL', 'text', 'Shown on the website.'],
   ['pickupAddress', '[Street address], Rosemont, IL', 'text', 'PRIVATE. Only sent in the confirmation email for pickup orders.'],
   ['pickupInstructions', '[Pickup instructions, e.g. pickup window, where to park, which door]', 'text', 'PRIVATE. Shown with the address in the confirmation email for pickup orders.'],
@@ -117,7 +126,8 @@ const STARTER_ZONES = [
   ['60056', 'Mount Prospect', 10],
   ['60004', 'Arlington Heights', 10]
 ];
-const STARTER_BLOCKED = [['2026-11-26', 'Thanksgiving'], ['2026-11-27', ''], ['2026-12-24', 'Christmas Eve'], ['2026-12-25', 'Christmas'], ['2026-12-26', '']];
+// Start, End (blank = just that day), Note
+const STARTER_BLOCKED = [['2026-11-26', '2026-11-27', 'Thanksgiving'], ['2026-12-24', '2026-12-26', 'Christmas']];
 const STARTER_FAQ = [
   ['What ingredients do you use?', 'I bake everything from scratch with [real butter, pure vanilla, unbleached flour, cane sugar, farm eggs]. Custom cookies are a [vanilla sugar cookie] decorated with [royal icing]. [Add any brands or sourcing you want to mention.]'],
   ['Can you make allergen-friendly cookies?', 'Yes! I’ve made [gluten-free, dairy-free and nut-free] cookies before. Just mention any allergies or dietary needs when you order (there’s a spot for it at checkout), or send me a message first. Please note my kitchen is not allergen-free, so I can’t guarantee against cross-contact for severe allergies.'],
@@ -152,13 +162,17 @@ const STARTER_PAGES = [
   ['galleryTitle', 'Past creations', 'Gallery page: big heading'],
   ['galleryIntro', 'A peek at cookies made for birthdays, showers, weddings and more. See the newest work on Instagram.', 'Gallery page: text under the heading']
 ];
-const EVENT_BUTTONS = ['Order now', 'Message me', 'Sign up', 'None'];
-// Show, Photo, When, Title, Description, Price, Button, Sign-up link
+// "Add to bag" = a class customers book and pay for at checkout (needs a price; no approval needed).
+const EVENT_BUTTONS = ['Add to bag', 'Order now', 'Message me', 'None'];
+// One object per Events row. Blank fields don't show on the website.
 const STARTER_EVENTS = [
-  [true, '[Class photo]', '[Date] · [Time]', '[Cookie decorating class]', '[What attendees will make, what\'s included, location, and how many spots are available.]', '[$ per person]', 'Sign up', ''],
-  [true, '[Seasonal cookie photo]', '[Available dates]', '[Seasonal special]', '[Holiday or seasonal box description. Specials can also be added to the artisan menu from the admin page.]', '', 'Order now', ''],
-  [true, '[Event photo]', '', 'Planning something bigger?', 'For weddings, corporate gifts or large events, start an order and describe what you have in mind, or send me a message.', '', 'Message me', '']
+  { id: 'e1', show: true, title: '[Cookie decorating class]', date: '', start: '', end: '', address: '', price: '', max: '', desc: '[What attendees will make and what\'s included.]', photo: '[Class photo]', when: '', button: 'Add to bag' },
+  { id: 'e2', show: true, title: '[Seasonal special]', date: '', start: '', end: '', address: '', price: '', max: '', desc: '[Holiday or seasonal box description. Specials can also be added to the artisan menu from the admin page.]', photo: '[Seasonal cookie photo]', when: '[Available dates]', button: 'Order now' },
+  { id: 'e3', show: true, title: 'Planning something bigger?', date: '', start: '', end: '', address: '', price: '', max: '', desc: 'For weddings, corporate gifts or large events, start an order and describe what you have in mind, or send me a message.', photo: '[Event photo]', when: '', button: 'Message me' }
 ];
+// Events tab column for each field above.
+const EVENT_COLS = { id: 'ID', show: 'Show', title: 'Title', date: 'Date', start: 'Start time', end: 'End time', address: 'Address', price: 'Price', max: 'Max attendees', desc: 'Description', photo: 'Photo', when: 'When', button: 'Button' };
+const CODE_TYPES = ['Percent off', 'Gift card'];
 // Show, Photo, Caption. The first 4 shown also appear under "Recent creations" on the home page.
 const STARTER_GALLERY = ['Birthday', 'Baby shower', 'Wedding shower', 'Anniversary', 'Holiday', 'Party', 'Artisan box', 'Custom set']
   .map((l) => [true, '[' + l + ' cookie photo]', l + ' cookies']);
@@ -168,22 +182,32 @@ const TABS = {
   Settings: { headers: ['Setting', 'Value', 'What it means'], widths: [170, 380, 460], text: ['Setting', 'Value'] },
   Flavors: { headers: ['ID', 'Flavor', 'Show on menu', 'Special'], widths: [60, 220, 120, 90], text: ['ID'] },
   Zones: { headers: ['ZIP', 'Area', 'Fee'], widths: [80, 240, 80], text: ['ZIP'], money: ['Fee'] },
-  BlockedDates: { headers: ['Date', 'Note'], widths: [120, 260], text: ['Date'] },
+  BlockedDates: { headers: ['Start', 'End', 'Note'], widths: [120, 120, 260], text: ['Start', 'End'] },
   FAQ: { headers: ['Question', 'Answer'], widths: [300, 700] },
   Pages: { headers: ['Key', 'Text', 'Where it shows'], widths: [170, 560, 380], text: ['Key', 'Text'] },
-  Events: { headers: ['Show', 'Photo', 'When', 'Title', 'Description', 'Price', 'Button', 'Sign-up link'], widths: [60, 220, 160, 220, 420, 120, 110, 220], text: ['Photo', 'When', 'Price', 'Sign-up link'] },
+  Events: {
+    headers: ['ID', 'Show', 'Title', 'Date', 'Start time', 'End time', 'Address', 'Price', 'Max attendees', 'Description', 'Photo', 'When', 'Button'],
+    widths: [50, 60, 220, 110, 90, 90, 220, 80, 100, 360, 220, 160, 110],
+    text: ['ID', 'Date', 'Start time', 'End time', 'Photo', 'When'], money: ['Price']
+  },
   Gallery: { headers: ['Show', 'Photo', 'Caption'], widths: [60, 320, 260], text: ['Photo'] },
+  Codes: {
+    headers: ['Code', 'Type', 'Amount', 'Balance', 'Active', 'Expires', 'Max uses', 'Uses', 'Note', 'Created'],
+    widths: [140, 110, 80, 90, 70, 110, 80, 60, 260, 150],
+    text: ['Code', 'Expires'], money: ['Balance'], datetime: ['Created']
+  },
   Orders: {
     headers: ['Order', 'Received', 'Status', 'Name', 'Email', 'Phone', 'Occasion', 'Date needed', 'Pickup / drop-off',
       'Street', 'City', 'ZIP', 'Allergies', 'Subtotal', 'Tax', 'Tax rate', 'Drop-off fee', 'Estimated total',
-      'Customer email', 'Owner alert', 'Invoice', 'Decline note', 'QuickBooks invoice', 'Pay link', 'Updated'],
-    widths: [80, 150, 110, 150, 200, 120, 140, 110, 110, 180, 120, 70, 220, 80, 70, 70, 90, 100, 160, 160, 120, 160, 120, 160, 150],
-    text: ['Order', 'Phone', 'Date needed', 'ZIP'], money: ['Subtotal', 'Tax', 'Drop-off fee', 'Estimated total'], datetime: ['Received', 'Updated']
+      'Customer email', 'Owner alert', 'Invoice', 'Decline note', 'QuickBooks invoice', 'Pay link', 'Updated',
+      'Type', 'Promo code', 'Discount', 'Gift card credit', 'Messages log', 'Submission ID'],
+    widths: [80, 150, 110, 150, 200, 120, 140, 110, 110, 180, 120, 70, 220, 80, 70, 70, 90, 100, 160, 160, 120, 160, 120, 160, 150, 80, 110, 80, 100, 200, 120],
+    text: ['Order', 'Phone', 'Date needed', 'ZIP', 'Promo code', 'Submission ID'], money: ['Subtotal', 'Tax', 'Drop-off fee', 'Estimated total', 'Discount', 'Gift card credit'], datetime: ['Received', 'Updated']
   },
   OrderItems: {
-    headers: ['Order', 'Line', 'Item', 'Kind', 'Qty', 'Designs', 'Flavors', 'Flavors (data)', 'Description', 'Photo', 'Unit price', 'Line total'],
-    widths: [80, 50, 140, 70, 60, 70, 260, 160, 360, 160, 90, 90],
-    text: ['Order'], money: ['Unit price', 'Line total']
+    headers: ['Order', 'Line', 'Item', 'Kind', 'Qty', 'Designs', 'Flavors', 'Flavors (data)', 'Description', 'Photo', 'Unit price', 'Line total', 'Event ID'],
+    widths: [80, 50, 140, 70, 60, 70, 260, 160, 360, 160, 90, 90, 70],
+    text: ['Order', 'Event ID'], money: ['Unit price', 'Line total']
   },
   Messages: {
     headers: ['ID', 'Received', 'Status', 'Topic', 'Name', 'Email', 'Phone', 'Order', 'Message', 'Photo', 'Source', 'Owner alert'],
@@ -197,6 +221,9 @@ const TABS = {
 function setupSheet() {
   const ss = SpreadsheetApp.getActive();
   const created = {};
+  // Older layouts, converted in place before anything else.
+  migrateBlockedDates_(ss.getSheetByName('BlockedDates'));
+  migrateEvents_(ss.getSheetByName('Events'));
   Object.keys(TABS).forEach((name) => {
     let sh = ss.getSheetByName(name);
     if (!sh) { sh = ss.insertSheet(name); created[name] = true; }
@@ -206,11 +233,12 @@ function setupSheet() {
   if (created.Settings) {
     appendRows_(ss.getSheetByName('Settings'), SETTINGS_SPEC.map((s) => [s[0], String(s[1]), s[3]]));
   } else {
-    // Add any settings introduced after the Sheet was first set up.
+    // Add settings introduced after the Sheet was first set up; drop ones no longer used.
     const sh = ss.getSheetByName('Settings');
     const have = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().map((r) => String(r[0])) : [];
     const missing = SETTINGS_SPEC.filter((s) => have.indexOf(s[0]) === -1);
     if (missing.length) appendRows_(sh, missing.map((s) => [s[0], String(s[1]), s[3]]));
+    ['maxOrdersPerDay'].forEach((old) => { const i = have.indexOf(old); if (i !== -1) sh.deleteRow(i + 2); });
   }
   if (created.Flavors) {
     const fl = ss.getSheetByName('Flavors');
@@ -221,12 +249,7 @@ function setupSheet() {
   if (created.BlockedDates) appendRows_(ss.getSheetByName('BlockedDates'), STARTER_BLOCKED);
   if (created.FAQ) appendRows_(ss.getSheetByName('FAQ'), STARTER_FAQ);
   if (created.Pages) appendRows_(ss.getSheetByName('Pages'), STARTER_PAGES);
-  if (created.Events) {
-    const ev = ss.getSheetByName('Events');
-    appendRows_(ev, STARTER_EVENTS);
-    ev.getRange(2, 1, 50, 1).insertCheckboxes();
-    ev.getRange(2, 7, 50, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(EVENT_BUTTONS, true).build());
-  }
+  if (created.Events) writeEvents_(STARTER_EVENTS);
   if (created.Gallery) {
     const gal = ss.getSheetByName('Gallery');
     appendRows_(gal, STARTER_GALLERY);
@@ -243,19 +266,84 @@ function setupSheet() {
   return 'Sheet is ready. Created: ' + (Object.keys(created).join(', ') || 'nothing (all tabs already existed)');
 }
 
+// Headers (adding any missing ones at the end, so older Sheets gain new columns), widths and number formats.
 function formatTab_(sh, spec) {
-  const cols = spec.headers.length;
-  const head = sh.getRange(1, 1, 1, cols);
-  if (!String(sh.getRange(1, 1).getValue())) head.setValues([spec.headers]);
-  head.setFontWeight('bold').setBackground('#F7E3DD').setFontColor('#1F2A44');
+  if (!String(sh.getRange(1, 1).getValue())) sh.getRange(1, 1, 1, spec.headers.length).setValues([spec.headers]);
+  else {
+    const have = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+    const missing = spec.headers.filter((h) => have.indexOf(h) === -1);
+    if (missing.length) sh.getRange(1, have.length + 1, 1, missing.length).setValues([missing]);
+  }
+  const cols = sh.getLastColumn();
+  sh.getRange(1, 1, 1, cols).setFontWeight('bold').setBackground('#F7E3DD').setFontColor('#1F2A44');
   sh.setFrozenRows(1);
-  (spec.widths || []).forEach((w, i) => sh.setColumnWidth(i + 1, w));
+  const map = headerMap_(sh);
   const maxRows = sh.getMaxRows() - 1;
-  const col = (h) => spec.headers.indexOf(h) + 1;
-  (spec.text || []).forEach((h) => sh.getRange(2, col(h), maxRows, 1).setNumberFormat('@'));
-  (spec.money || []).forEach((h) => sh.getRange(2, col(h), maxRows, 1).setNumberFormat('$#,##0.00'));
-  (spec.datetime || []).forEach((h) => sh.getRange(2, col(h), maxRows, 1).setNumberFormat('yyyy-mm-dd h:mm am/pm'));
-  if (['Settings', 'FAQ', 'Pages', 'Events', 'Gallery'].indexOf(sh.getName()) !== -1) sh.getRange(1, 1, sh.getMaxRows(), cols).setWrap(true).setVerticalAlignment('top');
+  spec.headers.forEach((h, i) => { if (spec.widths && spec.widths[i]) sh.setColumnWidth(map[h], spec.widths[i]); });
+  (spec.text || []).forEach((h) => sh.getRange(2, map[h], maxRows, 1).setNumberFormat('@'));
+  (spec.money || []).forEach((h) => sh.getRange(2, map[h], maxRows, 1).setNumberFormat('$#,##0.00'));
+  (spec.datetime || []).forEach((h) => sh.getRange(2, map[h], maxRows, 1).setNumberFormat('yyyy-mm-dd h:mm am/pm'));
+  if (['Settings', 'FAQ', 'Pages', 'Events', 'Gallery', 'Codes'].indexOf(sh.getName()) !== -1) sh.getRange(1, 1, sh.getMaxRows(), cols).setWrap(true).setVerticalAlignment('top');
+}
+
+// { 'Header name': column number } for a tab.
+function headerMap_(sh) {
+  const map = {};
+  if (!sh || sh.getLastColumn() < 1) return map;
+  sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].forEach((h, i) => { if (h) map[String(h)] = i + 1; });
+  return map;
+}
+
+// Rows below the header as objects keyed by header name.
+function rowObjects_(sh) {
+  if (!sh || sh.getLastRow() < 2) return [];
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  return rows_(sh).map((r) => { const o = {}; headers.forEach((h, i) => { if (h) o[h] = r[i]; }); return o; });
+}
+
+// BlockedDates used to be one date per row (Date, Note). Now it's ranges (Start, End, Note).
+function migrateBlockedDates_(sh) {
+  if (!sh || String(sh.getRange(1, 1).getValue()) !== 'Date') return;
+  sh.insertColumnAfter(1);
+  sh.getRange(1, 1, 1, 2).setValues([['Start', 'End']]);
+}
+
+// Events used to have Show, Photo, When, Title, Description, Price (text), Button, Sign-up link.
+function migrateEvents_(sh) {
+  if (!sh || headerMap_(sh)['Sign-up link'] === undefined) return;
+  const old = rowObjects_(sh).filter((r) => String(r.Title).trim());
+  const events = old.map((r, i) => ({
+    id: 'e' + (i + 1), show: truthy_(r.Show), title: String(r.Title), date: '', start: '', end: '', address: '',
+    price: (String(r.Price).match(/\d+(\.\d+)?/) || [''])[0], max: '', desc: String(r.Description || ''), photo: String(r.Photo || ''),
+    when: String(r.When || ''), button: r.Button === 'Sign up' ? 'Add to bag' : String(r.Button || 'None')
+  }));
+  sh.clear();
+  sh.getRange(1, 1, 1, TABS.Events.headers.length).setValues([TABS.Events.headers]);
+  writeEvents_(events);
+}
+
+// Replace the Events tab rows with these events (objects shaped like STARTER_EVENTS).
+function writeEvents_(events) {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Events');
+  const map = headerMap_(sh);
+  const width = sh.getLastColumn();
+  const rows = events.map((ev) => {
+    const row = new Array(width).fill('');
+    Object.keys(EVENT_COLS).forEach((k) => {
+      const col = map[EVENT_COLS[k]];
+      if (!col) return;
+      let v = ev[k];
+      if (k === 'show') v = v !== false;
+      else if (k === 'price' || k === 'max') v = v === '' || v == null || isNaN(Number(v)) ? '' : Number(v);
+      else v = String(v == null ? '' : v);
+      row[col - 1] = v;
+    });
+    return row;
+  });
+  replaceRows_(sh, rows, [map.Show]);
+  if (rows.length && map.Button) {
+    sh.getRange(2, map.Button, rows.length, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(EVENT_BUTTONS, true).build());
+  }
 }
 
 function appendRows_(sh, rows) {
@@ -283,18 +371,33 @@ function getConfig_() {
   return cfg;
 }
 
-// Settings safe to send to the website. Days that hit the order limit go out as blocked dates.
+// Settings safe to send to the website. Blocked ranges go out as a plain list of dates; weekLoads tells the
+// site how many cookies each upcoming week already has, so it can explain when a week is full.
 function publicConfig_(cfg) {
   const out = {};
-  Object.keys(cfg).forEach((k) => { if (PRIVATE_SETTINGS.indexOf(k) === -1 && k !== 'fullDates') out[k] = cfg[k]; });
-  out.blockedDates = unavailableDates_(cfg);
+  Object.keys(cfg).forEach((k) => { if (PRIVATE_SETTINGS.indexOf(k) === -1 && ['blockedRanges', 'weekCounts'].indexOf(k) === -1) out[k] = cfg[k]; });
+  out.blockedDates = blockedDates_(cfg);
+  out.weekLoads = {};
+  Object.keys(cfg.weekCounts || {}).forEach((w) => { out.weekLoads[w] = { custom: cfg.weekCounts[w].custom.approved, artisan: cfg.weekCounts[w].artisan.approved }; });
   return out;
 }
 
-// Blocked dates plus days already holding maxOrdersPerDay approved orders.
-function unavailableDates_(cfg) {
-  const all = (cfg.blockedDates || []).concat(cfg.fullDates || []);
-  return all.filter((d, i) => all.indexOf(d) === i).sort();
+// Every date inside a blocked range, from today on (at most two years out).
+function blockedDates_(cfg) {
+  const today = todayISO_();
+  const out = [];
+  (cfg.blockedRanges || []).forEach((r) => {
+    let d = r.start < today ? today : r.start;
+    for (let n = 0; d <= r.end && n < 731; n++, d = addDaysISO_(d, 1)) if (out.indexOf(d) === -1) out.push(d);
+  });
+  return out.sort();
+}
+
+// Monday (yyyy-mm-dd) of the Mon-Sun week a date falls in.
+function mondayOf_(iso) {
+  const p = iso.split('-').map(Number);
+  const dow = new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay();   // 0 = Sunday
+  return addDaysISO_(iso, -((dow + 6) % 7));
 }
 
 function clearConfigCache_() { CacheService.getScriptCache().remove(CONFIG_CACHE_KEY); }
@@ -328,11 +431,16 @@ function buildConfig_(admin) {
     .filter((r) => String(r[0]).trim())
     .map((r) => ({ zip: String(r[0]).trim(), area: String(r[1]).trim(), fee: Number(r[2]) || 0 }));
 
+  // Blocked ranges (End blank = just the Start day). Ranges that have ended are dropped.
   const today = todayISO_();
-  cfg.blockedDates = rows_(ss.getSheetByName('BlockedDates'))
-    .map((r) => toISODate_(r[0]))
-    .filter((d) => d && d >= today)
-    .sort();
+  cfg.blockedRanges = rowObjects_(ss.getSheetByName('BlockedDates'))
+    .map((r) => {
+      const start = toISODate_(r.Start);
+      const end = toISODate_(r.End) || start;
+      return { start, end: end < start ? start : end, note: String(r.Note || '').trim() };
+    })
+    .filter((r) => r.start && r.end >= today)
+    .sort((a, b) => (a.start < b.start ? -1 : 1));
 
   cfg.faqs = rows_(ss.getSheetByName('FAQ'))
     .filter((r) => String(r[0]).trim())
@@ -349,11 +457,21 @@ function buildConfig_(admin) {
   cfg.images = Object.assign({}, cfg.images || {});
   [['custom', 'photoCustom'], ['mini', 'photoMini'], ['large', 'photoLarge']].forEach(([k, p]) => { if (cfg.pages[p]) cfg.images[k] = cfg.pages[p]; });
 
-  cfg.events = rows_(ss.getSheetByName('Events'))
-    .filter((r) => (admin || truthy_(r[0])) && String(r[3]).trim())
-    .map((r) => {
-      const ev = { photo: String(r[1]).trim(), when: String(r[2]).trim(), title: String(r[3]).trim(), desc: String(r[4]).trim(), price: String(r[5]).trim(), button: String(r[6]).trim() || 'None', link: String(r[7]).trim() };
-      if (admin) ev.show = truthy_(r[0]);
+  // Events: classes ("Add to bag") show how many spots are left.
+  const counts = bookingCounts_();
+  cfg.events = rowObjects_(ss.getSheetByName('Events'))
+    .filter((r) => (admin || truthy_(r.Show)) && String(r.Title || '').trim())
+    .map((r, i) => {
+      const num = (v) => (v === '' || v == null || isNaN(Number(v)) ? '' : Number(v));
+      const ev = {
+        id: String(r.ID || '').trim() || ('row' + (i + 2)), title: String(r.Title).trim(), date: toISODate_(r.Date),
+        start: timeText_(r['Start time']), end: timeText_(r['End time']), address: String(r.Address || '').trim(),
+        price: num(r.Price), max: num(r['Max attendees']), desc: String(r.Description || '').trim(), photo: String(r.Photo || '').trim(),
+        when: String(r.When || '').trim(), button: EVENT_BUTTONS.indexOf(String(r.Button)) !== -1 ? String(r.Button) : 'None'
+      };
+      ev.booked = counts.seats[ev.id] || 0;
+      if (ev.max !== '') ev.spotsLeft = Math.max(0, ev.max - ev.booked);
+      if (admin) ev.show = truthy_(r.Show);
       return ev;
     });
 
@@ -365,32 +483,50 @@ function buildConfig_(admin) {
       return g;
     });
 
-  // Days already holding maxOrdersPerDay approved orders (Invoice sent and later). Pending and declined don't count.
-  const max = Number(cfg.maxOrdersPerDay) || 0;
-  const counts = dayCounts_();
-  cfg.fullDates = max > 0 ? Object.keys(counts).filter((d) => d >= today && counts[d].approved >= max).sort() : [];
+  // Cookies per upcoming week, for the weekly caps.
+  cfg.weekCounts = {};
+  const thisWeek = mondayOf_(today);
+  Object.keys(counts.weeks).forEach((w) => { if (w >= thisWeek) cfg.weekCounts[w] = counts.weeks[w]; });
 
   return cfg;
 }
 
+// Cookie orders count toward a week's cap once approved. Class bookings hold their spots until cancelled.
 const COUNTED_STATUSES = ['Invoice sent', 'Paid', 'Baking', 'Ready', 'Completed'];
+const CLASS_STATUSES = ['Booked', 'Paid', 'Completed', 'Cancelled'];
 
-// { '2026-11-07': { approved: 2, pending: 1 }, ... } from the Orders tab.
-function dayCounts_() {
-  const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
-  const out = {};
-  if (!sh || sh.getLastRow() < 2) return out;
-  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
-  const ci = headers.indexOf('Date needed'), si = headers.indexOf('Status');
-  rows_(sh).forEach((r) => {
-    const d = toISODate_(r[ci]);
-    const st = String(r[si]).trim();
-    if (!d) return;
-    out[d] = out[d] || { approved: 0, pending: 0 };
-    if (COUNTED_STATUSES.indexOf(st) !== -1) out[d].approved++;
-    else if (st === 'Pending review') out[d].pending++;
+// From the Orders + OrderItems tabs:
+//   weeks: { '2026-11-02': { custom: { approved, pending }, artisan: { approved, pending } } } (Monday of each week)
+//   seats: { eventId: seats booked }
+function bookingCounts_() {
+  const ss = SpreadsheetApp.getActive();
+  const orders = {};
+  rowObjects_(ss.getSheetByName('Orders')).forEach((o) => {
+    orders[String(o.Order).trim()] = { status: String(o.Status || '').trim(), date: toISODate_(o['Date needed']) };
   });
-  return out;
+  const weeks = {}, seats = {};
+  rowObjects_(ss.getSheetByName('OrderItems')).forEach((it) => {
+    const o = orders[String(it.Order).trim()];
+    if (!o) return;
+    const kind = String(it.Kind), qty = Number(it.Qty) || 0;
+    if (kind === 'class') {
+      if (o.status !== 'Cancelled' && o.status !== 'Declined') seats[String(it['Event ID'])] = (seats[String(it['Event ID'])] || 0) + qty;
+      return;
+    }
+    if (!o.date) return;
+    const w = mondayOf_(o.date);
+    const type = kind === 'custom' ? 'custom' : 'artisan';
+    weeks[w] = weeks[w] || { custom: { approved: 0, pending: 0 }, artisan: { approved: 0, pending: 0 } };
+    if (COUNTED_STATUSES.indexOf(o.status) !== -1) weeks[w][type].approved += qty;
+    else if (o.status === 'Pending review') weeks[w][type].pending += qty;
+  });
+  return { weeks, seats };
+}
+
+// A time cell as text, e.g. "2:00 PM" (Sheets may store times as dates).
+function timeText_(v) {
+  if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, tz_(), 'h:mm a');
+  return String(v == null ? '' : v).trim();
 }
 
 // The admin's unsaved "Preview changes" draft (Draft tab, key "config"), or null.
@@ -428,68 +564,117 @@ const MAX_QTY = 2000;
 
 function occasion_(o) { return o.eventType || 'Not specified'; }
 
-function itemLabel_(kind) { return kind === 'custom' ? 'Custom Cookies' : kind === 'mini' ? 'Mini Artisan' : 'Large Artisan'; }
+function itemLabel_(kind) { return kind === 'custom' ? 'Custom Cookies' : kind === 'mini' ? 'Mini Artisan' : kind === 'class' ? 'Class' : 'Large Artisan'; }
 
 function submitOrder_(b) {
+  // A retry of a checkout that already went through (e.g. the connection dropped before the reply arrived)
+  // gets the original result back instead of creating a second order.
+  const sid = clean_(b.submissionId, 60);
+  const cache = CacheService.getScriptCache();
+  if (sid) { const seen = cache.get('sub_' + sid); if (seen) return JSON.parse(seen); }
+
   const cfg = getConfig_();
-  if (!cfg.acceptingOrders) return { ok: false, code: 'closed', error: 'Sorry, I’m not taking new orders right now.' };
+  const hasCookies = (b.items || []).some((it) => it && it.kind !== 'class');
+  if (hasCookies && !cfg.acceptingOrders) return { ok: false, code: 'closed', error: 'Sorry, I’m not taking new cookie orders right now.' };
 
   const v = validateOrder_(cfg, b);
   if (v.errors.length) return { ok: false, code: 'invalid', errors: v.errors };
-  const o = v.order;
 
-  if (rateLimited_('order', o.customer.email, 5)) {
+  if (rateLimited_('order', v.customer.email, 5)) {
     return { ok: false, code: 'rate', error: 'We’ve received several requests from this email in the last hour. Please try again later or send a message instead.' };
   }
 
-  const ss = SpreadsheetApp.getActive();
-  const orders = ss.getSheetByName('Orders');
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
-  let row;
+  const placed = [];   // [{ order, row }]
   try {
-    o.number = 'SN-' + nextCounter_('nextOrder');
-    o.createdAt = new Date();
-    row = appendObject_(orders, {
-      'Order': o.number, 'Received': o.createdAt, 'Status': 'Pending review',
-      'Name': o.customer.name, 'Email': o.customer.email, 'Phone': o.customer.phone,
-      'Occasion': o.eventType, 'Date needed': o.dateNeeded, 'Pickup / drop-off': o.fulfillment === 'delivery' ? 'Drop-off' : 'Pickup',
-      'Street': o.address ? o.address.street : '', 'City': o.address ? o.address.city : '', 'ZIP': o.address ? o.address.zip : '',
-      'Allergies': o.allergies, 'Subtotal': o.subtotal, 'Tax': o.tax, 'Tax rate': o.taxRate, 'Drop-off fee': o.deliveryFee,
-      'Estimated total': o.total, 'Customer email': 'Sending…', 'Owner alert': 'Sending…', 'Updated': o.createdAt
+    // Re-check class spots and the code's balance now that no one else can book at the same time.
+    if (v.cls) {
+      const seats = bookingCounts_().seats;
+      for (const it of v.cls.items) {
+        const ev = cfg.events.find((e) => e.id === it.eventId);
+        if (ev && ev.max !== '' && (seats[it.eventId] || 0) + it.qty > ev.max) {
+          const left = Math.max(0, ev.max - (seats[it.eventId] || 0));
+          return { ok: false, code: 'invalid', errors: [left ? 'fewer spots in ' + ev.title + ' (only ' + left + ' left)' : ev.title + ' is now sold out. Please remove it'] };
+        }
+      }
+    }
+    const code = v.code ? lookupCode_(v.code.code) : null;
+    if (v.code && !code) return { ok: false, code: 'invalid', errors: ['a valid promo or gift code (or remove it)'] };
+    if (code && code.type === 'Gift card' && v.cls && v.cls.giftCredit > code.balance) {
+      v.cls.giftCredit = round2_(code.balance);
+      v.cls.total = round2_(v.cls.subtotal - v.cls.discount - v.cls.giftCredit);
+    }
+
+    const ss = SpreadsheetApp.getActive();
+    const now = new Date();
+    [v.cls, v.cookie].forEach((o) => {
+      if (!o) return;
+      o.number = 'SN-' + nextCounter_('nextOrder');
+      o.createdAt = now;
+      o.status = o.type === 'Class' ? 'Booked' : 'Pending review';
+      if (o.type === 'Class') {
+        // Classes are confirmed right away, so the invoice is final now (QuickBooks sends it in phase 4).
+        o.invoice = { lines: startingLines_(o), fee: 0, subtotal: round2_(o.subtotal - o.discount), tax: 0, credit: o.giftCredit, total: o.total, note: '', changed: false, sentAt: now.toISOString() };
+      }
+      const row = appendObject_(ss.getSheetByName('Orders'), {
+        'Order': o.number, 'Received': now, 'Status': o.status, 'Type': o.type,
+        'Name': o.customer.name, 'Email': o.customer.email, 'Phone': o.customer.phone,
+        'Occasion': o.eventType, 'Date needed': o.dateNeeded,
+        'Pickup / drop-off': o.type === 'Class' ? 'Class' : o.fulfillment === 'delivery' ? 'Drop-off' : 'Pickup',
+        'Street': o.address ? o.address.street : '', 'City': o.address ? o.address.city : '', 'ZIP': o.address ? o.address.zip : '',
+        'Allergies': o.allergies, 'Subtotal': o.subtotal, 'Tax': o.tax, 'Tax rate': o.taxRate, 'Drop-off fee': o.deliveryFee,
+        'Estimated total': o.total, 'Promo code': o.promoCode, 'Discount': o.discount, 'Gift card credit': o.giftCredit,
+        'Invoice': o.invoice ? JSON.stringify(o.invoice) : '', 'Submission ID': sid,
+        'Customer email': 'Sending…', 'Owner alert': 'Sending…', 'Updated': now
+      });
+      appendObjects_(ss.getSheetByName('OrderItems'), o.items.map((it, i) => ({
+        'Order': o.number, 'Line': i + 1, 'Item': itemLabel_(it.kind) + (it.kind === 'class' ? ': ' + it.title : ''), 'Kind': it.kind, 'Qty': it.qty,
+        'Designs': it.kind === 'custom' ? it.designs : '', 'Flavors': it.kind === 'mini' || it.kind === 'large' ? it.summary : '',
+        'Flavors (data)': it.fq ? JSON.stringify(it.fq) : '', 'Description': it.kind === 'class' ? it.summary : (it.desc || ''), 'Photo': it.photoName || '',
+        'Unit price': it.unit, 'Line total': it.lineTotal, 'Event ID': it.eventId || ''
+      })));
+      placed.push({ order: o, row });
     });
-    const items = ss.getSheetByName('OrderItems');
-    const lines = o.items.map((it, i) => [o.number, i + 1, itemLabel_(it.kind), it.kind, it.qty, it.kind === 'custom' ? it.designs : '',
-      it.kind === 'custom' ? '' : it.summary, it.kind === 'custom' ? '' : JSON.stringify(it.fq), it.desc || '', it.photoName || '', it.unit, it.lineTotal].map(cell_));
-    items.getRange(items.getLastRow() + 1, 1, lines.length, lines[0].length).setValues(lines);
+    // A percent code counts one use per checkout; a gift card is charged now for classes (cookie orders: when approved).
+    if (code) useCode_(code, v.cls ? v.cls.giftCredit : 0);
     SpreadsheetApp.flush();
   } finally {
     lock.releaseLock();
   }
+  clearConfigCache_();   // class spots changed
 
-  setCell_(orders, row, 'Customer email', sendSafely_(() => sendOrderRequestEmail_(cfg, o)));
-  setCell_(orders, row, 'Owner alert', sendSafely_(() => sendOwnerOrderAlert_(cfg, o)));
+  const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
+  placed.forEach(({ order: o, row }) => {
+    const toCustomer = o.type === 'Class' ? () => sendClassBookingEmail_(cfg, o) : () => sendOrderRequestEmail_(cfg, o);
+    const toOwner = o.type === 'Class' ? () => sendOwnerClassAlert_(cfg, o) : () => sendOwnerOrderAlert_(cfg, o);
+    setCell_(sh, row, 'Customer email', sendSafely_(toCustomer));
+    setCell_(sh, row, 'Owner alert', sendSafely_(toOwner));
+  });
 
-  return {
-    ok: true,
-    order: {
-      number: o.number, status: 'Pending review', createdAt: o.createdAt.toISOString(),
-      items: o.items, eventType: o.eventType, dateNeeded: o.dateNeeded, allergies: o.allergies,
-      fulfillment: o.fulfillment, address: o.address, customer: o.customer,
-      subtotal: o.subtotal, tax: o.tax, deliveryFee: o.deliveryFee, total: o.total, taxRate: o.taxRate
-    }
-  };
+  const pub = (o) => ({
+    number: o.number, type: o.type, status: o.status, createdAt: o.createdAt.toISOString(), items: o.items, eventType: o.eventType,
+    dateNeeded: o.dateNeeded, allergies: o.allergies, fulfillment: o.fulfillment, address: o.address, customer: o.customer,
+    subtotal: o.subtotal, discount: o.discount, promoCode: o.promoCode, tax: o.tax, deliveryFee: o.deliveryFee, giftCredit: o.giftCredit,
+    total: o.total, taxRate: o.taxRate
+  });
+  const orders = placed.map((p) => pub(p.order));
+  const result = { ok: true, orders, order: orders.find((o) => o.type === 'Cookies') || orders[0] };
+  if (sid) { try { cache.put('sub_' + sid, JSON.stringify(result), 21600); } catch (e) { /* too large: fine */ } }
+  return result;
 }
 
-// Returns { errors: [...short phrases for "Still needed: ..."], order }
+// Returns { errors: [...short phrases for "Still needed: ..."], customer, cookie, cls, code }.
+// A checkout can hold cookies (sent for review) and classes (booked right away); each becomes its own order.
 function validateOrder_(cfg, b) {
   const errors = [];
+  const today = todayISO_();
   const flavorsById = {};
   cfg.flavors.forEach((f) => { if (f.on) flavorsById[f.id] = f; });
 
   const rawItems = Array.isArray(b.items) ? b.items.slice(0, MAX_ITEMS) : [];
   if (!rawItems.length) errors.push('at least one item in your bag');
-  const items = [];
+  const cookies = [], classes = [];
   rawItems.forEach((raw) => {
     const kind = String(raw && raw.kind);
     const label = itemLabel_(kind);
@@ -501,7 +686,7 @@ function validateOrder_(cfg, b) {
       if (!(designs >= 1 && designs <= cfg.maxDesigns)) errors.push(label + ': 1 to ' + cfg.maxDesigns + ' designs');
       if (!desc) errors.push(label + ': a description of your cookies');
       const unit = Number(cfg.customBasePrice) || 0;
-      items.push({
+      cookies.push({
         kind, qty, designs, desc, photoName: clean_(raw.photoName, 200), unit: round2_(unit), lineTotal: round2_(qty * unit),
         summary: designs + ' design' + (designs > 1 ? 's' : '') + ' · estimated at ' + money_(unit) + ' each' + (raw.photoName ? ' · photo attached' : '')
       });
@@ -516,45 +701,30 @@ function validateOrder_(cfg, b) {
         qty += n;
       });
       const used = Object.keys(fq).length;
-      const max = cfg.flavorsPerDozen * Math.max(1, Math.floor(qty / 12));
+      const max = flavorLimit_(cfg, qty);
       if (qty < cfg.minQty || qty > MAX_QTY) errors.push(label + ': at least ' + cfg.minQty + ' cookies');
       else if (used > max) errors.push(label + ': up to ' + max + ' flavors for ' + qty + ' cookies');
       const unit = (kind === 'mini' ? cfg.miniPerDozen : cfg.largePerDozen) / 12;
-      items.push({
+      cookies.push({
         kind, qty, fq, unit: round2_(unit), lineTotal: round2_(qty * unit),
         flavorNames: Object.keys(fq).reduce((a, id) => { a[id] = flavorsById[id].name; return a; }, {}),
         summary: Object.keys(fq).map((id) => fq[id] + ' ' + flavorsById[id].name).join(', ')
       });
+    } else if (kind === 'class') {
+      const ev = cfg.events.find((e) => e.id === String(raw.eventId) && e.button === 'Add to bag' && Number(e.price) > 0);
+      const qty = Math.floor(Number(raw.qty));
+      if (!ev) { errors.push('a class that’s no longer available was in your bag. Please remove it'); return; }
+      if (ev.date && ev.date < today) { errors.push(ev.title + ' has already happened. Please remove it'); return; }
+      if (!(qty >= 1 && qty <= 20)) { errors.push(ev.title + ': 1 to 20 spots'); return; }
+      if (ev.spotsLeft !== undefined && qty > ev.spotsLeft) {
+        errors.push(ev.spotsLeft ? 'fewer spots in ' + ev.title + ' (only ' + ev.spotsLeft + ' left)' : ev.title + ' is sold out. Please remove it');
+        return;
+      }
+      classes.push({ kind, eventId: ev.id, title: ev.title, date: ev.date, start: ev.start, end: ev.end, address: ev.address, qty, unit: round2_(ev.price), lineTotal: round2_(qty * ev.price), summary: classWhen_(ev) });
     } else {
       errors.push('a valid item');
     }
   });
-
-  // The occasion is required for custom cookies (it shapes the design) and optional for artisan-only orders.
-  let eventType = clean_(b.eventType, 40);
-  const eventOther = clean_(b.eventOther, 120);
-  const needsOccasion = items.some((it) => it.kind === 'custom');
-  if (eventType || needsOccasion) {
-    if (EVENT_TYPES.indexOf(eventType) === -1) errors.push('event type');
-    else if (eventType === 'Other') { if (!eventOther) errors.push('the occasion'); else eventType = 'Other: ' + eventOther; }
-  }
-
-  const dateNeeded = toISODate_(b.dateNeeded);
-  const minISO = addDaysISO_(todayISO_(), Number(cfg.leadDays) || 0);
-  if (!dateNeeded) errors.push('date needed');
-  else if (dateNeeded < minISO) errors.push('a date at least ' + cfg.leadDays + ' days out');
-  else if (unavailableDates_(cfg).indexOf(dateNeeded) !== -1) errors.push('a different date (that day is booked)');
-
-  const fulfillment = b.fulfillment === 'delivery' ? 'delivery' : 'pickup';
-  let address = null, deliveryFee = 0;
-  if (fulfillment === 'delivery') {
-    const a = b.address || {};
-    address = { street: clean_(a.street, 200), city: clean_(a.city, 80), zip: clean_(a.zip, 5).replace(/\D/g, '') };
-    if (!address.street || !address.city) errors.push('drop-off address');
-    const zone = cfg.zones.find((z) => z.zip === address.zip);
-    if (!zone) errors.push('a ZIP in our drop-off area');
-    else deliveryFee = Number(zone.fee) || 0;
-  }
 
   const c = b.customer || {};
   const customer = { name: clean_(c.name, 120), email: clean_(c.email, 200), phone: formatPhone_(clean_(c.phone, 40)) };
@@ -562,14 +732,149 @@ function validateOrder_(cfg, b) {
   if (!validEmail_(customer.email)) errors.push('a valid email');
   if (!customer.phone) errors.push('a 10-digit phone number');
 
-  const subtotal = round2_(items.reduce((a, it) => a + it.lineTotal, 0));
-  const tax = Math.round(subtotal * Number(cfg.taxRate)) / 100;
-  const total = round2_(subtotal + tax + deliveryFee);
+  let code = null;
+  if (clean_(b.code, 40)) {
+    code = lookupCode_(b.code);
+    if (!code) errors.push('a valid promo or gift code (or remove it)');
+  }
+  const pct = code && code.type === 'Percent off' ? Math.min(100, Math.max(0, code.amount)) : 0;
+  let giftLeft = code && code.type === 'Gift card' ? code.balance : 0;
 
-  return {
-    errors: errors.filter((e, i) => errors.indexOf(e) === i),
-    order: { items, eventType, dateNeeded, allergies: clean_(b.allergies, 1000), fulfillment, address, customer, subtotal, tax, deliveryFee, total, taxRate: Number(cfg.taxRate) }
-  };
+  // Classes: no tax. A gift card is used on classes first, since they're paid now.
+  let cls = null;
+  if (classes.length) {
+    const subtotal = round2_(classes.reduce((a, it) => a + it.lineTotal, 0));
+    const discount = round2_(subtotal * pct / 100);
+    const giftCredit = round2_(Math.min(giftLeft, subtotal - discount));
+    giftLeft = round2_(giftLeft - giftCredit);
+    cls = {
+      type: 'Class', items: classes, eventType: '', dateNeeded: classes.map((it) => it.date).filter(Boolean).sort()[0] || '', allergies: '',
+      fulfillment: 'class', address: null, customer, subtotal, discount, tax: 0, deliveryFee: 0, giftCredit,
+      total: round2_(subtotal - discount - giftCredit), taxRate: 0, promoCode: code ? code.code : ''
+    };
+  }
+
+  let cookie = null;
+  if (cookies.length) {
+    // The occasion is required for custom cookies (it shapes the design) and optional for artisan-only orders.
+    let eventType = clean_(b.eventType, 40);
+    const eventOther = clean_(b.eventOther, 120);
+    if (eventType || cookies.some((it) => it.kind === 'custom')) {
+      if (EVENT_TYPES.indexOf(eventType) === -1) errors.push('event type');
+      else if (eventType === 'Other') { if (!eventOther) errors.push('the occasion'); else eventType = 'Other: ' + eventOther; }
+    }
+
+    const dateNeeded = toISODate_(b.dateNeeded);
+    const minISO = addDaysISO_(today, Number(cfg.leadDays) || 0);
+    if (!dateNeeded) errors.push('date needed');
+    else if (dateNeeded < minISO) errors.push('a date at least ' + cfg.leadDays + ' days out');
+    else if (blockedDates_(cfg).indexOf(dateNeeded) !== -1) errors.push('a different date (that day is booked)');
+    else weekCapErrors_(cfg, dateNeeded, cookies).forEach((e) => errors.push(e));
+
+    const fulfillment = b.fulfillment === 'delivery' ? 'delivery' : 'pickup';
+    let address = null, deliveryFee = 0;
+    if (fulfillment === 'delivery') {
+      const a = b.address || {};
+      address = { street: clean_(a.street, 200), city: clean_(a.city, 80), zip: clean_(a.zip, 5).replace(/\D/g, '') };
+      if (!address.street || !address.city) errors.push('drop-off address');
+      const zone = cfg.zones.find((z) => z.zip === address.zip);
+      if (!zone) errors.push('a ZIP in our drop-off area');
+      else deliveryFee = Number(zone.fee) || 0;
+    }
+
+    // Tax is on the cookies after any percent discount; the drop-off fee isn't taxed. A gift card comes off last.
+    const subtotal = round2_(cookies.reduce((a, it) => a + it.lineTotal, 0));
+    const discount = round2_(subtotal * pct / 100);
+    const tax = Math.round((subtotal - discount) * Number(cfg.taxRate)) / 100;
+    const beforeCredit = round2_(subtotal - discount + tax + deliveryFee);
+    const giftCredit = round2_(Math.min(giftLeft, beforeCredit));
+    cookie = {
+      type: 'Cookies', items: cookies, eventType, dateNeeded, allergies: clean_(b.allergies, 1000), fulfillment, address, customer,
+      subtotal, discount, tax, deliveryFee, giftCredit, total: round2_(beforeCredit - giftCredit), taxRate: Number(cfg.taxRate), promoCode: code ? code.code : ''
+    };
+  }
+
+  return { errors: errors.filter((e, i) => errors.indexOf(e) === i), customer, cookie, cls, code };
+}
+
+// Artisan flavor limit: flavorsPerDozen (4) below flavorsMaxAt cookies (24), then flavorsMax (6).
+function flavorLimit_(cfg, qty) {
+  return qty >= (Number(cfg.flavorsMaxAt) || 24) ? (Number(cfg.flavorsMax) || 6) : (Number(cfg.flavorsPerDozen) || 4);
+}
+
+// Weekly caps (Mon-Sun): would these cookies push the week past capCustomPerWeek / capArtisanPerWeek?
+function weekCapErrors_(cfg, dateNeeded, cookies) {
+  const errors = [];
+  const week = (cfg.weekCounts || {})[mondayOf_(dateNeeded)] || { custom: { approved: 0 }, artisan: { approved: 0 } };
+  [['custom', 'capCustomPerWeek', 'custom'], ['artisan', 'capArtisanPerWeek', 'artisan']].forEach(([type, key, word]) => {
+    const cap = Number(cfg[key]) || 0;
+    const qty = cookies.filter((it) => (type === 'custom') === (it.kind === 'custom')).reduce((a, it) => a + it.qty, 0);
+    if (!cap || !qty) return;
+    const left = Math.max(0, cap - week[type].approved);
+    if (qty > left) errors.push(left ? 'a different week (that week only has room for ' + left + ' more ' + word + ' cookies)' : 'a different week (' + word + ' cookies are fully booked that week)');
+  });
+  return errors;
+}
+
+// "Sat, Dec 6 · 2:00 PM–4:00 PM"
+function classWhen_(ev) {
+  const day = ev.date ? Utilities.formatDate(new Date(ev.date + 'T12:00:00Z'), 'UTC', 'EEE, MMM d') : '';
+  const time = ev.start ? ev.start + (ev.end ? '–' + ev.end : '') : '';
+  return [day, time].filter(Boolean).join(' · ');
+}
+
+/* ----- Promo and gift codes (Codes tab) ----- */
+
+// A usable code, or null. Percent off: active, not expired, under its use limit. Gift card: also has a balance.
+function lookupCode_(raw) {
+  const want = String(raw || '').trim().toUpperCase();
+  if (!want) return null;
+  const sh = SpreadsheetApp.getActive().getSheetByName('Codes');
+  if (!sh) return null;
+  const today = todayISO_();
+  const rows = rowObjects_(sh);
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (String(r.Code || '').trim().toUpperCase() !== want) continue;
+    const c = {
+      code: String(r.Code).trim(), type: String(r.Type), amount: Number(r.Amount) || 0, balance: round2_(Number(r.Balance) || 0),
+      active: truthy_(r.Active), expires: toISODate_(r.Expires), maxUses: Number(r['Max uses']) || 0, uses: Number(r.Uses) || 0, row: i + 2
+    };
+    if (!c.active || (c.expires && c.expires < today) || (c.maxUses && c.uses >= c.maxUses)) return null;
+    if (c.type === 'Gift card' && c.balance <= 0) return null;
+    if (c.type !== 'Gift card' && c.type !== 'Percent off') return null;
+    return c;
+  }
+  return null;
+}
+
+// Record a use: +1 use, and for a gift card take `credit` off the balance. Call inside the script lock.
+function useCode_(c, credit) {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Codes');
+  const map = headerMap_(sh);
+  sh.getRange(c.row, map.Uses).setValue((Number(sh.getRange(c.row, map.Uses).getValue()) || 0) + 1);
+  if (c.type === 'Gift card' && credit > 0) {
+    const bal = Number(sh.getRange(c.row, map.Balance).getValue()) || 0;
+    sh.getRange(c.row, map.Balance).setValue(round2_(Math.max(0, bal - credit)));
+  }
+}
+
+// Checkout's "Apply" button. Says what the code does without revealing anything about other codes.
+function checkCode_(b) {
+  if (rateLimited_('code', 'all', 300)) return { ok: false, error: 'Please try again in a little while.' };
+  const c = lookupCode_(b.code);
+  if (!c) return { ok: false, error: 'That code isn’t valid or has expired.' };
+  return c.type === 'Gift card'
+    ? { ok: true, code: c.code, type: 'gift', amount: c.balance }
+    : { ok: true, code: c.code, type: 'percent', amount: c.amount };
+}
+
+// Append several rows using the tab's header names as keys.
+function appendObjects_(sh, objs) {
+  if (!objs.length) return;
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  const rows = objs.map((o) => headers.map((h) => (h in o ? cell_(o[h]) : '')));
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, headers.length).setValues(rows);
 }
 
 // Runs a send and returns a short status for the Sheet ("Sent 10/19 2:14 PM" or "FAILED: ...").
@@ -671,15 +976,26 @@ function adminLoad() {
   const draft = getDraft_();
   return {
     config: cfg, stamp: settingsStamp_(cfg), draft: draft,
-    orders: readOrders_(), messages: readMessages_(), dayCounts: dayCounts_(),
+    orders: readOrders_(), messages: readMessages_(), weekCounts: cfg.weekCounts, codes: readCodes_(),
     sheetUrl: SpreadsheetApp.getActive().getUrl(), today: todayISO_()
   };
 }
 
+// Cookies per upcoming week (see bookingCounts_), for the admin after an order changes.
+function weekCountsNow_() {
+  const thisWeek = mondayOf_(todayISO_());
+  const weeks = bookingCounts_().weeks;
+  const out = {};
+  Object.keys(weeks).forEach((w) => { if (w >= thisWeek) out[w] = weeks[w]; });
+  return out;
+}
+
 // Fingerprint of the editable settings, to notice edits made in the Sheet while the admin page was open.
+// Booking counts are left out: they change with orders, not edits.
 function settingsStamp_(cfg) {
   const c = Object.assign({}, cfg);
-  delete c.fullDates;
+  delete c.weekCounts;
+  c.events = (c.events || []).map((e) => { const x = Object.assign({}, e); delete x.booked; delete x.spotsLeft; return x; });
   return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(c), Utilities.Charset.UTF_8));
 }
 
@@ -735,11 +1051,17 @@ function writeSettings_(c) {
   replaceRows_(ss.getSheetByName('Flavors'), (c.flavors || []).map((f) => [f.id || ('f' + Date.now().toString(36)), f.name, !!f.on, !!f.special]), [3, 4]);
   replaceRows_(ss.getSheetByName('Zones'), (c.zones || []).filter((z) => /^\d{5}$/.test(z.zip)).map((z) => [z.zip, z.area, Number(z.fee) || 0]));
 
-  // Keep any notes typed next to blocked dates in the Sheet.
+  // Blocked ranges (Start, End, Note); End blank = just the Start day. Columns matched by header.
   const bd = ss.getSheetByName('BlockedDates');
-  const notes = {};
-  rows_(bd).forEach((r) => { const d = toISODate_(r[0]); if (d) notes[d] = r[1]; });
-  replaceRows_(bd, (c.blockedDates || []).map((d) => [d, notes[d] || '']));
+  const bm = headerMap_(bd);
+  replaceRows_(bd, (c.blockedRanges || []).filter((r) => toISODate_(r.start)).map((r) => {
+    const row = new Array(bd.getLastColumn()).fill('');
+    const start = toISODate_(r.start), end = toISODate_(r.end);
+    row[bm.Start - 1] = start;
+    row[bm.End - 1] = end && end !== start ? end : '';
+    row[bm.Note - 1] = r.note || '';
+    return row;
+  }));
 
   replaceRows_(ss.getSheetByName('FAQ'), (c.faqs || []).filter((f) => (f.q || '').trim() || (f.a || '').trim()).map((f) => [f.q, f.a]));
 
@@ -754,11 +1076,11 @@ function writeSettings_(c) {
     pkeys.push(key);
   });
 
-  const ev = ss.getSheetByName('Events');
-  replaceRows_(ev, (c.events || []).filter((e) => (e.title || '').trim())
-    .map((e) => [e.show !== false, e.photo || '', e.when || '', e.title, e.desc || '', e.price || '', EVENT_BUTTONS.indexOf(e.button) !== -1 ? e.button : 'None', e.link || '']), [1]);
-  const n = Math.max(1, (c.events || []).length);
-  ev.getRange(2, 7, n, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(EVENT_BUTTONS, true).build());
+  // Events keep their IDs (class bookings point at them); new ones get one.
+  writeEvents_((c.events || []).filter((e) => (e.title || '').trim()).map((e) => Object.assign({}, e, {
+    id: e.id && String(e.id).indexOf('row') !== 0 ? String(e.id) : 'e' + Utilities.getUuid().slice(0, 8),
+    button: EVENT_BUTTONS.indexOf(e.button) !== -1 ? e.button : 'None'
+  })));
 
   replaceRows_(ss.getSheetByName('Gallery'), (c.gallery || []).filter((g) => (g.photo || '').trim())
     .map((g) => [g.show !== false, g.photo, g.caption || '']), [1]);
@@ -793,6 +1115,14 @@ function readOrders_() {
     try { fq = JSON.parse(g('Flavors (data)') || '{}'); } catch (e) { /* ignore */ }
     const unit = Number(g('Unit price')) || 0;
     const designs = Number(g('Designs')) || 0;
+    if (kind === 'class') {
+      // Classes: the Item column is "Class: <title>" and Description holds the date and time.
+      (items[num] = items[num] || []).push({
+        kind, qty: Number(g('Qty')) || 0, eventId: String(g('Event ID') || ''), title: String(g('Item') || '').replace(/^Class: /, ''),
+        unit, lineTotal: Number(g('Line total')) || 0, summary: String(g('Description') || '')
+      });
+      return;
+    }
     (items[num] = items[num] || []).push({
       kind, qty: Number(g('Qty')) || 0, designs, desc: String(g('Description') || ''), photoName: String(g('Photo') || ''), fq,
       unit, lineTotal: Number(g('Line total')) || 0,
@@ -809,19 +1139,22 @@ function readOrders_() {
 function orderFromRow_(h, r, items) {
   const g = (k) => r[h.indexOf(k)];
   const iso = (v) => (v instanceof Date ? v.toISOString() : String(v || ''));
-  const delivery = String(g('Pickup / drop-off')) === 'Drop-off';
-  let invoice = null;
-  try { invoice = g('Invoice') ? JSON.parse(g('Invoice')) : null; } catch (e) { /* ignore */ }
+  const how = String(g('Pickup / drop-off'));
+  const delivery = how === 'Drop-off';
+  const json = (k, fallback) => { try { return g(k) ? JSON.parse(g(k)) : fallback; } catch (e) { return fallback; } };
   const num = String(g('Order')).trim();
   return {
-    number: num, createdAt: iso(g('Received')), status: String(g('Status') || 'Pending review'),
+    number: num, type: String(g('Type') || '') || (how === 'Class' ? 'Class' : 'Cookies'),
+    createdAt: iso(g('Received')), status: String(g('Status') || 'Pending review'),
     customer: { name: String(g('Name') || ''), email: String(g('Email') || ''), phone: String(g('Phone') || '') },
     eventType: String(g('Occasion') || ''), dateNeeded: toISODate_(g('Date needed')), allergies: String(g('Allergies') || ''),
-    fulfillment: delivery ? 'delivery' : 'pickup',
+    fulfillment: how === 'Class' ? 'class' : delivery ? 'delivery' : 'pickup',
     address: delivery ? { street: String(g('Street') || ''), city: String(g('City') || ''), zip: String(g('ZIP') || '') } : null,
     subtotal: Number(g('Subtotal')) || 0, tax: Number(g('Tax')) || 0, taxRate: Number(g('Tax rate')) || 0,
     deliveryFee: Number(g('Drop-off fee')) || 0, total: Number(g('Estimated total')) || 0,
-    items: items[num] || [], invoice, declineNote: String(g('Decline note') || ''),
+    promoCode: String(g('Promo code') || ''), discount: Number(g('Discount')) || 0, giftCredit: Number(g('Gift card credit')) || 0,
+    items: items[num] || [], invoice: json('Invoice', null), declineNote: String(g('Decline note') || ''),
+    messages: json('Messages log', []),
     emailStatus: String(g('Customer email') || ''), updatedAt: iso(g('Updated'))
   };
 }
@@ -839,12 +1172,17 @@ function loadOrder_(number) {
   return o;
 }
 
-// The invoice lines an approval starts from (same wording as the admin page shows).
+// The invoice lines an approval starts from (same wording as SN.linesFromOrder on the admin page).
+// A percent promo code becomes its own discount line.
 function startingLines_(o) {
-  return o.items.map((it) => ({
-    desc: it.qty + ' ' + itemLabel_(it.kind) + (it.summary ? ' (' + it.summary.replace(/ · estimated at .*?each/, '') + ')' : ''),
+  const lines = o.items.map((it) => ({
+    desc: it.kind === 'class'
+      ? 'Class: ' + it.title + (it.summary ? ' (' + it.summary + ')' : '')
+      : it.qty + ' ' + itemLabel_(it.kind) + (it.summary ? ' (' + it.summary.replace(/ · estimated at .*?each/, '') + ')' : ''),
     qty: it.qty, unit: round2_(it.unit)
   }));
+  if (o.discount) lines.push({ desc: 'Promo code ' + o.promoCode, qty: 1, unit: -round2_(o.discount) });
+  return lines;
 }
 
 // Approve a pending order: save the final invoice, mark it "Invoice sent" and email the confirmation (email #2).
@@ -861,10 +1199,18 @@ function adminApprove(number, inv) {
     const fee = o.fulfillment === 'delivery' ? Math.max(0, Number(inv.fee) || 0) : 0;
     const subtotal = round2_(lines.reduce((a, l) => a + l.qty * l.unit, 0));
     const tax = Math.round(Math.max(0, subtotal) * o.taxRate) / 100;
-    const total = round2_(subtotal + tax + fee);
-    if (total <= 0) return { ok: false, error: 'The invoice total has to be more than $0.' };
+    const beforeCredit = round2_(subtotal + tax + fee);
+    if (beforeCredit <= 0) return { ok: false, error: 'The invoice total has to be more than $0.' };
+    // A gift card comes off last, from its balance right now.
+    let credit = 0;
+    const gift = o.promoCode ? lookupCode_(o.promoCode) : null;
+    if (gift && gift.type === 'Gift card') {
+      credit = round2_(Math.min(gift.balance, beforeCredit));
+      useCode_(gift, credit);
+    }
+    const total = round2_(beforeCredit - credit);
     const changed = JSON.stringify(lines) !== JSON.stringify(startingLines_(o)) || fee !== (o.fulfillment === 'delivery' ? o.deliveryFee : 0);
-    o.invoice = { lines, fee, subtotal, tax, total, note: clean_(inv.note, 2000), changed, sentAt: new Date().toISOString() };
+    o.invoice = { lines, fee, subtotal, tax, credit, total, note: clean_(inv.note, 2000), changed, sentAt: new Date().toISOString() };
     o.status = 'Invoice sent';
     const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
     const row = findOrderRow_(sh, number);
@@ -883,8 +1229,8 @@ function finishApproval_(o) {
   o.invoice.emailStatus = sendSafely_(() => sendConfirmationEmail_(cfg, o));
   const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
   setCell_(sh, findOrderRow_(sh, o.number), 'Invoice', JSON.stringify(o.invoice));
-  clearConfigCache_();   // the date may now be full
-  return { ok: true, order: o, dayCounts: dayCounts_() };
+  clearConfigCache_();   // the week may now be full
+  return { ok: true, order: o, weekCounts: weekCountsNow_() };
 }
 
 function adminResendConfirmation(number) {
@@ -908,20 +1254,119 @@ function adminDecline(number, note) {
   setCell_(sh, row, 'Updated', new Date());
   const emailStatus = sendSafely_(() => sendDeclineEmail_(getConfig_(), o));
   clearConfigCache_();
-  return { ok: true, order: o, emailStatus, dayCounts: dayCounts_() };
+  return { ok: true, order: o, emailStatus, weekCounts: weekCountsNow_() };
 }
 
-// Status changes after approval (Paid, Baking, Ready, Completed). QuickBooks sets "Paid" automatically in phase 3.
+// Status changes: cookie orders after approval (Paid, Baking, Ready, Completed); classes Booked, Paid, Completed or
+// Cancelled (cancelling frees the spots). QuickBooks sets "Paid" automatically in phase 4.
 function adminSetStatus(number, status) {
   requireOwner_();
-  if (COUNTED_STATUSES.indexOf(status) === -1) return { ok: false, error: 'Unknown status.' };
+  const o = loadOrder_(number);
+  const allowed = o.type === 'Class' ? CLASS_STATUSES : COUNTED_STATUSES;
+  if (allowed.indexOf(status) === -1) return { ok: false, error: 'Unknown status.' };
   const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
   const row = findOrderRow_(sh, number);
-  if (row === -1) return { ok: false, error: 'Order ' + number + ' not found.' };
   setCell_(sh, row, 'Status', status);
   setCell_(sh, row, 'Updated', new Date());
   clearConfigCache_();
-  return { ok: true };
+  return { ok: true, weekCounts: weekCountsNow_() };
+}
+
+// "Message customer" from Review: emails the customer with an order summary and keeps a copy on the order.
+function adminMessageCustomer(number, text) {
+  requireOwner_();
+  const msg = clean_(text, 4000);
+  if (!msg) return { ok: false, error: 'Write a message first.' };
+  const o = loadOrder_(number);
+  const emailStatus = sendSafely_(() => sendOrderMessageEmail_(getConfig_(), o, msg));
+  o.messages = logOrderMessage_(o, msg, emailStatus);
+  return { ok: true, order: o, emailStatus };
+}
+
+// Change the date an order is needed (e.g. after talking with the customer). Optionally email them about it.
+function adminChangeDate(number, newDate, notify, note) {
+  requireOwner_();
+  const d = toISODate_(newDate);
+  if (!d) return { ok: false, error: 'Pick a valid date.' };
+  const o = loadOrder_(number);
+  if (o.type === 'Class') return { ok: false, error: 'Class dates are set on the Events tab.' };
+  const old = o.dateNeeded;
+  const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
+  const row = findOrderRow_(sh, number);
+  setCell_(sh, row, 'Date needed', d);
+  setCell_(sh, row, 'Updated', new Date());
+  o.dateNeeded = d;
+  clearConfigCache_();
+  let emailStatus = '';
+  if (notify) {
+    const msg = 'Your order’s date has changed from ' + prettyDate_(old) + ' to ' + prettyDate_(d) + '.' + (clean_(note, 2000) ? '\n\n' + clean_(note, 2000) : '');
+    emailStatus = sendSafely_(() => sendOrderMessageEmail_(getConfig_(), o, msg));
+    o.messages = logOrderMessage_(o, msg, emailStatus);
+  }
+  return { ok: true, order: o, emailStatus, weekCounts: weekCountsNow_() };
+}
+
+function logOrderMessage_(o, text, emailStatus) {
+  const log = (o.messages || []).concat([{ at: new Date().toISOString(), text, emailStatus }]);
+  const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
+  setCell_(sh, findOrderRow_(sh, o.number), 'Messages log', JSON.stringify(log));
+  return log;
+}
+
+/* ----- Codes tab ----- */
+
+function readCodes_() {
+  return rowObjects_(SpreadsheetApp.getActive().getSheetByName('Codes')).filter((r) => String(r.Code || '').trim()).map((r) => ({
+    code: String(r.Code).trim(), type: String(r.Type || 'Percent off'), amount: Number(r.Amount) || 0, balance: Number(r.Balance) || 0,
+    active: truthy_(r.Active), expires: toISODate_(r.Expires), maxUses: Number(r['Max uses']) || 0, uses: Number(r.Uses) || 0,
+    note: String(r.Note || ''), created: r.Created instanceof Date ? r.Created.toISOString() : ''
+  }));
+}
+
+// Add or update one code (matched by its original name). Uses aren't changed here; a gift card's balance is.
+function adminSaveCode(c, originalCode) {
+  requireOwner_();
+  const code = clean_(c.code, 40).toUpperCase().replace(/\s+/g, '');
+  if (!/^[A-Z0-9-]{3,40}$/.test(code)) return { ok: false, error: 'Codes use letters, numbers and dashes (3 or more).' };
+  if (CODE_TYPES.indexOf(c.type) === -1) return { ok: false, error: 'Pick a code type.' };
+  const amount = Number(c.amount);
+  if (!(amount > 0) || (c.type === 'Percent off' && amount > 100)) return { ok: false, error: c.type === 'Percent off' ? 'Enter a percent from 1 to 100.' : 'Enter the gift card amount.' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = SpreadsheetApp.getActive().getSheetByName('Codes');
+    const map = headerMap_(sh);
+    const rows = rowObjects_(sh);
+    const find = (name) => rows.findIndex((r) => String(r.Code).trim().toUpperCase() === String(name || '').toUpperCase());
+    const i = find(originalCode || code);
+    const clash = find(code);
+    if (clash !== -1 && clash !== i) return { ok: false, error: code + ' already exists.' };
+    const values = {
+      'Code': code, 'Type': c.type, 'Amount': amount, 'Active': c.active !== false, 'Expires': toISODate_(c.expires) || '',
+      'Max uses': Number(c.maxUses) > 0 ? Number(c.maxUses) : '', 'Note': clean_(c.note, 300)
+    };
+    if (c.type === 'Gift card') values.Balance = i === -1 ? amount : round2_(Math.max(0, Number(c.balance) || 0));
+    if (i === -1) {
+      values.Uses = 0;
+      values.Created = new Date();
+      appendObject_(sh, values);
+      sh.getRange(sh.getLastRow(), map.Active).insertCheckboxes();
+      if (values.Active) sh.getRange(sh.getLastRow(), map.Active).check();
+    } else {
+      Object.keys(values).forEach((h) => { if (map[h]) sh.getRange(i + 2, map[h]).setValue(h === 'Active' ? values[h] : cell_(values[h])); });
+    }
+    return { ok: true, codes: readCodes_() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function adminDeleteCode(code) {
+  requireOwner_();
+  const sh = SpreadsheetApp.getActive().getSheetByName('Codes');
+  const i = rowObjects_(sh).findIndex((r) => String(r.Code).trim().toUpperCase() === String(code).toUpperCase());
+  if (i !== -1) sh.deleteRow(i + 2);
+  return { ok: true, codes: readCodes_() };
 }
 
 /* ----- Messages ----- */
@@ -1069,7 +1514,7 @@ function sendConfirmationEmail_(cfg, o) {
     inv.lines.map((l) => '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:15px;padding:6px 0"><tr>' +
       '<td>' + esc_(l.desc) + '<br><span style="color:' + C.muted + ';font-size:13px">' + l.qty + ' × ' + money_(l.unit) + '</span></td>' +
       '<td align="right" style="vertical-align:top">' + money_(l.qty * l.unit) + '</td></tr></table>').join('') + '</div>';
-  const totals = totalsBlock_({ fulfillment: o.fulfillment, subtotal: inv.subtotal, tax: inv.tax, taxRate: o.taxRate, deliveryFee: inv.fee, total: inv.total }, 'Amount due') +
+  const totals = totalsBlock_({ fulfillment: o.fulfillment, subtotal: inv.subtotal, tax: inv.tax, taxRate: o.taxRate, deliveryFee: inv.fee, giftCredit: inv.credit || 0, promoCode: o.promoCode, total: inv.total }, 'Amount due') +
     (inv.changed ? p_('Your original estimate was ' + money_(o.total) + '.', 13) : '');
   // Phase 3 replaces this with the QuickBooks Pay button.
   const pay = '<div style="border:2px dashed ' + C.field + ';border-radius:12px;padding:14px 18px;text-align:center;font-size:14px;color:' + C.muted + ';margin-bottom:18px">' +
@@ -1086,7 +1531,7 @@ function sendConfirmationEmail_(cfg, o) {
     isDel ? 'Drop-off to: ' + o.address.street + ', ' + o.address.city + ' ' + o.address.zip : 'Pickup address: ' + cfg.pickupAddress + (cfg.pickupInstructions ? '\n' + cfg.pickupInstructions : ''),
     'Needed by: ' + prettyDate_(o.dateNeeded), '',
     inv.lines.map((l) => l.desc + ' – ' + l.qty + ' × ' + money_(l.unit) + ' = ' + money_(l.qty * l.unit)).join('\n'), '',
-    'Subtotal: ' + money_(inv.subtotal), 'Grocery tax (' + o.taxRate + '%): ' + money_(inv.tax), isDel ? 'Drop-off: ' + money_(inv.fee) : 'Pickup: Free',
+    'Subtotal: ' + money_(inv.subtotal), 'Tax (' + o.taxRate + '%): ' + money_(inv.tax), isDel ? 'Drop-off: ' + money_(inv.fee) : 'Pickup: Free', inv.credit ? 'Gift card: -' + money_(inv.credit) : '',
     'Amount due: ' + money_(inv.total), '', 'Questions or changes? Just reply to this email and mention your order number.'
   ].join('\n');
   MailApp.sendEmail({
@@ -1111,6 +1556,83 @@ function sendDeclineEmail_(cfg, o) {
       (o.declineNote ? '\n\n"' + o.declineNote + '" — M' : '') + '\n\nQuestions? Just reply to this email.',
     name: cfg.senderName, replyTo: cfg.replyToEmail
   });
+}
+
+/* ---------- Class booked (customer): confirmed right away, no review ---------- */
+function sendClassBookingEmail_(cfg, o) {
+  const first = (o.customer.name || '').split(' ')[0];
+  const html = shell_(cfg, 'You’re booked' + (first ? ', ' + esc_(first) : '') + '!', o.number,
+    '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">Your spot' + (o.items.reduce((a, it) => a + it.qty, 0) > 1 ? 's are' : ' is') +
+      ' saved. Your invoice will follow by email; please pay it to keep your booking.</div>' +
+    classDetails_(o) + totalsBlock_(o, 'Total') +
+    p_('Questions or need to change your booking? Just reply to this email and mention your order number.', 14));
+  MailApp.sendEmail({
+    to: o.customer.email,
+    subject: subjectPrefix_(cfg) + 'You’re booked! – Sweet Nothings ' + o.number,
+    htmlBody: html,
+    body: ['You’re booked' + (first ? ', ' + first : '') + '!', 'Order number ' + o.number, '', 'Your invoice will follow by email; please pay it to keep your booking.', '',
+      classText_(o), '', totalsText_(o, 'Total'), '', 'Questions? Just reply to this email.'].join('\n'),
+    name: cfg.senderName, replyTo: cfg.replyToEmail
+  });
+}
+
+/* ---------- Owner alert: new class booking ---------- */
+function sendOwnerClassAlert_(cfg, o) {
+  const html = shell_(cfg, 'New class booking', o.number,
+    '<div style="font-size:15px;margin-bottom:18px"><strong>' + esc_(o.customer.name) + '</strong><br>' +
+      '<a href="mailto:' + esc_(o.customer.email) + '" style="color:' + C.navy + '">' + esc_(o.customer.email) + '</a><br>' + esc_(o.customer.phone) + '</div>' +
+    classDetails_(o) + totalsBlock_(o, 'Total') +
+    (cfg.adminUrl ? button_(cfg.adminUrl, 'Open admin') : '') +
+    p_('Booked automatically; no review needed. Reply to this email to write to the customer.', 13));
+  MailApp.sendEmail({
+    to: cfg.ownerEmail,
+    subject: subjectPrefix_(cfg) + 'New class booking – ' + o.number + ' (' + o.items.map((it) => it.qty + ' × ' + it.title).join(', ') + ')',
+    htmlBody: html,
+    body: ['New class booking: ' + o.number, o.customer.name, o.customer.email, o.customer.phone, '', classText_(o), '', totalsText_(o, 'Total')].join('\n'),
+    name: cfg.senderName, replyTo: o.customer.email
+  });
+}
+
+function classDetails_(o) {
+  return '<div style="border-top:1px solid ' + C.line + ';padding-top:14px;margin-bottom:18px">' + h2_('Your class' + (o.items.length > 1 ? 'es' : '')) +
+    o.items.map((it) =>
+      '<div style="padding:8px 0;font-size:15px"><table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr><td><strong>' + esc_(it.title) + '</strong></td>' +
+        '<td align="right">' + money_(it.lineTotal) + '</td></tr></table>' +
+        '<div style="color:' + C.muted + ';font-size:14px">' + esc_([it.summary, it.address].filter(Boolean).join(' · ')) + '</div>' +
+        '<div style="color:' + C.muted + ';font-size:14px">' + it.qty + ' spot' + (it.qty > 1 ? 's' : '') + ' × ' + money_(it.unit) + '</div></div>').join('') +
+  '</div>';
+}
+function classText_(o) {
+  return o.items.map((it) => it.title + ' – ' + it.qty + ' spot' + (it.qty > 1 ? 's' : '') + ' × ' + money_(it.unit) + ' = ' + money_(it.lineTotal) +
+    '\n   ' + [it.summary, it.address].filter(Boolean).join(' · ')).join('\n');
+}
+
+/* ---------- "A message about your order" (customer), sent from Review ---------- */
+function sendOrderMessageEmail_(cfg, o, text) {
+  const first = (o.customer.name || '').split(' ')[0];
+  const inv = o.invoice;
+  const totals = inv
+    ? totalsBlock_({ fulfillment: o.fulfillment, subtotal: inv.subtotal, tax: inv.tax, taxRate: o.taxRate, deliveryFee: inv.fee, giftCredit: inv.credit || 0, promoCode: o.promoCode, total: inv.total }, o.type === 'Class' ? 'Total' : 'Amount due')
+    : totalsBlock_(o, 'Estimated total');
+  const html = shell_(cfg, 'A message about your order', o.number,
+    (first ? p_('Hi ' + esc_(first) + ',', 15) : '') +
+    '<div style="font-size:15px;white-space:pre-wrap;margin-bottom:18px;color:' + C.navy + '">' + esc_(text) + '</div>' +
+    '<p style="margin:0 0 18px;font-size:15px">— M</p>' +
+    (o.type === 'Class' ? classDetails_(o) : facts_(o, 'message') + itemsBlock_(o, 'Your order')) + totals +
+    p_('Just reply to this email to answer.', 14));
+  MailApp.sendEmail({
+    to: o.customer.email,
+    subject: subjectPrefix_(cfg) + 'A message about your order ' + o.number + ' – Sweet Nothings',
+    htmlBody: html,
+    body: (first ? 'Hi ' + first + ',\n\n' : '') + text + '\n\n— M\n\nYour order ' + o.number + ':\n' +
+      (o.type === 'Class' ? classText_(o) : 'Needed by: ' + prettyDate_(o.dateNeeded) + '\n' + itemsText_(o)) + '\n\nJust reply to this email to answer.',
+    name: cfg.senderName, replyTo: cfg.replyToEmail
+  });
+}
+
+// "24 Custom Cookies", "12 Mini Artisan", or for a class "2 spots · Class: Holiday decorating"
+function itemHeading_(it) {
+  return it.kind === 'class' ? it.qty + ' spot' + (it.qty > 1 ? 's' : '') + ' · Class: ' + it.title : it.qty + ' ' + itemLabel_(it.kind);
 }
 
 /* ---------- Building blocks ---------- */
@@ -1172,7 +1694,7 @@ function itemsBlock_(o, heading) {
   return '<div style="border-top:1px solid ' + C.line + ';padding-top:14px;margin-bottom:18px">' + h2_(heading) +
     o.items.map((it) =>
       '<div style="padding:8px 0">' +
-        '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:15px"><tr><td><strong>' + it.qty + ' ' + esc_(itemLabel_(it.kind)) + '</strong></td><td align="right">' + (it.kind === 'custom' ? 'from ' : '') + money_(it.lineTotal) + '</td></tr></table>' +
+        '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:15px"><tr><td><strong>' + esc_(itemHeading_(it)) + '</strong></td><td align="right">' + (it.kind === 'custom' ? 'from ' : '') + money_(it.lineTotal) + '</td></tr></table>' +
         '<div style="color:' + C.muted + ';font-size:14px">' + esc_(it.summary) + '</div>' +
         (it.desc ? '<div style="font-size:14px;color:' + C.muted + ';background:#FBF7F4;border-radius:10px;padding:10px 12px;margin-top:6px"><strong style="color:' + C.navy + '">Description:</strong> ' + esc_(it.desc) + '</div>' : '') +
       '</div>').join('') +
@@ -1182,10 +1704,13 @@ function itemsBlock_(o, heading) {
 function totalsBlock_(o, totalLabel) {
   const row = (k, v) => '<tr><td style="padding:3px 0;color:' + C.muted + ';font-size:15px">' + k + '</td><td align="right" style="padding:3px 0;font-size:15px">' + v + '</td></tr>';
   const isDel = o.fulfillment === 'delivery';
+  const cookies = o.fulfillment !== 'class';   // classes have no tax or pickup/drop-off
   return '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-top:1px solid ' + C.line + ';padding-top:14px;margin-bottom:10px">' +
     row('Subtotal', money_(o.subtotal)) +
-    row('Grocery tax (' + o.taxRate + '%)', money_(o.tax)) +
-    row(isDel ? 'Drop-off' : 'Pickup', isDel ? money_(o.deliveryFee) : 'Free') +
+    (o.discount ? row('Promo code ' + esc_(o.promoCode), '−' + money_(o.discount)) : '') +
+    (cookies ? row('Tax (' + o.taxRate + '%)', money_(o.tax)) : '') +
+    (cookies ? row(isDel ? 'Drop-off' : 'Pickup', isDel ? money_(o.deliveryFee) : 'Free') : '') +
+    (o.giftCredit ? row('Gift card' + (o.promoCode ? ' ' + esc_(o.promoCode) : ''), '−' + money_(o.giftCredit)) : '') +
     '<tr><td style="border-top:1px solid ' + C.line + ';padding-top:10px"><strong>' + totalLabel + '</strong></td>' +
       '<td align="right" style="border-top:1px solid ' + C.line + ';padding-top:10px;font-family:' + SERIF + ';font-size:30px;font-weight:700">' + money_(o.total) + '</td></tr>' +
   '</table>';
@@ -1196,13 +1721,18 @@ function button_(href, label) {
 }
 
 function itemsText_(o) {
-  return o.items.map((it) => it.qty + ' ' + itemLabel_(it.kind) + ' – ' + (it.kind === 'custom' ? 'from ' : '') + money_(it.lineTotal) +
+  return o.items.map((it) => itemHeading_(it) + ' – ' + (it.kind === 'custom' ? 'from ' : '') + money_(it.lineTotal) +
     '\n   ' + it.summary + (it.desc ? '\n   Description: ' + it.desc : '')).join('\n');
 }
 
 function totalsText_(o, totalLabel) {
-  return 'Subtotal: ' + money_(o.subtotal) + '\nGrocery tax (' + o.taxRate + '%): ' + money_(o.tax) + '\n' +
-    (o.fulfillment === 'delivery' ? 'Drop-off: ' + money_(o.deliveryFee) : 'Pickup: Free') + '\n' + totalLabel + ': ' + money_(o.total);
+  const cookies = o.fulfillment !== 'class';
+  return ['Subtotal: ' + money_(o.subtotal),
+    o.discount ? 'Promo code ' + o.promoCode + ': -' + money_(o.discount) : '',
+    cookies ? 'Tax (' + o.taxRate + '%): ' + money_(o.tax) : '',
+    cookies ? (o.fulfillment === 'delivery' ? 'Drop-off: ' + money_(o.deliveryFee) : 'Pickup: Free') : '',
+    o.giftCredit ? 'Gift card: -' + money_(o.giftCredit) : '',
+    totalLabel + ': ' + money_(o.total)].filter(Boolean).join('\n');
 }
 
 

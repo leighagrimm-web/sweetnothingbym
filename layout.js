@@ -10,13 +10,16 @@
     ['contact', 'contact.html', 'Contact']
   ];
   const onOrder = page === 'order';
+  // Pages Melissa can hide from the menu (Settings: showAbout, showEvents, showGallery, showFaq).
+  const SHOW_KEY = { about: 'showAbout', events: 'showEvents', gallery: 'showGallery', faq: 'showFaq' };
+  const shown = (cfg, key) => !SHOW_KEY[key] || cfg[SHOW_KEY[key]] !== false;
 
   // Drawn right away from saved/default settings so the page doesn't flash, then redrawn once if the Sheet's settings differ.
   let drawn = '';
   function render() {
     const cfg = SN.load();
     const preview = SN.isPreview();
-    const sig = JSON.stringify([preview, cfg.instagram, cfg.instagramHandle, cfg.pickupCity]);
+    const sig = JSON.stringify([preview, cfg.instagram, cfg.instagramHandle, cfg.pickupCity, Object.keys(SHOW_KEY).map((k) => shown(cfg, k))]);
     if (sig === drawn) return;
     drawn = sig;
     const count = SN.getBag().reduce((a, it) => a + it.qty, 0);
@@ -30,7 +33,7 @@
           '<a class="brand" href="index.html"><img src="logo.png" alt="Sweet Nothings by M"><span>Sweet Nothings <em>by M</em></span></a>' +
           '<div class="header-right">' +
             '<nav class="main-nav" aria-label="Main">' +
-              links.map(([key, href, label]) => '<a href="' + href + '"' + (key === page ? ' aria-current="page"' : '') + '>' + label + '</a>').join('') +
+              links.filter(([key]) => shown(cfg, key)).map(([key, href, label]) => '<a href="' + href + '"' + (key === page ? ' aria-current="page"' : '') + '>' + label + '</a>').join('') +
             '</nav>' +
             '<a class="icon-btn" href="' + SN.esc(cfg.instagram) + '" target="_blank" rel="noopener" aria-label="Instagram ' + SN.esc(cfg.instagramHandle) + '">' + SN_ICONS.insta + '</a>' +
             (onOrder
@@ -50,7 +53,7 @@
           '<span>© Sweet Nothings by M · Pickup in ' + SN.esc(cfg.pickupCity) + '</span>' +
           '<nav aria-label="Footer">' +
             '<a href="' + SN.esc(cfg.instagram) + '" target="_blank" rel="noopener">Instagram ' + SN.esc(cfg.instagramHandle) + '</a>' +
-            '<a href="faq.html">FAQ</a>' +
+            (shown(cfg, 'faq') ? '<a href="faq.html">FAQ</a>' : '') +
             '<a href="contact.html">Contact</a>' +
             '<a href="admin.html">Owner admin</a>' +
           '</nav>' +
@@ -58,7 +61,16 @@
     }
   }
   render();
-  SN.ready.then(render);
+  SN.ready.then(() => {
+    render();
+    const cfg = SN.load();
+    // A hidden page sends visitors to the home page (except while previewing changes).
+    if (!shown(cfg, page) && !SN.isPreview()) { location.replace('index.html'); return; }
+    // Links to hidden pages elsewhere on the page disappear (with their card, if marked data-page-link).
+    Object.keys(SHOW_KEY).filter((k) => !shown(cfg, k)).forEach((k) => {
+      document.querySelectorAll('main a[href="' + k + '.html"]').forEach((a) => { (a.closest('[data-page-link]') || a).hidden = true; });
+    });
+  });
 })();
 
 /* ---------- Quick "Message me" form (email + message), opened by any [data-quick-message] button ---------- */
