@@ -108,6 +108,13 @@ button { font: inherit; color: inherit; }
 .label { font-size: 13px; font-weight: 600; letter-spacing: .02em; }
 .input { width: 100%; padding: 12px 14px; border: 1px solid var(--field); border-radius: 10px; font: inherit; font-size: 16px; background: var(--white); color: var(--navy); min-height: 46px; }
 textarea.input { resize: vertical; }
+/* Date boxes: phones (iPhone Safari especially) give them a built-in minimum width wider than the screen. */
+.field { min-width: 0; }
+.input[type="date"] { display: block; min-width: 0; max-width: 100%; }
+.input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+@supports (-webkit-touch-callout: none) {   /* iPhone / iPad only */
+  .input[type="date"] { -webkit-appearance: none; appearance: none; }
+}
 .input:focus { outline: 2px solid var(--coral); outline-offset: 1px; border-color: var(--coral); }
 .input[aria-invalid="true"] { border-color: var(--error); }
 .hint { font-size: 13px; color: var(--muted); margin: 0; }

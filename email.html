@@ -51,11 +51,11 @@ SN.ready.then(function () {
   const isDel = o.fulfillment === 'delivery' && o.address;
   const where = isDel
     ? ['Drop-off to', esc(o.address.street) + ', ' + esc(o.address.city) + ' ' + esc(o.address.zip)]
-    : ['Pickup', type === 'invoice' ? esc(cfg.pickupAddress) : esc(cfg.pickupCity) + ' (address sent once confirmed)'];
+    : ['Pickup', esc(cfg.pickupCity) + (type === 'invoice' ? ' (address above)' : ' (address sent once confirmed)')];
   const facts =
     '<div class="facts">' +
       '<div><div class="k">Needed by</div><div class="v">' + esc(SN.prettyDate(o.dateNeeded)) + '</div></div>' +
-      '<div><div class="k">Occasion</div><div class="v">' + esc(o.eventType) + '</div></div>' +
+      '<div><div class="k">Occasion</div><div class="v">' + esc(o.eventType || 'Not specified') + '</div></div>' +
       '<div><div class="k">' + where[0] + '</div><div class="v">' + where[1] + '</div></div>' +
       '<div><div class="k">Contact</div><div class="v">' + esc(o.customer.name) + '<br>' + esc(o.customer.phone) + '</div></div>' +
       (o.allergies ? '<div style="grid-column:1 / -1"><div class="k">Allergies / dietary needs</div><div class="v">' + esc(o.allergies) + '</div></div>' : '') +
@@ -70,7 +70,12 @@ SN.ready.then(function () {
     intro = '<div style="background:var(--blush);border-radius:12px;padding:16px 18px;font-size:15px">' +
       (inv.changed ? 'I\u2019ve reviewed your order and updated the price. ' : 'I\u2019ve reviewed your order and it\u2019s all set. ') +
       'Pay the invoice below to lock in your date.</div>' +
-      (inv.note ? '<div style="font-size:15px;border-left:3px solid var(--coral);padding:4px 0 4px 14px"><em>\u201c' + esc(inv.note) + '\u201d</em><br><span class="muted" style="font-size:13px">\u2014 M</span></div>' : '');
+      (inv.note ? '<div style="font-size:15px;border-left:3px solid var(--coral);padding:4px 0 4px 14px"><em>\u201c' + esc(inv.note) + '\u201d</em><br><span class="muted" style="font-size:13px">\u2014 M</span></div>' : '') +
+      // Pickup orders: the address is only shared here, in the confirmation (Settings: pickupAddress, pickupInstructions).
+      (isDel ? '' : '<div style="border:1px solid var(--line);border-radius:12px;padding:14px 18px;font-size:15px">' +
+        '<div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em">Pickup address</div>' +
+        '<div style="font-weight:600;margin-top:2px">' + esc(cfg.pickupAddress) + '</div>' +
+        (cfg.pickupInstructions ? '<div class="muted" style="margin-top:6px;font-size:14px">' + esc(cfg.pickupInstructions) + '</div>' : '') + '</div>');
     middle = '<div style="border-top:1px solid var(--line);padding-top:14px"><h2 style="font-size:24px;margin-bottom:6px">Your invoice</h2>' +
       inv.lines.map((l) => '<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:15px"><span>' + esc(l.desc) + '<br><span class="hint">' + l.qty + ' \u00d7 ' + money(Number(l.unit)) + '</span></span><span>' + money(l.qty * l.unit) + '</span></div>').join('') + '</div>';
     totals = row('Subtotal', money(inv.subtotal)) + row('Grocery tax (' + o.taxRate + '%)', money(inv.tax)) +

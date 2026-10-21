@@ -82,7 +82,8 @@ const SETTINGS_SPEC = [
   ['specialUntil', '2026-10-31', 'date', 'Last day to show the special (YYYY-MM-DD).'],
   ['taxRate', 2.25, 'number', 'Grocery tax percent, on cookies only (not drop-off).'],
   ['pickupCity', 'Rosemont, IL', 'text', 'Shown on the website.'],
-  ['pickupAddress', '[Street address], Rosemont, IL', 'text', 'PRIVATE. Only sent in the confirmation email.'],
+  ['pickupAddress', '[Street address], Rosemont, IL', 'text', 'PRIVATE. Only sent in the confirmation email for pickup orders.'],
+  ['pickupInstructions', '[Pickup instructions, e.g. pickup window, where to park, which door]', 'text', 'PRIVATE. Shown with the address in the confirmation email for pickup orders.'],
   ['instagram', 'https://www.instagram.com/sweet_nothings_by_m/', 'text', 'Instagram link.'],
   ['instagramHandle', '@sweet_nothings_by_m', 'text', 'Instagram name shown on the site.'],
   ['images', '{"custom":"","mini":"","large":""}', 'json', 'Menu photo paths (advanced).'],
@@ -92,7 +93,7 @@ const SETTINGS_SPEC = [
   ['siteUrl', 'https://leighagrimm-web.github.io/sweetnothingbym/', 'text', 'PRIVATE. Website address, used for the logo and links in emails. End with /'],
   ['environment', 'UAT', 'text', 'PRIVATE. UAT or PROD. UAT adds [TEST] to email subjects.']
 ];
-const PRIVATE_SETTINGS = ['pickupAddress', 'ownerEmail', 'replyToEmail', 'senderName', 'siteUrl', 'environment'];
+const PRIVATE_SETTINGS = ['pickupAddress', 'pickupInstructions','ownerEmail', 'replyToEmail', 'senderName', 'siteUrl', 'environment'];
 
 const STARTER_FLAVORS = [
   ['cc', 'Chocolate Chip', true, false],
@@ -376,6 +377,8 @@ const EVENT_TYPES = ['Birthday', 'Baby Shower', 'Wedding Shower', 'Anniversary',
 const MAX_ITEMS = 20;
 const MAX_QTY = 2000;
 
+function occasion_(o) { return o.eventType || 'Not specified'; }
+
 function itemLabel_(kind) { return kind === 'custom' ? 'Custom Cookies' : kind === 'mini' ? 'Mini Artisan' : 'Large Artisan'; }
 
 function submitOrder_(b) {
@@ -478,10 +481,14 @@ function validateOrder_(cfg, b) {
     }
   });
 
+  // The occasion is required for custom cookies (it shapes the design) and optional for artisan-only orders.
   let eventType = clean_(b.eventType, 40);
   const eventOther = clean_(b.eventOther, 120);
-  if (EVENT_TYPES.indexOf(eventType) === -1) errors.push('event type');
-  else if (eventType === 'Other') { if (!eventOther) errors.push('the occasion'); else eventType = 'Other: ' + eventOther; }
+  const needsOccasion = items.some((it) => it.kind === 'custom');
+  if (eventType || needsOccasion) {
+    if (EVENT_TYPES.indexOf(eventType) === -1) errors.push('event type');
+    else if (eventType === 'Other') { if (!eventOther) errors.push('the occasion'); else eventType = 'Other: ' + eventOther; }
+  }
 
   const dateNeeded = toISODate_(b.dateNeeded);
   const minISO = addDaysISO_(todayISO_(), Number(cfg.leadDays) || 0);
@@ -605,7 +612,7 @@ function sendOrderRequestEmail_(cfg, o) {
     'NOT A FINAL ORDER: this email confirms we received your request. Your order is not confirmed yet, your date is not reserved, and the price below is an estimate. You haven’t been charged anything.', '',
     'What happens next:', '1. Request received (this email).', '2. I review your order, usually within 1–2 days.',
     '3. You get a second email with your confirmation, final price and a QuickBooks invoice.', '4. Pay the invoice to lock in your date.', '',
-    'Needed by: ' + prettyDate_(o.dateNeeded), 'Occasion: ' + o.eventType,
+    'Needed by: ' + prettyDate_(o.dateNeeded), 'Occasion: ' + occasion_(o),
     o.address ? 'Drop-off to: ' + o.address.street + ', ' + o.address.city + ' ' + o.address.zip : 'Pickup: ' + cfg.pickupCity + ' (address sent once confirmed)',
     o.allergies ? 'Allergies / dietary needs: ' + o.allergies : '', '',
     itemsText_(o), '', totalsText_(o, 'Estimated total*'), '',
@@ -632,13 +639,13 @@ function sendOwnerOrderAlert_(cfg, o) {
   const text = [
     'New order to review: ' + o.number, '', o.customer.name, o.customer.email, o.customer.phone, '',
     o.allergies ? 'ALLERGIES / DIETARY NEEDS: ' + o.allergies + '\n' : '',
-    'Needed by: ' + prettyDate_(o.dateNeeded), 'Occasion: ' + o.eventType,
+    'Needed by: ' + prettyDate_(o.dateNeeded), 'Occasion: ' + occasion_(o),
     o.address ? 'Drop-off to: ' + o.address.street + ', ' + o.address.city + ' ' + o.address.zip : 'Pickup',
     '', itemsText_(o), '', totalsText_(o, 'Estimated total'), '', 'Orders sheet: ' + SpreadsheetApp.getActive().getUrl()
   ].join('\n');
   MailApp.sendEmail({
     to: cfg.ownerEmail,
-    subject: subjectPrefix_(cfg) + 'New order to review – ' + o.number + ' (' + o.eventType + ', ' + prettyDate_(o.dateNeeded) + ')',
+    subject: subjectPrefix_(cfg) + 'New order to review – ' + o.number + ' (' + (o.eventType ? o.eventType + ', ' : '') + prettyDate_(o.dateNeeded) + ')',
     htmlBody: html, body: text, name: cfg.senderName, replyTo: o.customer.email
   });
 }
@@ -716,7 +723,7 @@ function facts_(o, forOwner) {
     : ['Pickup', forOwner ? 'Pickup' : esc_(getConfig_().pickupCity) + ' (address sent once confirmed)'];
   const cell = (k, v) => '<td style="width:50%;vertical-align:top;padding:0 12px 14px 0"><div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em">' + k + '</div><div style="font-weight:600;margin-top:2px;font-size:14px">' + v + '</div></td>';
   return '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:4px">' +
-    '<tr>' + cell('Needed by', esc_(prettyDate_(o.dateNeeded))) + cell('Occasion', esc_(o.eventType)) + '</tr>' +
+    '<tr>' + cell('Needed by', esc_(prettyDate_(o.dateNeeded))) + cell('Occasion', esc_(occasion_(o))) + '</tr>' +
     '<tr>' + cell(where[0], where[1]) + cell('Contact', esc_(o.customer.name) + '<br>' + esc_(o.customer.phone)) + '</tr>' +
     (o.allergies && !forOwner ? '<tr><td colspan="2" style="padding:0 0 14px"><div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em">Allergies / dietary needs</div><div style="font-weight:600;margin-top:2px;font-size:14px">' + esc_(o.allergies) + '</div></td></tr>' : '') +
   '</table>';

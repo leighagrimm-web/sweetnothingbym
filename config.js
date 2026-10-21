@@ -66,7 +66,8 @@ const SN_DEFAULTS = {
     { q: 'How should I store my cookies?', a: '[Cookies stay fresh for about X days at room temperature in an airtight container. Decorated cookies can be frozen for up to X months. Keep them out of direct sunlight and away from heat.]' }
   ],
   ownerEmail: '',
-  pickupAddress: '[Street address], Rosemont, IL',
+  pickupAddress: '[Street address], Rosemont, IL',   // private in the Sheet: only in the confirmation email (email #2)
+  pickupInstructions: '[Pickup instructions, e.g. pickup window, where to park, which door]',
   pickupCity: 'Rosemont, IL',
   instagram: 'https://www.instagram.com/sweet_nothings_by_m/',
   instagramHandle: '@sweet_nothings_by_m',

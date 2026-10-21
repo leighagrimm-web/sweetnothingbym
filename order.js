@@ -317,7 +317,7 @@ SN.ready.then(function () {
           '<button type="button" class="link-btn" data-act="to-bag" style="margin-top:6px">Edit bag</button></div>' +
 
         '<div class="sec"><h3>Your event</h3><div class="stack">' +
-          '<div class="field"><label class="label" for="c-event">What are the cookies for?</label>' +
+          '<div class="field"><label class="label" for="c-event">What are the cookies for?' + (needsOccasion() ? '' : ' <span class="muted" style="font-weight:400">(optional)</span>') + '</label>' +
             '<select class="input" id="c-event" data-co="eventType"><option value="">Choose one…</option>' +
             events.map((e) => '<option' + (checkout.eventType === e ? ' selected' : '') + '>' + e + '</option>').join('') + '</select></div>' +
           '<div class="field" id="other-wrap"' + (checkout.eventType === 'Other' ? '' : ' hidden') + '><label class="label" for="c-other">Tell us the occasion</label>' +
@@ -334,6 +334,7 @@ SN.ready.then(function () {
             '<button type="button" class="choice" data-act="pickup" aria-pressed="' + !isDel + '"><strong>Pickup · Free</strong><span>' + esc(cfg.pickupCity) + '</span></button>' +
             '<button type="button" class="choice" data-act="delivery" aria-pressed="' + isDel + '"><strong>Drop-off · ' + esc(feeRange()) + '</strong><span>Based on ZIP code</span></button>' +
           '</div>' +
+          '<p class="hint" id="pickup-note" style="margin-top:12px"' + (isDel ? ' hidden' : '') + '>Pickup is in ' + esc(cfg.pickupCity) + '. The exact address is shared before pickup, in your order confirmation email.</p>' +
           '<div class="grid-2" id="delivery-fields" style="margin-top:14px"' + (isDel ? '' : ' hidden') + '>' +
             '<div class="field full"><label class="label" for="c-address">Street address</label><input class="input" id="c-address" type="text" autocomplete="street-address" data-co="address" value="' + esc(checkout.address) + '"></div>' +
             '<div class="field"><label class="label" for="c-city">City</label><input class="input" id="c-city" type="text" autocomplete="address-level2" data-co="city" value="' + esc(checkout.city) + '"></div>' +
@@ -381,10 +382,13 @@ SN.ready.then(function () {
     return { subtotal, tax, fee, zone, isDel, total: subtotal + tax + fee };
   }
 
+  // The occasion is required when the bag has custom cookies (it shapes the design), optional for artisan-only orders.
+  function needsOccasion() { return bag.some((it) => it.kind === 'custom'); }
+
   function missingList() {
     const m = [];
     const minISO = SN.isoDate(SN.minDate(cfg));
-    if (!checkout.eventType) m.push('event type');
+    if (!checkout.eventType) { if (needsOccasion()) m.push('event type'); }
     else if (checkout.eventType === 'Other' && !checkout.eventOther.trim()) m.push('the occasion');
     if (!checkout.date) m.push('date needed');
     else if (checkout.date < minISO) m.push('a date at least ' + cfg.leadDays + ' days out');
@@ -480,6 +484,7 @@ SN.ready.then(function () {
       checkout.fulfillment = act;
       $$('[data-act="pickup"],[data-act="delivery"]', panel).forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.act === act)));
       $('#delivery-fields').hidden = act !== 'delivery';
+      $('#pickup-note').hidden = act === 'delivery';
       updateCheckoutUI();
       return;
     }
