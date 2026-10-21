@@ -318,6 +318,7 @@ function migrateEvents_(sh) {
     when: String(r.When || ''), button: r.Button === 'Sign up' ? 'Add to bag' : String(r.Button || 'None')
   }));
   sh.clear();
+  sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).clearDataValidations().setNumberFormat('General');   // old column formats don't carry over
   sh.getRange(1, 1, 1, TABS.Events.headers.length).setValues([TABS.Events.headers]);
   writeEvents_(events);
 }
@@ -1095,8 +1096,14 @@ function replaceRows_(sh, rows, checkboxCols) {
     old.clearContent();
   }
   if (!rows.length) return;
+  // Checkbox columns need normal formatting: in a plain-text cell, TRUE is stored as text and the box shows unticked.
+  (checkboxCols || []).forEach((col) => sh.getRange(2, col, rows.length, 1).setNumberFormat('General'));
   sh.getRange(2, 1, rows.length, rows[0].length).setValues(rows.map((r) => r.map(cell_)));
-  (checkboxCols || []).forEach((col) => sh.getRange(2, col, rows.length, 1).insertCheckboxes());
+  (checkboxCols || []).forEach((col) => {
+    const range = sh.getRange(2, col, rows.length, 1);
+    range.insertCheckboxes();
+    range.setValues(rows.map((r) => [r[col - 1] === true]));   // write the ticks again after making them checkboxes
+  });
 }
 
 /* ----- Orders ----- */
