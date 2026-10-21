@@ -48,12 +48,11 @@
       '</div></header>' +
       '<div class="wrap admin-layout">' +
         '<nav class="admin-nav" aria-label="Admin sections">' +
-          [['orders', 'Orders'], ['messages', 'Messages'], ['custom', 'Custom pricing'], ['artisan', 'Artisan &amp; flavors'], ['rules', 'Ordering rules'],
-            ['zones', 'Drop-off zones'], ['faq', 'FAQ'], ['pages', 'Website pages'], ['events', 'Events'], ['gallery', 'Gallery'], ['settings', 'Tax &amp; contact']]
-            .map(([id, label]) => '<a href="#' + id + '" target="_self">' + label + '</a>').join('') +
+          TAB_GROUPS.map(([group, tabs]) => '<span class="admin-nav-group">' + group + '</span>' +
+            tabs.map(([id, label]) => '<a href="#' + id + '" target="_self" data-tab="' + id + '">' + label + '<span class="nav-count" id="nav-count-' + id + '" hidden></span></a>').join('')).join('') +
         '</nav>' +
         '<main class="admin-main">' +
-          '<div class="admin-title"><div><h1>Shop settings</h1>' +
+          '<div class="admin-title" id="settings-title"><div><h1>Shop settings</h1>' +
             '<p>Use <strong>Preview changes</strong> to see the site with your edits before anything goes live. Customers only see changes after you save.</p></div>' +
             '<div class="row-gap" style="gap:10px"><button type="button" class="btn ghost" data-preview>Preview changes</button><button type="button" class="btn" data-save>Save changes</button></div>' +
           '</div>' +
@@ -69,6 +68,29 @@
         '<button type="button" class="btn small" data-save>Save changes</button></div></div></div>' +
       '<div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-text"></span></div>';
     wire();
+  }
+
+  // Each tab shows one section. Orders and Messages are day-to-day; the rest are shop settings (saved together).
+  const TAB_GROUPS = [
+    ['Orders &amp; messages', [['orders', 'Orders'], ['messages', 'Messages']]],
+    ['Shop settings', [['custom', 'Custom pricing'], ['artisan', 'Artisan &amp; flavors'], ['rules', 'Ordering rules'], ['zones', 'Drop-off zones'],
+      ['faq', 'FAQ'], ['pages', 'Website pages'], ['events', 'Events'], ['gallery', 'Gallery'], ['settings', 'Tax &amp; contact']]]
+  ];
+  const TAB_IDS = TAB_GROUPS.reduce((a, g) => a.concat(g[1].map((t) => t[0])), []);
+
+  function showTab() {
+    const id = TAB_IDS.indexOf(location.hash.slice(1)) !== -1 ? location.hash.slice(1) : 'orders';
+    $$('.admin-main > .panel-card').forEach((s) => { s.hidden = s.id !== id; });
+    $('#settings-title').hidden = id === 'orders' || id === 'messages';
+    $$('.admin-nav a').forEach((a) => { if (a.dataset.tab === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    window.scrollTo(0, 0);
+  }
+  // Badge on a tab, e.g. "2 to review".
+  function navCount(id, text) {
+    const el = $('#nav-count-' + id);
+    if (!el) return;
+    el.textContent = text || '';
+    el.hidden = !text;
   }
 
   const field = (id, label, input, hint) => '<div class="field"><label class="label" for="' + id + '">' + label + '</label>' + input + (hint ? '<p class="hint">' + hint + '</p>' : '') + '</div>';
@@ -251,6 +273,7 @@
   function renderOrders() {
     const pending = orders.filter((o) => o.status === 'Pending review').length;
     $('#orders-h').innerHTML = 'Orders' + (pending ? ' <span class="count-pill">' + pending + ' to review</span>' : '');
+    navCount('orders', pending ? pending + ' to review' : '');
     const list = showAllOrders ? orders : orders.filter(isActive);
     $('#orders-toggle').textContent = showAllOrders ? 'Hide completed & declined' : 'Show completed & declined (' + (orders.length - orders.filter(isActive).length) + ')';
     const body = $('#orders-body');
@@ -665,6 +688,7 @@
   function renderMessages() {
     const unread = messages.filter((m) => m.status === 'New').length;
     $('#messages-h').innerHTML = 'Messages' + (unread ? ' <span class="count-pill">' + unread + ' new</span>' : '');
+    navCount('messages', unread ? unread + ' new' : '');
     $('#msg-list').innerHTML = messages.length ? messages.map((m) => {
       const subject = encodeURIComponent('Re: your question for Sweet Nothings by M');
       const when = m.createdAt ? new Date(m.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
@@ -811,6 +835,8 @@
       markDirty();
     });
     window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+    window.addEventListener('hashchange', showTab);
+    showTab();
   }
 
   /* ---------- Start ---------- */

@@ -41,32 +41,10 @@ Every page loads `styles.css` and the scripts with a version number, for example
 
 ## Still to come (later phases)
 
-- **Photos** aren't uploaded yet (phase 4). Only the file name is recorded.
-- **Payments / QuickBooks** come in phase 3.
-
-## Publish it on GitHub Pages
-
-1. Create a new repository on GitHub (for example `sweet-nothings`). Public is required for free GitHub Pages.
-2. Click **Add file → Upload files**, drag in everything from this folder (keep the `assets`, `css` and `js` folders), and commit.
-3. Go to **Settings → Pages**. Under **Build and deployment**, set Source to **Deploy from a branch**, branch **main**, folder **/ (root)**, and save.
-4. After a minute or two the site is live at `https://<your-username>.github.io/sweet-nothings/`.
+- **Phase 3: customer photo uploads.** Inspiration photos from the order and Contact forms will be saved to a Google Drive folder, with thumbnails in the admin, the owner emails and the Sheet. Today only the file name is recorded.
+- **Phase 4: QuickBooks.** Approving an order creates and sends the QuickBooks invoice with a Pay button (sandbox first), and the confirmation email gets the real Pay link.
+- **Launch:** replace the `[bracketed]` placeholder copy and photos (in the admin), switch to Melissa's Google account, and add her custom domain.
 
 ## Adding real photos
 
-- Menu cards: put photos in `assets/` and set the paths in `js/config.js` under `images` (for example `custom: 'assets/custom.jpg'`).
-- Gallery: list photos in the `photos` array at the bottom of `gallery.html`.
-- About and Events: replace the `[bracketed]` placeholders.
-
-## Next phase (real build in Claude Code)
-
-- Google Sheet with **Settings** and **Orders** tabs; Google Apps Script web app to save orders and serve settings
-- Order numbers; "request received" email to customer and "new order to review" email to owner, sent from Gmail via Apps Script
-- **Approval flow:** admin Approve (as-is or with changes) calls Apps Script, which creates the customer + invoice in **QuickBooks Online** (lines, tax, drop-off fee, M's note in the invoice memo/message) and sends it via the QuickBooks invoice *send* endpoint so the customer gets a Pay button (requires QuickBooks Payments). Decline sends a decline email. Status flow: Pending review → Invoice sent → Paid → Baking → Ready → Completed (or Declined)
-- Preview changes: the admin page will live on Apps Script (a different site than GitHub Pages), so browser storage can't carry the draft. Save the draft to a "Draft" tab in the Sheet and have the public site read it when opened with `?preview=1`
-- Blocked dates: keep auto-dropping dates before today (done in `SN.dropPastDates`)
-- Contact form: save to a Messages tab, email M with the customer's email as reply-to, photo to Drive
-- FAQ: store in a FAQ tab of the Sheet so the admin editor saves there
-- Optional: hourly Apps Script trigger that checks QuickBooks for paid invoices and flips the order to Paid
-- Inspiration photos saved to a Google Drive folder
-- Admin page locked to the owner's Google account
-- Max-orders-per-day enforcement and fully booked dates
+In the admin, open **Website pages**, **Events** or **Gallery** and paste a Google Drive share link into a photo box. In Drive, use **Share → General access → Anyone with the link → Copy link**. A small preview shows next to the box.

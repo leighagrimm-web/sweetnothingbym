@@ -202,6 +202,18 @@ textarea.input { resize: vertical; }
 .admin-nav { flex: 1 1 200px; display: flex; flex-direction: column; gap: 4px; }
 .admin-nav a { padding: 12px 16px; border-radius: 10px; text-decoration: none; }
 .admin-nav a:hover { background: var(--white); }
+/* Admin tabs: the current one is highlighted; group labels; badges like "2 to review". */
+.admin-nav a { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--navy); }
+.admin-nav a[aria-current="page"] { background: var(--white); font-weight: 700; box-shadow: inset 3px 0 0 var(--coral); }
+.admin-nav-group { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 14px 16px 4px; }
+.admin-nav-group:first-child { padding-top: 0; }
+.nav-count { background: var(--coral); color: var(--white); font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+@media (max-width: 900px) {   /* below this the menu would sit above the content as a long list */
+  .admin-nav { flex: 1 1 100%; flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+  .admin-nav-group { display: none; }
+  .admin-nav a { white-space: nowrap; flex: none; padding: 10px 14px; }
+  .admin-nav a[aria-current="page"] { box-shadow: inset 0 -3px 0 var(--coral); }
+}
 .admin-main { flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 22px; }
 .admin-title { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; }
 .admin-title h1 { font-size: 44px; }
