@@ -56,6 +56,27 @@ Changes to `admin.js`, `config.js` or `styles.css` only need publishing the webs
 
 **Testing the admin locally:** run `node .claude/serve.js` and open `http://localhost:5500/admin.html?dev=1`. It uses fake data from `.claude/admin-dev.js`, not the Sheet.
 
+## Payments: QuickBooks (cookie orders) and Square (classes)
+
+**How it works**
+- **Cookie orders:** approving an order creates an invoice in QuickBooks. It uses five Products/Services the script creates itself: Custom Cookies and Artisan Cookies (taxed), Drop-off Fee, Promo Discount and Gift Card Credit. The confirmation email carries the invoice's **Pay** button. If QuickBooks has no pay link (QuickBooks Payments turned off), QuickBooks emails the invoice itself.
+- **Classes:** checkout sends the customer to a Square payment page. The booking is **Awaiting payment**, holding the spot for `classHoldMinutes` (30). Once Square has the payment it becomes **Paid**, and only then do the confirmation and owner alert go out. If it isn't paid in time it becomes **Expired**: the spot opens up again and any gift card amount goes back on the card.
+- **Every 5 minutes**, `checkPayments` marks invoices with no balance left **Paid**, confirms paid classes, and expires old holds. The admin's Payments tab has **Check now**.
+- If either service is down or not set up, nothing breaks. Approvals still send the confirmation (and admin offers **Try QuickBooks again**). Classes book right away, and Melissa collects payment herself.
+
+**Setup (per environment)**
+1. Apps Script → **Libraries** → add `1B7FSrk5Zi6L1rSxxTDgDEUsPzlukDsi4KGuTMorsTQHhGBzBkMun4iDF`, identifier `OAuth2`.
+2. Apps Script → **Project Settings → Script Properties**. Secrets live here only, never in the repo:
+   - `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET`: from the Intuit developer app (Keys & credentials)
+   - `QBO_ENV`: `sandbox` or `production`
+   - `SQUARE_ACCESS_TOKEN`, `SQUARE_LOCATION_ID`: from the Square developer app (Credentials, Locations)
+   - `SQUARE_ENV`: `sandbox` or `production`
+3. In the Intuit app, add this redirect URI: `https://script.google.com/macros/d/<SCRIPT ID>/usercallback`. The Payments tab shows the exact one.
+4. Run **setupSheet**. It schedules the 5-minute check and asks for the new permissions (external requests, triggers).
+5. Admin → **Payments** → **Connect QuickBooks**, pick the company, approve, then click **Refresh**.
+
+**Going live:** switch both `*_ENV` properties to `production` and use the production keys. Connect QuickBooks again (to Melissa's real company), and turn on QuickBooks Payments so invoices get a Pay button. Also check that QuickBooks' sales tax matches the site's tax rate: the admin flags invoices where the two totals differ.
+
 ## What's in the Sheet
 
 | Tab | What it holds |

@@ -48,6 +48,7 @@ function doPost(e) {
     if (body.action === 'submitOrder') return json_(submitOrder_(body));
     if (body.action === 'sendMessage') return json_(sendMessage_(body));
     if (body.action === 'checkCode') return json_(checkCode_(body));
+    if (body.action === 'checkClassPayment') return json_(checkClassPayment_(body));
     return json_({ ok: false, error: 'Unknown action.' });
   } catch (err) {
     console.error('doPost failed', body && body.action, err && err.stack || err);
@@ -100,6 +101,7 @@ const SETTINGS_SPEC = [
   ['instagram', 'https://www.instagram.com/sweet_nothings_by_m/', 'text', 'Instagram link.'],
   ['instagramHandle', '@sweet_nothings_by_m', 'text', 'Instagram name shown on the site.'],
   ['images', '{"custom":"","mini":"","large":""}', 'json', 'Menu photo paths (advanced).'],
+  ['classHoldMinutes', 30, 'number', 'Minutes a class spot is held while the customer pays in Square. Unpaid after this, the booking expires and the spot opens up.'],
   ['ownerEmail', '', 'text', 'PRIVATE. Where "new order" and "new message" alerts go. Blank = the Google account that runs this.'],
   ['replyToEmail', '', 'text', 'PRIVATE. Where customer replies go. Blank = ownerEmail.'],
   ['senderName', 'Sweet Nothings by M', 'text', 'PRIVATE. Name shown as the email sender.'],
@@ -200,9 +202,9 @@ const TABS = {
     headers: ['Order', 'Received', 'Status', 'Name', 'Email', 'Phone', 'Occasion', 'Date needed', 'Pickup / drop-off',
       'Street', 'City', 'ZIP', 'Allergies', 'Subtotal', 'Tax', 'Tax rate', 'Drop-off fee', 'Estimated total',
       'Customer email', 'Owner alert', 'Invoice', 'Decline note', 'QuickBooks invoice', 'Pay link', 'Updated',
-      'Type', 'Promo code', 'Discount', 'Gift card credit', 'Messages log', 'Submission ID'],
-    widths: [80, 150, 110, 150, 200, 120, 140, 110, 110, 180, 120, 70, 220, 80, 70, 70, 90, 100, 160, 160, 120, 160, 120, 160, 150, 80, 110, 80, 100, 200, 120],
-    text: ['Order', 'Phone', 'Date needed', 'ZIP', 'Promo code', 'Submission ID'], money: ['Subtotal', 'Tax', 'Drop-off fee', 'Estimated total', 'Discount', 'Gift card credit'], datetime: ['Received', 'Updated']
+      'Type', 'Promo code', 'Discount', 'Gift card credit', 'Messages log', 'Submission ID', 'Square order'],
+    widths: [80, 150, 110, 150, 200, 120, 140, 110, 110, 180, 120, 70, 220, 80, 70, 70, 90, 100, 160, 160, 120, 160, 120, 160, 150, 80, 110, 80, 100, 200, 120, 160],
+    text: ['Order', 'Phone', 'Date needed', 'ZIP', 'Promo code', 'Submission ID', 'Square order', 'QuickBooks invoice'], money: ['Subtotal', 'Tax', 'Drop-off fee', 'Estimated total', 'Discount', 'Gift card credit'], datetime: ['Received', 'Updated']
   },
   OrderItems: {
     headers: ['Order', 'Line', 'Item', 'Kind', 'Qty', 'Designs', 'Flavors', 'Flavors (data)', 'Description', 'Photo', 'Unit price', 'Line total', 'Event ID'],
@@ -260,6 +262,9 @@ function setupSheet() {
   // Remove the blank starter tab Google adds to new spreadsheets.
   const blank = ss.getSheetByName('Sheet1');
   if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
+
+  // Checks QuickBooks and Square for payments every 5 minutes.
+  ensurePaymentTrigger_();
 
   ss.setActiveSheet(ss.getSheetByName('Orders'));
   clearConfigCache_();
@@ -494,7 +499,10 @@ function buildConfig_(admin) {
 
 // Cookie orders count toward a week's cap once approved. Class bookings hold their spots until cancelled.
 const COUNTED_STATUSES = ['Invoice sent', 'Paid', 'Baking', 'Ready', 'Completed'];
-const CLASS_STATUSES = ['Booked', 'Paid', 'Completed', 'Cancelled'];
+// Classes paid through Square start as "Awaiting payment" (spot held classHoldMinutes) and become "Paid" once Square
+// says so; unpaid ones become "Expired". "Booked" = confirmed without online payment (Square not set up, or by hand).
+const CLASS_STATUSES = ['Awaiting payment', 'Booked', 'Paid', 'Completed', 'Cancelled', 'Expired'];
+const CLASS_HOLDS_SPOT = ['Awaiting payment', 'Booked', 'Paid', 'Completed'];
 
 // From the Orders + OrderItems tabs:
 //   weeks: { '2026-11-02': { custom: { approved, pending }, artisan: { approved, pending } } } (Monday of each week)
@@ -511,7 +519,7 @@ function bookingCounts_() {
     if (!o) return;
     const kind = String(it.Kind), qty = Number(it.Qty) || 0;
     if (kind === 'class') {
-      if (o.status !== 'Cancelled' && o.status !== 'Declined') seats[String(it['Event ID'])] = (seats[String(it['Event ID'])] || 0) + qty;
+      if (CLASS_HOLDS_SPOT.indexOf(o.status) !== -1) seats[String(it['Event ID'])] = (seats[String(it['Event ID'])] || 0) + qty;
       return;
     }
     if (!o.date) return;
@@ -613,9 +621,10 @@ function submitOrder_(b) {
       if (!o) return;
       o.number = 'SN-' + nextCounter_('nextOrder');
       o.createdAt = now;
-      o.status = o.type === 'Class' ? 'Booked' : 'Pending review';
+      // Classes are paid at checkout through Square when it's set up (the spot is held until then); a class that's
+      // free after a gift card, or with Square not set up, is booked right away.
+      o.status = o.type === 'Class' ? (squareReady_() && o.total > 0 ? 'Awaiting payment' : 'Booked') : 'Pending review';
       if (o.type === 'Class') {
-        // Classes are confirmed right away, so the invoice is final now (QuickBooks sends it in phase 4).
         o.invoice = { lines: startingLines_(o), fee: 0, subtotal: round2_(o.subtotal - o.discount), tax: 0, credit: o.giftCredit, total: o.total, note: '', changed: false, sentAt: now.toISOString() };
       }
       const row = appendObject_(ss.getSheetByName('Orders'), {
@@ -647,6 +656,26 @@ function submitOrder_(b) {
 
   const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
   placed.forEach(({ order: o, row }) => {
+    if (o.status === 'Awaiting payment') {
+      // Square checkout link. No emails yet: the confirmation and owner alert go out once the payment goes through.
+      try {
+        const link = squarePaymentLink_(cfg, o);
+        o.payUrl = link.url;
+        o.invoice.square = { linkId: link.id, orderId: link.orderId, url: link.url };
+        setCell_(sh, row, 'Invoice', JSON.stringify(o.invoice));
+        setCell_(sh, row, 'Square order', link.orderId);
+        setCell_(sh, row, 'Pay link', link.url);
+        setCell_(sh, row, 'Customer email', 'Waiting for payment');
+        setCell_(sh, row, 'Owner alert', 'Waiting for payment');
+        return;
+      } catch (err) {
+        // Square didn't answer: book it anyway and let Melissa collect payment another way.
+        console.error('Square payment link failed', err && err.stack || err);
+        o.status = 'Booked';
+        setCell_(sh, row, 'Status', 'Booked');
+        setCell_(sh, row, 'Pay link', 'FAILED: ' + String(err && err.message || err).slice(0, 200));
+      }
+    }
     const toCustomer = o.type === 'Class' ? () => sendClassBookingEmail_(cfg, o) : () => sendOrderRequestEmail_(cfg, o);
     const toOwner = o.type === 'Class' ? () => sendOwnerClassAlert_(cfg, o) : () => sendOwnerOrderAlert_(cfg, o);
     setCell_(sh, row, 'Customer email', sendSafely_(toCustomer));
@@ -657,7 +686,7 @@ function submitOrder_(b) {
     number: o.number, type: o.type, status: o.status, createdAt: o.createdAt.toISOString(), items: o.items, eventType: o.eventType,
     dateNeeded: o.dateNeeded, allergies: o.allergies, fulfillment: o.fulfillment, address: o.address, customer: o.customer,
     subtotal: o.subtotal, discount: o.discount, promoCode: o.promoCode, tax: o.tax, deliveryFee: o.deliveryFee, giftCredit: o.giftCredit,
-    total: o.total, taxRate: o.taxRate
+    total: o.total, taxRate: o.taxRate, payUrl: o.payUrl || ''
   });
   const orders = placed.map((p) => pub(p.order));
   const result = { ok: true, orders, order: orders.find((o) => o.type === 'Cookies') || orders[0] };
@@ -1230,14 +1259,39 @@ function adminApprove(number, inv) {
   return finishApproval_(o);
 }
 
-// Send (or resend) the confirmation email and record how it went in the invoice.
+// Create the QuickBooks invoice (once), then send (or resend) the confirmation email with its Pay link,
+// and record how both went on the order. If QuickBooks fails, the approval still stands and admin offers Retry.
 function finishApproval_(o) {
   const cfg = getConfig_();
+  if (qbReady_() && !(o.invoice.qb && o.invoice.qb.id)) qbInvoiceForOrder_(cfg, o);
   o.invoice.emailStatus = sendSafely_(() => sendConfirmationEmail_(cfg, o));
-  const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
-  setCell_(sh, findOrderRow_(sh, o.number), 'Invoice', JSON.stringify(o.invoice));
+  saveInvoice_(o);
   clearConfigCache_();   // the week may now be full
   return { ok: true, order: o, weekCounts: weekCountsNow_() };
+}
+
+// Write the invoice JSON (and the QuickBooks invoice number / pay link columns) back to the order's row.
+function saveInvoice_(o) {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
+  const row = findOrderRow_(sh, o.number);
+  setCell_(sh, row, 'Invoice', JSON.stringify(o.invoice));
+  const qb = o.invoice.qb || {};
+  setCell_(sh, row, 'QuickBooks invoice', qb.docNumber ? '#' + qb.docNumber : o.invoice.qbError ? 'FAILED: ' + o.invoice.qbError : '');
+  setCell_(sh, row, 'Pay link', qb.link || '');
+}
+
+// Admin "Retry" when QuickBooks didn't take the invoice the first time. On success the customer gets the
+// confirmation email again, now with the Pay button.
+function adminRetryInvoice(number) {
+  requireOwner_();
+  const o = loadOrder_(number);
+  if (!o.invoice || o.type === 'Class') return { ok: false, error: number + ' has no approved invoice.' };
+  if (o.invoice.qb && o.invoice.qb.id) return { ok: true, order: o };
+  if (!qbReady_()) return { ok: false, error: 'QuickBooks isn’t connected. Connect it on the Payments tab first.' };
+  qbInvoiceForOrder_(getConfig_(), o);
+  if (o.invoice.qbError) { saveInvoice_(o); return { ok: false, error: 'QuickBooks said: ' + o.invoice.qbError, order: o }; }
+  o.invoice.sentAt = new Date().toISOString();
+  return finishApproval_(o);
 }
 
 function adminResendConfirmation(number) {
@@ -1264,13 +1318,18 @@ function adminDecline(number, note) {
   return { ok: true, order: o, emailStatus, weekCounts: weekCountsNow_() };
 }
 
-// Status changes: cookie orders after approval (Paid, Baking, Ready, Completed); classes Booked, Paid, Completed or
-// Cancelled (cancelling frees the spots). QuickBooks sets "Paid" automatically in phase 4.
+// Status changes: cookie orders after approval (Paid, Baking, Ready, Completed); classes Awaiting payment, Booked,
+// Paid, Completed, Cancelled or Expired (cancelling or expiring frees the spots). The payment check sets "Paid" itself.
+// Confirming a class by hand that was still waiting for payment sends its confirmation emails.
 function adminSetStatus(number, status) {
   requireOwner_();
   const o = loadOrder_(number);
   const allowed = o.type === 'Class' ? CLASS_STATUSES : COUNTED_STATUSES;
   if (allowed.indexOf(status) === -1) return { ok: false, error: 'Unknown status.' };
+  if (o.type === 'Class' && ['Awaiting payment', 'Expired'].indexOf(o.status) !== -1 && ['Booked', 'Paid'].indexOf(status) !== -1) {
+    confirmClass_(o, status);
+    return { ok: true, weekCounts: weekCountsNow_() };
+  }
   const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
   const row = findOrderRow_(sh, number);
   setCell_(sh, row, 'Status', status);
@@ -1414,6 +1473,363 @@ function adminDeleteMessage(id) {
   return { ok: true };
 }
 
+/* ============================== Payments ============================== */
+
+/*
+ * QuickBooks Online (cookie orders): approving an order creates and sends a QuickBooks invoice with a Pay button.
+ * Square (classes): booking a class sends the customer to a Square checkout link; the spot is held meanwhile.
+ * checkPayments() runs every 5 minutes (see setupSheet) and marks orders Paid, and releases unpaid class holds.
+ *
+ * Keys live in Script Properties (Project Settings), never in this file:
+ *   QBO_CLIENT_ID, QBO_CLIENT_SECRET, QBO_ENV (sandbox | production)
+ *   SQUARE_ACCESS_TOKEN, SQUARE_LOCATION_ID, SQUARE_ENV (sandbox | production)
+ * The QuickBooks sign-in uses Google's OAuth2 library (Libraries: identifier OAuth2).
+ */
+
+const SCRIPT_PROPS = () => PropertiesService.getScriptProperties();
+
+/* ----- QuickBooks ----- */
+
+function qbEnv_() { return SCRIPT_PROPS().getProperty('QBO_ENV') === 'production' ? 'production' : 'sandbox'; }
+function qbKeysSet_() { const p = SCRIPT_PROPS(); return !!(p.getProperty('QBO_CLIENT_ID') && p.getProperty('QBO_CLIENT_SECRET')); }
+function qbReady_() { try { return qbKeysSet_() && !!SCRIPT_PROPS().getProperty('QBO_REALM_ID') && qbService_().hasAccess(); } catch (e) { return false; } }
+
+function qbService_() {
+  const p = SCRIPT_PROPS();
+  const id = p.getProperty('QBO_CLIENT_ID'), secret = p.getProperty('QBO_CLIENT_SECRET');
+  return OAuth2.createService('QuickBooks-' + qbEnv_())
+    .setAuthorizationBaseUrl('https://appcenter.intuit.com/connect/oauth2')
+    .setTokenUrl('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer')
+    .setClientId(id)
+    .setClientSecret(secret)
+    .setScope('com.intuit.quickbooks.accounting')
+    .setCallbackFunction('qbAuthCallback')
+    .setPropertyStore(p)
+    .setCache(CacheService.getScriptCache())
+    .setTokenHeaders({ Authorization: 'Basic ' + Utilities.base64Encode(id + ':' + secret), Accept: 'application/json' });
+}
+
+// Intuit sends the owner back here after they approve the connection.
+function qbAuthCallback(request) {
+  const ok = qbService_().handleCallback(request);
+  if (ok) {
+    SCRIPT_PROPS().setProperty('QBO_REALM_ID', String(request.parameter.realmId || ''));
+    try { qbItems_(true); } catch (e) { console.error('QuickBooks items setup failed', e); }
+  }
+  return HtmlService.createHtmlOutput('<div style="font-family:sans-serif;padding:32px;max-width:520px">' +
+    (ok ? '<h2>QuickBooks is connected</h2><p>You can close this tab. Back in the admin, click <strong>Refresh</strong> on the Payments tab.</p>'
+        : '<h2>QuickBooks wasn’t connected</h2><p>The sign-in was cancelled or didn’t finish. Close this tab and try <strong>Connect QuickBooks</strong> again.</p>') + '</div>');
+}
+
+function qbBase_() { return qbEnv_() === 'production' ? 'https://quickbooks.api.intuit.com' : 'https://sandbox-quickbooks.api.intuit.com'; }
+function qbAppUrl_(invoiceId) { return (qbEnv_() === 'production' ? 'https://app.qbo.intuit.com' : 'https://app.sandbox.qbo.intuit.com') + '/app/invoice?txnId=' + invoiceId; }
+
+// Call the QuickBooks API. Throws with QuickBooks' own message when it refuses.
+function qbFetch_(method, path, body, contentType) {
+  const realm = SCRIPT_PROPS().getProperty('QBO_REALM_ID');
+  const url = qbBase_() + '/v3/company/' + realm + path + (path.indexOf('?') === -1 ? '?' : '&') + 'minorversion=75';
+  const opts = { method, muteHttpExceptions: true, headers: { Authorization: 'Bearer ' + qbService_().getAccessToken(), Accept: 'application/json' } };
+  if (body !== undefined) { opts.contentType = contentType || 'application/json'; opts.payload = typeof body === 'string' ? body : JSON.stringify(body); }
+  const res = UrlFetchApp.fetch(url, opts);
+  let data = {};
+  try { data = JSON.parse(res.getContentText() || '{}'); } catch (e) { /* not JSON */ }
+  if (res.getResponseCode() >= 300 || data.Fault) {
+    const e = (data.Fault && data.Fault.Error && data.Fault.Error[0]) || {};
+    const err = new Error((e.Message || 'HTTP ' + res.getResponseCode()) + (e.Detail ? ': ' + e.Detail : ''));
+    err.code = e.code;
+    throw err;
+  }
+  return data;
+}
+function qbQuery_(sql) { return (qbFetch_('get', '/query?query=' + encodeURIComponent(sql)).QueryResponse) || {}; }
+function qbEsc_(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+// The Products/Services invoices use. Created in QuickBooks the first time; their IDs are remembered per company.
+const QB_ITEMS = [
+  ['custom', 'Custom Cookies', true, 'Hand-decorated custom cookies'],
+  ['artisan', 'Artisan Cookies', true, 'Mini and large artisan cookies'],
+  ['dropoff', 'Drop-off Fee', false, 'Local drop-off'],
+  ['discount', 'Promo Discount', true, 'Promo code or price adjustment'],
+  ['gift', 'Gift Card Credit', false, 'Sweet Nothings gift card applied']
+];
+function qbItems_(force) {
+  const key = 'QBO_ITEMS_' + SCRIPT_PROPS().getProperty('QBO_REALM_ID');
+  const saved = SCRIPT_PROPS().getProperty(key);
+  if (saved && !force) return JSON.parse(saved);
+  const accounts = (qbQuery_("select * from Account where AccountType = 'Income' maxresults 100").Account || []);
+  const income = accounts.find((a) => /sales/i.test(a.Name)) || accounts[0];
+  if (!income) throw new Error('No income account found in QuickBooks.');
+  const map = {};
+  QB_ITEMS.forEach(([k, name, taxable, desc]) => {
+    const found = (qbQuery_("select * from Item where Name = '" + qbEsc_(name) + "'").Item || [])[0];
+    map[k] = found ? found.Id : qbFetch_('post', '/item', { Name: name, Type: 'Service', Taxable: taxable, Description: desc, IncomeAccountRef: { value: income.Id } }).Item.Id;
+  });
+  SCRIPT_PROPS().setProperty(key, JSON.stringify(map));
+  return map;
+}
+
+// Find the customer by email, or create them (with a billing email so the invoice can be paid online).
+function qbCustomer_(c) {
+  let found = null;
+  try { found = (qbQuery_("select * from Customer where PrimaryEmailAddr = '" + qbEsc_(c.email) + "'").Customer || [])[0]; } catch (e) { /* not filterable here */ }
+  if (!found) found = (qbQuery_("select * from Customer where DisplayName = '" + qbEsc_(c.name) + "'").Customer || [])[0];
+  if (found) return found.Id;
+  const parts = c.name.trim().split(/\s+/);
+  const body = { DisplayName: c.name, GivenName: parts[0], FamilyName: parts.slice(1).join(' ') || undefined, PrimaryEmailAddr: { Address: c.email }, PrimaryPhone: c.phone ? { FreeFormNumber: c.phone } : undefined };
+  try {
+    return qbFetch_('post', '/customer', body).Customer.Id;
+  } catch (e) {
+    if (String(e.code) !== '6240') throw e;   // name already used (e.g. a vendor): make it unique
+    body.DisplayName = c.name + ' (' + c.email + ')';
+    return qbFetch_('post', '/customer', body).Customer.Id;
+  }
+}
+
+// Create the QuickBooks invoice for an approved order, email it from QuickBooks, and save its number, total and pay link.
+// Never throws: problems are kept on the order as invoice.qbError so admin can show Retry.
+function qbInvoiceForOrder_(cfg, o) {
+  try {
+    const items = qbItems_();
+    const inv = o.invoice;
+    const line = (itemKey, desc, qty, unit, taxable) => ({
+      DetailType: 'SalesItemLineDetail', Amount: round2_(qty * unit), Description: desc.slice(0, 4000),
+      SalesItemLineDetail: { ItemRef: { value: items[itemKey] }, Qty: qty, UnitPrice: unit, TaxCodeRef: { value: taxable ? 'TAX' : 'NON' } }
+    });
+    const lines = inv.lines.map((l) => line(l.unit < 0 ? 'discount' : /artisan|mini|large/i.test(l.desc) ? 'artisan' : 'custom', l.desc, l.qty, l.unit, true));
+    if (inv.fee) lines.push(line('dropoff', 'Drop-off fee', 1, inv.fee, false));
+    if (inv.credit) lines.push(line('gift', 'Gift card ' + (o.promoCode || ''), 1, -inv.credit, false));
+    const created = qbFetch_('post', '/invoice', {
+      CustomerRef: { value: qbCustomer_(o.customer) },
+      Line: lines,
+      BillEmail: { Address: o.customer.email },
+      CustomerMemo: { value: ('Order ' + o.number + (inv.note ? ' – ' + inv.note : '')).slice(0, 1000) },
+      PrivateNote: 'Website order ' + o.number,
+      AllowOnlineCreditCardPayment: true,
+      AllowOnlineACHPayment: true
+    }).Invoice;
+    let link = '';
+    try { link = qbFetch_('get', '/invoice/' + created.Id + '?include=invoiceLink').Invoice.InvoiceLink || ''; } catch (e) { /* online payments off */ }
+    // Our confirmation email carries the Pay button. Without a pay link, QuickBooks emails the invoice itself instead.
+    let sent = '';
+    if (!link) {
+      try { qbFetch_('post', '/invoice/' + created.Id + '/send?sendTo=' + encodeURIComponent(o.customer.email), '', 'application/octet-stream'); sent = new Date().toISOString(); } catch (e) { sent = 'FAILED: ' + e.message; }
+    }
+    inv.qb = { id: created.Id, docNumber: created.DocNumber, total: Number(created.TotalAmt), tax: Number((created.TxnTaxDetail || {}).TotalTax || 0), balance: Number(created.Balance), link, sent, env: qbEnv_(), url: qbAppUrl_(created.Id) };
+    // QuickBooks' total wins if its tax settings work it out differently; admin shows both.
+    inv.qbMismatch = Math.abs(inv.qb.total - inv.total) > 0.009;
+    delete inv.qbError;
+  } catch (err) {
+    console.error('QuickBooks invoice failed', o.number, err && err.stack || err);
+    o.invoice.qbError = String(err && err.message || err).slice(0, 300);
+  }
+}
+
+/* ----- Square ----- */
+
+function squareEnv_() { return SCRIPT_PROPS().getProperty('SQUARE_ENV') === 'production' ? 'production' : 'sandbox'; }
+function squareReady_() { const p = SCRIPT_PROPS(); return !!(p.getProperty('SQUARE_ACCESS_TOKEN') && p.getProperty('SQUARE_LOCATION_ID')); }
+
+function squareFetch_(method, path, body) {
+  const base = squareEnv_() === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
+  const opts = {
+    method, muteHttpExceptions: true, contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + SCRIPT_PROPS().getProperty('SQUARE_ACCESS_TOKEN'), 'Square-Version': '2024-10-17' }
+  };
+  if (body !== undefined) opts.payload = JSON.stringify(body);
+  const res = UrlFetchApp.fetch(base + path, opts);
+  let data = {};
+  try { data = JSON.parse(res.getContentText() || '{}'); } catch (e) { /* not JSON */ }
+  if (res.getResponseCode() >= 300) throw new Error(((data.errors || [])[0] || {}).detail || 'Square HTTP ' + res.getResponseCode());
+  return data;
+}
+
+// A Square checkout link for a class booking. Promo codes and gift cards come off as order-level discounts.
+function squarePaymentLink_(cfg, o) {
+  const cents = (n) => Math.round(Number(n) * 100);
+  const discounts = [];
+  if (o.discount) discounts.push({ uid: 'promo', name: 'Promo code ' + o.promoCode, type: 'FIXED_AMOUNT', amount_money: { amount: cents(o.discount), currency: 'USD' }, scope: 'ORDER' });
+  if (o.giftCredit) discounts.push({ uid: 'gift', name: 'Gift card', type: 'FIXED_AMOUNT', amount_money: { amount: cents(o.giftCredit), currency: 'USD' }, scope: 'ORDER' });
+  const data = squareFetch_('post', '/v2/online-checkout/payment-links', {
+    idempotency_key: o.number + '-' + Utilities.getUuid().slice(0, 8),
+    order: {
+      location_id: SCRIPT_PROPS().getProperty('SQUARE_LOCATION_ID'),
+      reference_id: o.number,
+      line_items: o.items.map((it) => ({ name: ('Class: ' + it.title).slice(0, 500), note: it.summary || undefined, quantity: String(it.qty), base_price_money: { amount: cents(it.unit), currency: 'USD' } })),
+      discounts: discounts.length ? discounts : undefined
+    },
+    checkout_options: { redirect_url: String(cfg.siteUrl || '') + 'order.html?paid=' + encodeURIComponent(o.number), ask_for_shipping_address: false },
+    pre_populated_data: { buyer_email: o.customer.email }
+  });
+  return { id: data.payment_link.id, url: data.payment_link.url, orderId: data.payment_link.order_id };
+}
+
+// True once Square has taken payment for the order.
+function squareOrderPaid_(orderId) {
+  const order = squareFetch_('get', '/v2/orders/' + encodeURIComponent(orderId)).order || {};
+  return order.state !== 'CANCELED' && (order.tenders || []).length > 0;
+}
+
+/* ----- Confirming classes and checking payments ----- */
+
+// A class booking is confirmed (paid, or booked by hand): set the status and send the confirmation + owner alert.
+function confirmClass_(o, status, late) {
+  const cfg = getConfig_();
+  const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
+  const row = findOrderRow_(sh, o.number);
+  o.status = status;
+  setCell_(sh, row, 'Status', status);
+  setCell_(sh, row, 'Updated', new Date());
+  setCell_(sh, row, 'Customer email', sendSafely_(() => sendClassBookingEmail_(cfg, o)));
+  setCell_(sh, row, 'Owner alert', sendSafely_(() => sendOwnerClassAlert_(cfg, o, late)));
+  clearConfigCache_();
+}
+
+// Runs every 5 minutes (time-driven trigger), and from admin's "Check payments now".
+//   QuickBooks: invoices with no balance left -> Paid (part-paid ones keep their balance on the order).
+//   Square: class bookings paid -> Paid (+ confirmation emails); unpaid past the hold -> Expired (spot released).
+function checkPayments() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) return { ok: false, error: 'A payment check is already running.' };
+  const summary = { invoicesPaid: [], classesPaid: [], expired: [], errors: [] };
+  try {
+    const cfg = getConfig_();
+    const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
+    const rows = rowObjects_(sh).map((r, i) => Object.assign(r, { _row: i + 2 }));
+    const json = (s) => { try { return JSON.parse(s || 'null'); } catch (e) { return null; } };
+
+    if (qbReady_()) {
+      const open = rows.filter((r) => r.Status === 'Invoice sent').map((r) => ({ r, inv: json(r.Invoice) })).filter((x) => x.inv && x.inv.qb && x.inv.qb.id);
+      for (let i = 0; i < open.length; i += 30) {
+        const batch = open.slice(i, i + 30);
+        try {
+          const found = qbQuery_('select Id, Balance, TotalAmt from Invoice where Id in (' + batch.map((x) => "'" + x.inv.qb.id + "'").join(',') + ')').Invoice || [];
+          batch.forEach((x) => {
+            const q = found.find((f) => f.Id === x.inv.qb.id);
+            if (!q) return;
+            x.inv.qb.balance = Number(q.Balance);
+            x.inv.qb.checkedAt = new Date().toISOString();
+            if (x.inv.qb.balance <= 0) {
+              x.inv.qb.paidAt = new Date().toISOString();
+              setCell_(sh, x.r._row, 'Status', 'Paid');
+              setCell_(sh, x.r._row, 'Updated', new Date());
+              summary.invoicesPaid.push(x.r.Order);
+            }
+            setCell_(sh, x.r._row, 'Invoice', JSON.stringify(x.inv));
+          });
+        } catch (e) { summary.errors.push('QuickBooks: ' + e.message); }
+      }
+    }
+
+    if (squareReady_()) {
+      const hold = (Number(cfg.classHoldMinutes) || 30) * 60000;
+      const now = Date.now();
+      rows.filter((r) => r['Square order'] && (r.Status === 'Awaiting payment' || (r.Status === 'Expired' && now - new Date(r.Received).getTime() < 864e5)))
+        .forEach((r) => {
+          try {
+            if (squareOrderPaid_(r['Square order'])) {
+              const late = r.Status === 'Expired';
+              // Paid after the hold ran out: the gift card amount it gave back is used again.
+              if (late && Number(r['Gift card credit']) > 0) { const g = lookupCode_(r['Promo code']); if (g) useCode_(g, Number(r['Gift card credit'])); }
+              confirmClass_(loadOrder_(String(r.Order)), 'Paid', late);
+              summary.classesPaid.push(r.Order);
+            } else if (r.Status === 'Awaiting payment' && now - new Date(r.Received).getTime() > hold) {
+              const inv = json(r.Invoice) || {};
+              try { if (inv.square && inv.square.linkId) squareFetch_('delete', '/v2/online-checkout/payment-links/' + inv.square.linkId); } catch (e) { /* already gone */ }
+              setCell_(sh, r._row, 'Status', 'Expired');
+              setCell_(sh, r._row, 'Updated', new Date());
+              if (Number(r['Gift card credit']) > 0) refundGiftCard_(r['Promo code'], Number(r['Gift card credit']));
+              summary.expired.push(r.Order);
+            }
+          } catch (e) { summary.errors.push('Square ' + r.Order + ': ' + e.message); }
+        });
+    }
+    if (summary.classesPaid.length || summary.expired.length || summary.invoicesPaid.length) clearConfigCache_();
+    SCRIPT_PROPS().setProperty('PAYMENTS_LAST_CHECK', JSON.stringify(Object.assign({ at: new Date().toISOString() }, summary)));
+    return Object.assign({ ok: true }, summary);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// An expired class booking gives back the gift card amount it used.
+function refundGiftCard_(code, amount) {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Codes');
+  const map = headerMap_(sh);
+  const c = rowObjects_(sh).findIndex((r) => String(r.Code).trim().toUpperCase() === String(code).trim().toUpperCase());
+  if (c === -1) return;
+  const row = c + 2;
+  sh.getRange(row, map.Balance).setValue(round2_((Number(sh.getRange(row, map.Balance).getValue()) || 0) + amount));
+  sh.getRange(row, map.Uses).setValue(Math.max(0, (Number(sh.getRange(row, map.Uses).getValue()) || 0) - 1));
+}
+
+// The page Square sends customers back to asks this: has my class payment gone through? (Checks Square right away.)
+function checkClassPayment_(b) {
+  if (rateLimited_('paycheck', 'all', 600)) return { ok: false, error: 'Please try again in a minute.' };
+  const number = clean_(b.number, 20);
+  let o;
+  try { o = loadOrder_(number); } catch (e) { return { ok: false, error: 'We couldn’t find that booking.' }; }
+  if (o.type !== 'Class') return { ok: false, error: 'We couldn’t find that booking.' };
+  if (o.status === 'Awaiting payment' && o.invoice && o.invoice.square && squareReady_()) {
+    try { if (squareOrderPaid_(o.invoice.square.orderId)) confirmClass_(o, 'Paid'); } catch (e) { console.error('Square check failed', e); }
+  }
+  return {
+    ok: true, number: o.number, status: o.status, total: o.total,
+    classes: o.items.map((it) => ({ title: it.title, summary: it.summary, qty: it.qty })),
+    payUrl: o.status === 'Awaiting payment' && o.invoice && o.invoice.square ? o.invoice.square.url : '',
+    holdMinutes: Number(getConfig_().classHoldMinutes) || 30
+  };
+}
+
+// Make sure the 5-minute payment check is scheduled (called from setupSheet).
+function ensurePaymentTrigger_() {
+  const has = ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'checkPayments');
+  if (!has) ScriptApp.newTrigger('checkPayments').timeBased().everyMinutes(5).create();
+}
+
+/* ----- Admin: Payments tab ----- */
+
+function adminPayments() {
+  requireOwner_();
+  const p = SCRIPT_PROPS();
+  const out = {
+    qb: { keys: qbKeysSet_(), env: qbEnv_(), connected: false, company: '', items: null, error: '' },
+    square: { ready: squareReady_(), env: squareEnv_(), location: '', error: '' },
+    lastCheck: JSON.parse(p.getProperty('PAYMENTS_LAST_CHECK') || 'null'),
+    trigger: ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'checkPayments'),
+    callbackUrl: 'https://script.google.com/macros/d/' + ScriptApp.getScriptId() + '/usercallback'
+  };
+  if (out.qb.keys && p.getProperty('QBO_REALM_ID')) {
+    try {
+      out.qb.connected = qbService_().hasAccess();
+      if (out.qb.connected) {
+        const info = qbFetch_('get', '/companyinfo/' + p.getProperty('QBO_REALM_ID')).CompanyInfo || {};
+        out.qb.company = info.CompanyName || '';
+        out.qb.items = JSON.parse(p.getProperty('QBO_ITEMS_' + p.getProperty('QBO_REALM_ID')) || 'null');
+      }
+    } catch (e) { out.qb.error = e.message; }
+  }
+  if (out.square.ready) {
+    try { out.square.location = (squareFetch_('get', '/v2/locations/' + p.getProperty('SQUARE_LOCATION_ID')).location || {}).name || ''; }
+    catch (e) { out.square.error = e.message; }
+  }
+  return out;
+}
+
+// The Intuit sign-in page to connect QuickBooks (opened in a new tab).
+function adminQbConnectUrl() {
+  requireOwner_();
+  if (!qbKeysSet_()) throw new Error('Add QBO_CLIENT_ID and QBO_CLIENT_SECRET in Script Properties first.');
+  return qbService_().getAuthorizationUrl();
+}
+function adminQbDisconnect() {
+  requireOwner_();
+  qbService_().reset();
+  SCRIPT_PROPS().deleteProperty('QBO_REALM_ID');
+  return { ok: true };
+}
+function adminQbSetupItems() { requireOwner_(); return { ok: true, items: qbItems_(true) }; }
+function adminCheckPaymentsNow() { requireOwner_(); ensurePaymentTrigger_(); return checkPayments(); }
+
 /* ============================== Emails ============================== */
 
 /*
@@ -1523,9 +1939,12 @@ function sendConfirmationEmail_(cfg, o) {
       '<td align="right" style="vertical-align:top">' + money_(l.qty * l.unit) + '</td></tr></table>').join('') + '</div>';
   const totals = totalsBlock_({ fulfillment: o.fulfillment, subtotal: inv.subtotal, tax: inv.tax, taxRate: o.taxRate, deliveryFee: inv.fee, giftCredit: inv.credit || 0, promoCode: o.promoCode, total: inv.total }, 'Amount due') +
     (inv.changed ? p_('Your original estimate was ' + money_(o.total) + '.', 13) : '');
-  // Phase 3 replaces this with the QuickBooks Pay button.
-  const pay = '<div style="border:2px dashed ' + C.field + ';border-radius:12px;padding:14px 18px;text-align:center;font-size:14px;color:' + C.muted + ';margin-bottom:18px">' +
-    '[Pay button: your QuickBooks invoice with a secure Pay button goes here. Connected in the next update.]</div>';
+  // The QuickBooks invoice's own Pay page. Without one (QuickBooks not connected, or online payments off), say how it'll come.
+  const qb = inv.qb || {};
+  const payNote = qb.link ? '' : qb.id ? 'Your invoice' + (qb.docNumber ? ' #' + qb.docNumber : '') + ' from QuickBooks is in a separate email.' : 'I’ll send your invoice to pay in a separate email.';
+  const pay = qb.link
+    ? button_(qb.link, 'Pay ' + money_(qb.total || inv.total) + ' securely') + p_('Card or bank transfer, through QuickBooks' + (qb.docNumber ? ' (invoice #' + qb.docNumber + ')' : '') + '.', 13)
+    : p_(payNote, 14);
   const html = shell_(cfg, 'You’re confirmed' + (first ? ', ' + esc_(first) : '') + '!', o.number,
     '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">' +
       (inv.changed ? 'I’ve reviewed your order and updated the price. ' : 'I’ve reviewed your order and it’s all set. ') + 'Pay the invoice below to lock in your date.</div>' +
@@ -1539,7 +1958,7 @@ function sendConfirmationEmail_(cfg, o) {
     'Needed by: ' + prettyDate_(o.dateNeeded), '',
     inv.lines.map((l) => l.desc + ' – ' + l.qty + ' × ' + money_(l.unit) + ' = ' + money_(l.qty * l.unit)).join('\n'), '',
     'Subtotal: ' + money_(inv.subtotal), 'Tax (' + o.taxRate + '%): ' + money_(inv.tax), isDel ? 'Drop-off: ' + money_(inv.fee) : 'Pickup: Free', inv.credit ? 'Gift card: -' + money_(inv.credit) : '',
-    'Amount due: ' + money_(inv.total), '', 'Questions or changes? Just reply to this email and mention your order number.'
+    'Amount due: ' + money_(qb.total || inv.total), '', qb.link ? 'Pay securely here: ' + qb.link : payNote, '', 'Questions or changes? Just reply to this email and mention your order number.'
   ].join('\n');
   MailApp.sendEmail({
     to: o.customer.email,
@@ -1568,34 +1987,45 @@ function sendDeclineEmail_(cfg, o) {
 /* ---------- Class booked (customer): confirmed right away, no review ---------- */
 function sendClassBookingEmail_(cfg, o) {
   const first = (o.customer.name || '').split(' ')[0];
+  const paid = o.status === 'Paid';
   const html = shell_(cfg, 'You’re booked' + (first ? ', ' + esc_(first) : '') + '!', o.number,
     '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">Your spot' + (o.items.reduce((a, it) => a + it.qty, 0) > 1 ? 's are' : ' is') +
-      ' saved. Your invoice will follow by email; please pay it to keep your booking.</div>' +
-    classDetails_(o) + totalsBlock_(o, 'Total') +
+      ' saved. ' + classPayLine_(o) + '</div>' +
+    classDetails_(o) + totalsBlock_(o, paid ? 'Paid' : 'Total') +
     p_('Questions or need to change your booking? Just reply to this email and mention your order number.', 14));
   MailApp.sendEmail({
     to: o.customer.email,
     subject: subjectPrefix_(cfg) + 'You’re booked! – Sweet Nothings ' + o.number,
     htmlBody: html,
-    body: ['You’re booked' + (first ? ', ' + first : '') + '!', 'Order number ' + o.number, '', 'Your invoice will follow by email; please pay it to keep your booking.', '',
-      classText_(o), '', totalsText_(o, 'Total'), '', 'Questions? Just reply to this email.'].join('\n'),
+    body: ['You’re booked' + (first ? ', ' + first : '') + '!', 'Order number ' + o.number, '', classPayLine_(o), '',
+      classText_(o), '', totalsText_(o, paid ? 'Paid' : 'Total'), '', 'Questions? Just reply to this email.'].join('\n'),
     name: cfg.senderName, replyTo: cfg.replyToEmail
   });
 }
 
+function classPayLine_(o) {
+  if (o.status === 'Paid') return 'Your payment went through. Thank you!';
+  if (!(o.total > 0)) return 'Nothing to pay. See you there!';
+  return 'I’ll be in touch about payment.';
+}
+
 /* ---------- Owner alert: new class booking ---------- */
-function sendOwnerClassAlert_(cfg, o) {
-  const html = shell_(cfg, 'New class booking', o.number,
+// late: paid in Square after the hold ran out (the spot may have been taken by then).
+function sendOwnerClassAlert_(cfg, o, late) {
+  const how = o.status === 'Paid' ? 'Paid online through Square.' : o.total > 0 ? 'Not paid online; collect payment another way.' : 'Nothing to pay.';
+  const html = shell_(cfg, late ? 'Late class payment: check spots' : 'New class booking', o.number,
+    (late ? '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px"><strong>Paid after the ' + (Number(cfg.classHoldMinutes) || 30) +
+      '-minute hold ran out.</strong> The spot was released meanwhile, so the class may now be over capacity. Check the class and refund in Square if needed.</div>' : '') +
     '<div style="font-size:15px;margin-bottom:18px"><strong>' + esc_(o.customer.name) + '</strong><br>' +
       '<a href="mailto:' + esc_(o.customer.email) + '" style="color:' + C.navy + '">' + esc_(o.customer.email) + '</a><br>' + esc_(o.customer.phone) + '</div>' +
     classDetails_(o) + totalsBlock_(o, 'Total') +
     (cfg.adminUrl ? button_(cfg.adminUrl, 'Open admin') : '') +
-    p_('Booked automatically; no review needed. Reply to this email to write to the customer.', 13));
+    p_(how + ' Booked automatically; no review needed. Reply to this email to write to the customer.', 13));
   MailApp.sendEmail({
     to: cfg.ownerEmail,
-    subject: subjectPrefix_(cfg) + 'New class booking – ' + o.number + ' (' + o.items.map((it) => it.qty + ' × ' + it.title).join(', ') + ')',
+    subject: subjectPrefix_(cfg) + (late ? 'LATE class payment – ' : 'New class booking – ') + o.number + ' (' + o.items.map((it) => it.qty + ' × ' + it.title).join(', ') + ')',
     htmlBody: html,
-    body: ['New class booking: ' + o.number, o.customer.name, o.customer.email, o.customer.phone, '', classText_(o), '', totalsText_(o, 'Total')].join('\n'),
+    body: [(late ? 'LATE class payment (after the hold ran out; check spots): ' : 'New class booking: ') + o.number, how, o.customer.name, o.customer.email, o.customer.phone, '', classText_(o), '', totalsText_(o, 'Total')].join('\n'),
     name: cfg.senderName, replyTo: o.customer.email
   });
 }

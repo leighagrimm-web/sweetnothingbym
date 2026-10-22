@@ -127,7 +127,8 @@ SN.ready.then(function () {
     else if (mode === 'bag') panel.innerHTML = renderBag();
     else if (mode === 'checkout') panel.innerHTML = renderCheckout();
     else if (mode === 'done') panel.innerHTML = renderDone();
-    panel.classList.toggle('full', mode === 'checkout' || mode === 'done');
+    else if (mode === 'paid') panel.innerHTML = renderPaid();
+    panel.classList.toggle('full', mode === 'checkout' || mode === 'done' || mode === 'paid');
     if (mode === 'custom' || mode === 'mini' || mode === 'large') updateDraftUI();
     if (mode === 'checkout') updateCheckoutUI();
   }
@@ -564,13 +565,21 @@ SN.ready.then(function () {
     const cookieOrder = lastOrders.find((o) => o.type === 'Cookies');
     const classOrder = lastOrders.find((o) => o.type === 'Class');
     const email = (cookieOrder || classOrder).customer.email;
-    return fullHead(cookieOrder ? 'Request sent' : 'You’re booked', false) +
+    const toPay = classOrder && classOrder.payUrl;
+    const classHtml = !classOrder ? '' : toPay
+      // Square checkout: class-only bookings go straight there (see orderSent); a mixed bag gets this button.
+      ? '<h3>' + (cookieOrder ? 'One more step: pay for your class' : 'Taking you to secure checkout…') + '</h3>' +
+        '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(classOrder.number) + '</strong></p>' +
+        '<p class="muted" style="margin:12px 0 0">Your spot is held for ' + (Number(cfg.classHoldMinutes) || 30) + ' minutes while you pay. We’ll email ' + esc(email) + ' as soon as your payment goes through.</p>' +
+        '<div class="stack" style="margin-top:16px;align-items:center"><a class="btn" href="' + esc(classOrder.payUrl) + '">Pay ' + money(classOrder.total) + ' for your class</a></div>'
+      : '<h3>' + (cookieOrder ? 'Your class is booked!' : 'You’re booked!') + '</h3>' +
+        '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(classOrder.number) + '</strong></p>' +
+        '<p class="muted" style="margin:12px 0 0">Your spot is saved. We sent the details to ' + esc(email) + '.' + (classOrder.total > 0 ? ' M will be in touch about payment.' : '') + '</p>' +
+        '<p style="margin:16px 0 0;font-family:var(--serif);font-size:26px;font-weight:600">Total ' + money(classOrder.total) + '</p>';
+    return fullHead(cookieOrder ? 'Request sent' : toPay ? 'Almost booked' : 'You’re booked', false) +
       '<div class="panel-body"><div class="checkout-col done">' +
         '<div class="check">' + SN_ICONS.check + '</div>' +
-        (classOrder ? '<h3>' + (cookieOrder ? 'Your class is booked!' : 'You’re booked!') + '</h3>' +
-          '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(classOrder.number) + '</strong></p>' +
-          '<p class="muted" style="margin:12px 0 0">Your spot is saved. We sent the details to ' + esc(email) + '. Your invoice will follow by email.</p>' +
-          '<p style="margin:16px 0 0;font-family:var(--serif);font-size:26px;font-weight:600">Total ' + money(classOrder.total) + '</p>' : '') +
+        classHtml +
         (cookieOrder ? '<h3' + (classOrder ? ' style="margin-top:28px"' : '') + '>Thanks, we got your cookie request!</h3>' +
           '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(cookieOrder.number) + '</strong></p>' +
           '<p class="muted" style="margin:12px 0 0"><strong>This is not a final order yet.</strong> We sent a copy of your request to ' + esc(email) + '. M will review it and send a second email with your confirmation, final price and invoice. Your date is reserved once the invoice is paid.</p>' +
@@ -756,6 +765,46 @@ SN.ready.then(function () {
     if (!wasOpen) showPanel(bagBtn);   // they closed the bag while it was sending
     const c = $('[data-act="close"]', panel);
     if (c) c.focus();
+    // Class only: straight on to Square's checkout. Square sends them back to order.html?paid=SN-x.
+    const cls = orders.find((o) => o.type === 'Class');
+    if (cls && cls.payUrl && orders.length === 1) setTimeout(() => { location.href = cls.payUrl; }, 1200);
+  }
+
+  /* ---------------- Back from Square (order.html?paid=SN-x) ---------------- */
+  let paidInfo = null;        // { number, status, total, classes, payUrl } from checkClassPayment, or { error }
+  let paidTries = 0;
+  function renderPaid() {
+    const p = paidInfo;
+    let body;
+    if (!p) body = '<h3>Checking your payment…</h3><p class="muted" style="margin:12px 0 0">This only takes a moment.</p>';
+    else if (p.error) body = '<h3>We couldn’t check your booking</h3><p class="muted" style="margin:12px 0 0">' + esc(p.error) + ' If you paid, you’ll get a confirmation email shortly.</p>';
+    else if (p.status === 'Paid' || p.status === 'Booked' || p.status === 'Completed') {
+      body = '<div class="check">' + SN_ICONS.check + '</div><h3>You’re booked!</h3>' +
+        '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(p.number) + '</strong></p>' +
+        p.classes.map((c) => '<p style="margin:12px 0 0"><strong>' + esc(c.title) + '</strong><br><span class="muted">' + esc(c.summary || '') + ' · ' + c.qty + ' spot' + (c.qty > 1 ? 's' : '') + '</span></p>').join('') +
+        '<p class="muted" style="margin:12px 0 0">' + (p.status === 'Paid' ? 'Your payment went through. ' : '') + 'A confirmation email is on its way.</p>';
+    } else if (p.status === 'Awaiting payment') {
+      body = paidTries < 6
+        ? '<h3>Checking your payment…</h3><p class="muted" style="margin:12px 0 0">Square can take a few seconds to let us know.</p>'
+        : '<h3>We haven’t seen your payment yet</h3><p class="muted" style="margin:12px 0 0">If you finished paying, you’ll get a confirmation email within a few minutes. If not, your spot is held for ' + p.holdMinutes + ' minutes from when you booked.</p>' +
+          (p.payUrl ? '<div class="stack" style="margin-top:16px;align-items:center"><a class="btn" href="' + esc(p.payUrl) + '">Finish paying ' + money(p.total) + '</a></div>' : '');
+    } else {
+      body = '<h3>This booking has ' + (p.status === 'Expired' ? 'expired' : 'been cancelled') + '</h3><p class="muted" style="margin:12px 0 0">' +
+        (p.status === 'Expired' ? 'The ' + p.holdMinutes + '-minute hold ran out before the payment came through, so the spot was released. If you were charged, reply to any of our emails and we’ll sort it out, or book again from the Classes page.' : 'Questions? Send us a message.') + '</p>';
+    }
+    return fullHead('Your class booking', false) + '<div class="panel-body"><div class="checkout-col done">' + body +
+      '<div class="stack" style="margin-top:24px;align-items:center"><button type="button" class="btn ghost" data-act="close">Back to the menu</button></div></div></div>';
+  }
+  function checkPaid(number) {
+    SN.post('checkClassPayment', { number })
+      .then((r) => { paidInfo = r && r.ok ? r : { error: (r && r.error) || 'Something went wrong.' }; })
+      .catch((r) => { paidInfo = { error: SN.sendErrorText(r) }; })
+      .then(() => {
+        paidTries += 1;
+        if (mode !== 'paid') return;
+        renderPanel();
+        if (paidInfo.status === 'Awaiting payment' && paidTries < 6) setTimeout(() => checkPaid(number), 4000);
+      });
   }
 
   function showToast(text) {
@@ -781,5 +830,13 @@ SN.ready.then(function () {
   if (new URLSearchParams(location.search).get('bag')) {
     history.replaceState(null, '', location.pathname);
     openBag(bagBtn);
+  }
+  const paidNumber = new URLSearchParams(location.search).get('paid');
+  if (paidNumber) {
+    history.replaceState(null, '', location.pathname);
+    mode = 'paid';
+    renderPanel();
+    showPanel(bagBtn);
+    checkPaid(paidNumber);
   }
 });

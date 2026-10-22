@@ -57,7 +57,7 @@
             '<p>Use <strong>Preview changes</strong> to see the site with your edits before anything goes live. Customers only see changes after you save.</p></div>' +
             '<div class="row-gap" style="gap:10px"><button type="button" class="btn ghost" data-preview>Preview changes</button><button type="button" class="btn" data-save>Save changes</button></div>' +
           '</div>' +
-          sectionDashboard() + sectionOrders() + sectionMessages() + sectionCodes() + sectionCustom() + sectionArtisan() + sectionRules() + sectionZones() + sectionFaq() +
+          sectionDashboard() + sectionOrders() + sectionMessages() + sectionCodes() + sectionPayments() + sectionCustom() + sectionArtisan() + sectionRules() + sectionZones() + sectionFaq() +
           sectionPages() + sectionEvents() + sectionGallery() + sectionSettings() +
         '</main>' +
       '</div>' +
@@ -73,7 +73,7 @@
 
   // Each tab shows one section. Orders and Messages are day-to-day; the rest are shop settings (saved together).
   const TAB_GROUPS = [
-    ['Orders &amp; messages', [['dashboard', 'Dashboard'], ['orders', 'Orders'], ['messages', 'Messages'], ['codes', 'Promo &amp; gift codes']]],
+    ['Orders &amp; messages', [['dashboard', 'Dashboard'], ['orders', 'Orders'], ['messages', 'Messages'], ['codes', 'Promo &amp; gift codes'], ['payments', 'Payments']]],
     ['Shop settings', [['custom', 'Custom pricing'], ['artisan', 'Artisan &amp; flavors'], ['rules', 'Ordering rules'], ['zones', 'Drop-off zones'],
       ['faq', 'FAQ'], ['pages', 'Website pages'], ['events', 'Events'], ['gallery', 'Gallery'], ['settings', 'Tax &amp; contact']]]
   ];
@@ -82,7 +82,8 @@
   function showTab() {
     const id = TAB_IDS.indexOf(location.hash.slice(1)) !== -1 ? location.hash.slice(1) : 'dashboard';
     $$('.admin-main > .panel-card').forEach((s) => { s.hidden = s.id !== id; });
-    $('#settings-title').hidden = ['dashboard', 'orders', 'messages', 'codes'].indexOf(id) !== -1;
+    $('#settings-title').hidden = ['dashboard', 'orders', 'messages', 'codes', 'payments'].indexOf(id) !== -1;
+    if (id === 'payments' && !payInfo) loadPayments();
     $$('.admin-nav a').forEach((a) => { if (a.dataset.tab === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     window.scrollTo(0, 0);
   }
@@ -103,7 +104,7 @@
   function sectionOrders() {
     return '<section class="panel-card" id="orders" aria-labelledby="orders-h">' +
       '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-start">' +
-        '<div><h2 id="orders-h">Orders</h2><p class="sub">Cookie requests come in as <strong>Pending review</strong>. Click <strong>Review</strong> to approve as-is or with changes, decline, message the customer, or change the date. Class bookings come in already <strong>Booked</strong>.</p></div>' +
+        '<div><h2 id="orders-h">Orders</h2><p class="sub">Cookie requests come in as <strong>Pending review</strong>. Click <strong>Review</strong> to approve as-is or with changes, decline, message the customer, or change the date. Class bookings pay in Square at checkout: <strong>Awaiting payment</strong> while they pay, then <strong>Paid</strong> (or <strong>Expired</strong> if they don’t).</p></div>' +
         '<button type="button" class="btn ghost small" id="orders-toggle"></button>' +
       '</div>' +
       '<div class="table-wrap"><table class="orders-table"><thead><tr><th>Order</th><th>Customer</th><th>Needed by</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>' +
@@ -227,6 +228,9 @@
   }
   function sectionEvents() {
     return card('events', 'Special Events', 'One card per event on the Special Events page, in this order. Anything left blank doesn\'t show. For a class people book and pay for at checkout, set the button to <strong>Add to bag</strong> and fill in a price; add <strong>Max attendees</strong> to show spots left. Hide a card to take it off the page without deleting it.',
+      '<div class="fields" style="margin-bottom:18px">' +
+        field('classHoldMinutes', 'Hold a class spot while they pay', numInput('classHoldMinutes', 'min="10" max="240" step="5"', '', 'minutes', 'int'), 'With Square connected, unpaid bookings expire after this and the spot opens up again.') +
+      '</div>' +
       '<div class="stack" id="events-editor"></div><button type="button" class="btn dashed" data-act="add-event" style="margin-top:14px">+ Add an event</button>');
   }
   function sectionGallery() {
@@ -323,15 +327,18 @@
   const STATUS_STYLE = {
     'Pending review': 'background:#FDF0D5;color:#7A4B00', 'Invoice sent': 'background:#E4E9F3;color:#1F2A44', 'Paid': 'background:#DDEFE3;color:#1E5A35',
     'Baking': 'background:#F7E3DD;color:#8E3A2E', 'Ready': 'background:#DDEFE3;color:#1E5A35', 'Completed': 'background:#EDEDED;color:#3D4250',
-    'Declined': 'background:#EDEDED;color:#3D4250', 'Booked': 'background:#E4E9F3;color:#1F2A44', 'Cancelled': 'background:#EDEDED;color:#3D4250'
+    'Declined': 'background:#EDEDED;color:#3D4250', 'Booked': 'background:#E4E9F3;color:#1F2A44', 'Cancelled': 'background:#EDEDED;color:#3D4250',
+    'Awaiting payment': 'background:#FDF0D5;color:#7A4B00', 'Expired': 'background:#EDEDED;color:#3D4250'
   };
   // Statuses Melissa can pick from the list: cookie orders after approval; class bookings any time.
+  // "Awaiting payment" (paying in Square) and "Expired" (didn't pay in time) are set automatically, so they're only
+  // in the list while a booking is in them. Picking Booked or Paid from there confirms it and sends the emails.
   const AFTER_INVOICE = ['Invoice sent', 'Paid', 'Baking', 'Ready', 'Completed'];
   const CLASS_STATUSES = ['Booked', 'Paid', 'Completed', 'Cancelled'];
   const isClass = (o) => o.type === 'Class';
-  const pickable = (o) => (isClass(o) ? CLASS_STATUSES : AFTER_INVOICE.indexOf(o.status) !== -1 ? AFTER_INVOICE : null);
+  const pickable = (o) => (isClass(o) ? (CLASS_STATUSES.indexOf(o.status) === -1 ? [o.status] : []).concat(CLASS_STATUSES) : AFTER_INVOICE.indexOf(o.status) !== -1 ? AFTER_INVOICE : null);
   const badge = (st) => '<span class="status-badge" style="' + (STATUS_STYLE[st] || '') + '">' + esc(st) + '</span>';
-  const isActive = (o) => ['Completed', 'Declined', 'Cancelled'].indexOf(o.status) === -1;
+  const isActive = (o) => ['Completed', 'Declined', 'Cancelled', 'Expired'].indexOf(o.status) === -1;
 
   function renderOrders() {
     const pending = orders.filter((o) => o.status === 'Pending review').length;
@@ -708,7 +715,36 @@
       (inv.note ? '<div class="rv-quote" style="margin-top:12px">Your note: “' + esc(inv.note) + '”</div>' : '') +
       (isClass(o) ? '<p class="hint" style="margin-top:12px">Booked ' + esc(new Date(o.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) + '. Booking email: <strong>' + esc(o.emailStatus) + '</strong></p>'
         : '<p class="hint" style="margin-top:12px">Approved ' + esc(new Date(inv.sentAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) +
-          (inv.changed ? ' with changes' : ' as requested') + '. Confirmation email to ' + esc(o.customer.email) + ': <strong>' + esc(inv.emailStatus || '') + '</strong></p>');
+          (inv.changed ? ' with changes' : ' as requested') + '. Confirmation email to ' + esc(o.customer.email) + ': <strong>' + esc(inv.emailStatus || '') + '</strong></p>') +
+      paymentHtml(o);
+  }
+
+  // Where the money is: the QuickBooks invoice (cookies) or the Square checkout (classes).
+  function paymentHtml(o) {
+    const inv = o.invoice;
+    if (isClass(o)) {
+      if (!inv.square) return '';
+      const sqMsg = {
+        'Awaiting payment': 'Waiting for the customer to pay in Square. The spot is held ' + (Number(cfg.classHoldMinutes) || 30) + ' minutes from booking, then released.',
+        'Expired': 'Not paid in time, so the spot was released. If they pay late, it’s confirmed automatically and you get a “late payment” email.',
+        'Paid': 'Paid through Square.'
+      }[o.status] || 'Square checkout for this booking: ' + o.status + '.';
+      return '<h3 class="rv-h">Payment</h3><p class="hint">' + sqMsg + '</p>';
+    }
+    const qb = inv.qb;
+    if (qb) {
+      return '<h3 class="rv-h">QuickBooks</h3>' +
+        '<p class="hint">Invoice <strong>#' + esc(qb.docNumber || qb.id) + '</strong>: ' + money(qb.total) + (qb.balance > 0 ? ', ' + money(qb.balance) + ' still due' : ', paid in full') + '.' +
+          (qb.env === 'sandbox' ? ' (Sandbox: test money.)' : '') + ' <a href="' + esc(qb.url) + '" target="_blank" rel="noopener">Open in QuickBooks</a>' +
+          (qb.link ? ' · <a href="' + esc(qb.link) + '" target="_blank" rel="noopener">Customer pay page</a>' : '') + '</p>' +
+        (inv.qbMismatch ? '<p class="err">QuickBooks worked out ' + money(qb.total) + ' but the site said ' + money(inv.total) + '. Check the sales tax settings in QuickBooks; the customer pays the QuickBooks amount.</p>' : '') +
+        (!qb.link ? '<p class="hint">No online Pay button: QuickBooks Payments may not be turned on, so QuickBooks emailed the invoice' + (/^FAILED/.test(qb.sent || '') ? ' (that failed: ' + esc(qb.sent) + ')' : '') + '.</p>' : '');
+    }
+    if (inv.qbError) {
+      return '<h3 class="rv-h">QuickBooks</h3><p class="err">The invoice wasn’t created: ' + esc(inv.qbError) + '</p>' +
+        '<button type="button" class="btn ghost small" data-rv="retry-qb">Try QuickBooks again</button>';
+    }
+    return '';
   }
 
   function renderReview() {
@@ -898,8 +934,95 @@
           toast('Confirmation email: ' + r.order.invoice.emailStatus);
         }).catch(failed);
         break;
+      case 'retry-qb':
+        if (busy) return;
+        busy = true; b.textContent = 'Sending to QuickBooks…';
+        server('adminRetryInvoice', o.number).then((r) => {
+          busy = false;
+          if (r.order) replaceOrder(r.order, r.weekCounts);
+          if (!r.ok) { toast(r.error, 8000); renderReview(); return; }
+          toast('QuickBooks invoice created and the confirmation emailed again, with the Pay button');
+        }).catch(failed);
+        break;
       default:
     }
+  }
+
+  /* ---------- Payments: QuickBooks (cookie invoices) and Square (class checkout) ---------- */
+  let payInfo = null;       // from adminPayments; loaded the first time the tab opens (it calls QuickBooks and Square)
+  function sectionPayments() {
+    return card('payments', 'Payments', 'Approving a cookie order creates its invoice in <strong>QuickBooks</strong>; the confirmation email has its Pay button. Class bookings pay at checkout through <strong>Square</strong>. Every 5 minutes the site checks both and marks orders <strong>Paid</strong>.',
+      '<div id="pay-box"><p class="muted">Loading…</p></div>');
+  }
+  function loadPayments() {
+    $('#pay-box').innerHTML = '<p class="muted">Checking QuickBooks and Square…</p>';
+    return server('adminPayments').then((d) => { payInfo = d; renderPayments(); }).catch((err) => {
+      $('#pay-box').innerHTML = '<p class="err">Couldn’t check payments: ' + esc(err && err.message ? err.message : err) + '</p><button type="button" class="btn ghost small" data-pay="refresh">Try again</button>';
+    });
+  }
+  function renderPayments() {
+    const p = payInfo;
+    const when = (iso) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const env = (e) => '<span class="status-badge" style="' + (e === 'production' ? 'background:#DDEFE3;color:#1E5A35' : 'background:#FDF0D5;color:#7A4B00') + '">' + (e === 'production' ? 'Live' : 'Sandbox (test money)') + '</span>';
+    const qb = p.qb;
+    const qbBody = !qb.keys
+      ? '<p class="muted">Not set up yet: add <code>QBO_CLIENT_ID</code> and <code>QBO_CLIENT_SECRET</code> in Apps Script → Project Settings → Script Properties.</p>'
+      : qb.connected
+        ? '<p>Connected to <strong>' + esc(qb.company || 'your company') + '</strong>.</p>' +
+          (qb.items ? '<p class="hint">Invoice items are ready: Custom Cookies, Artisan Cookies, Drop-off Fee, Promo Discount, Gift Card Credit.</p>' : '<p class="hint">Invoice items aren’t set up yet.</p>') +
+          '<div class="row-gap" style="gap:8px;margin-top:10px"><button type="button" class="btn ghost small" data-pay="items">' + (qb.items ? 'Re-check invoice items' : 'Set up invoice items') + '</button>' +
+          '<button type="button" class="btn ghost small" data-pay="disconnect">Disconnect</button></div>'
+        : '<p class="muted">' + (qb.error ? 'Not connected (' + esc(qb.error) + ').' : 'Not connected yet.') + '</p>' +
+          '<div class="row-gap" style="gap:8px;margin-top:10px"><button type="button" class="btn small" data-pay="connect">Connect QuickBooks</button></div>' +
+          '<p class="hint">Opens Intuit’s sign-in in a new tab. Pick the company, approve, then come back and click Refresh. If Intuit says the redirect URI is wrong, add this one in the Intuit app’s Keys &amp; credentials: <code style="word-break:break-all">' + esc(p.callbackUrl) + '</code></p>';
+    const sq = p.square;
+    const sqBody = !sq.ready
+      ? '<p class="muted">Not set up yet: add <code>SQUARE_ACCESS_TOKEN</code> and <code>SQUARE_LOCATION_ID</code> in Script Properties. Until then, class bookings are confirmed right away and you collect payment yourself.</p>'
+      : sq.error
+        ? '<p class="err">Square didn’t accept the keys: ' + esc(sq.error) + '</p>'
+        : '<p>Connected' + (sq.location ? ' to <strong>' + esc(sq.location) + '</strong>' : '') + '. Class bookings go to Square checkout and hold the spot for ' + (Number(cfg.classHoldMinutes) || 30) + ' minutes.</p>';
+    const lc = p.lastCheck;
+    const last = lc
+      ? 'Last check ' + when(lc.at) + ': ' + [lc.invoicesPaid.length ? lc.invoicesPaid.length + ' invoice' + (lc.invoicesPaid.length > 1 ? 's' : '') + ' paid' : '',
+          lc.classesPaid.length ? lc.classesPaid.length + ' class booking' + (lc.classesPaid.length > 1 ? 's' : '') + ' paid' : '',
+          lc.expired.length ? lc.expired.length + ' expired' : ''].filter(Boolean).join(', ').replace(/^$/, 'nothing new') + '.' +
+        (lc.errors.length ? ' <span class="err">' + esc(lc.errors.join(' · ')) + '</span>' : '')
+      : 'No check has run yet.';
+    $('#pay-box').innerHTML =
+      '<div class="fields">' +
+        '<div class="field"><h3 class="rv-h" style="margin-top:0">QuickBooks ' + (qb.keys ? env(qb.env) : '') + '</h3>' + qbBody + '</div>' +
+        '<div class="field"><h3 class="rv-h" style="margin-top:0">Square ' + (sq.ready ? env(sq.env) : '') + '</h3>' + sqBody + '</div>' +
+      '</div>' +
+      '<h3 class="rv-h">Payment check</h3>' +
+      '<p>' + (p.trigger ? 'Runs every 5 minutes.' : '<span class="err">Not scheduled. Click Check now to schedule it.</span>') + ' ' + last + '</p>' +
+      '<div class="row-gap" style="gap:8px;margin-top:10px"><button type="button" class="btn ghost small" data-pay="check">Check now</button><button type="button" class="btn ghost small" data-pay="refresh">Refresh</button></div>';
+  }
+  function onPayClick(b) {
+    const act = b.dataset.pay;
+    if (busy) return;
+    if (act === 'refresh') { loadPayments(); return; }
+    if (act === 'connect') {
+      // Open the tab now (pop-up blockers allow it during the click), then point it at Intuit.
+      const w = window.open('', '_blank');
+      server('adminQbConnectUrl').then((url) => { if (w) w.location.href = url; else window.open(url, '_blank'); })
+        .catch((err) => { if (w) w.close(); failed(err); });
+      return;
+    }
+    if (act === 'disconnect' && !confirm('Disconnect QuickBooks? Approved orders won’t get QuickBooks invoices until you connect again.')) return;
+    const fn = { items: 'adminQbSetupItems', disconnect: 'adminQbDisconnect', check: 'adminCheckPaymentsNow' }[act];
+    if (!fn) return;
+    busy = true;
+    b.textContent = 'Working…';
+    server(fn).then((r) => {
+      busy = false;
+      if (act === 'check') {
+        if (!r.ok) toast(r.error);
+        else toast('Checked: ' + (r.invoicesPaid.length + r.classesPaid.length) + ' newly paid, ' + r.expired.length + ' expired' + (r.errors.length ? '. Problems: ' + r.errors.join(' · ') : ''), r.errors.length ? 8000 : 3600);
+        refreshOrders().catch(() => {});
+      }
+      if (act === 'items') toast('Invoice items are ready in QuickBooks');
+      return loadPayments();
+    }).catch(failed);
   }
 
   /* ---------- Promo & gift codes (saved right away, not with the other settings) ---------- */
@@ -1239,6 +1362,8 @@
       if (rvb) { onReviewClick(rvb); return; }
       const db = e.target.closest('[data-dash], [data-dash-open]');
       if (db) { onDashClick(db); return; }
+      const pb = e.target.closest('[data-pay]');
+      if (pb) { onPayClick(pb); return; }
       const mb = e.target.closest('[data-msg]');
       if (mb) { onMessageClick(mb); return; }
       const ab = e.target.closest('[data-act]');
