@@ -103,9 +103,29 @@
     });
   }
 
+  // A page left open (a background tab, a locked phone, or one restored by the Back button) checks again when the
+  // visitor comes back, at most once a minute: maintenance turned on drops the curtain; turned off reloads the site.
+  let lastCheck = Date.now();
+  function recheck(force) {
+    if (document.hidden || (!force && Date.now() - lastCheck < 60000)) return;
+    lastCheck = Date.now();
+    try { sessionStorage.removeItem('sn_live_cfg'); } catch (e) { /* ignore */ }
+    SN.fetchConfig().then(() => {
+      if (SN.configFailed) return;
+      const cfg = SN.load();
+      try { localStorage.setItem('sn_maint', cfg.maintenanceMode === true ? '1' : '0'); } catch (e) { /* ignore */ }
+      const curtain = document.getElementById('maint');
+      if (closed(cfg) && !curtain) showMaintenance(cfg);
+      else if (!closed(cfg) && curtain) location.reload();
+    });
+  }
+  document.addEventListener('visibilitychange', () => recheck(false));
+  window.addEventListener('pageshow', (e) => { if (e.persisted) recheck(true); });
+
   render();
   SN.ready.then(() => {
     const cfg = SN.load();
+    lastCheck = Date.now();
     try { localStorage.setItem('sn_maint', cfg.maintenanceMode === true ? '1' : '0'); } catch (e) { /* ignore */ }
     if (closed(cfg)) { showMaintenance(cfg); document.documentElement.classList.remove('sn-maint-wait'); return; }
     document.documentElement.classList.remove('sn-maint-wait');
