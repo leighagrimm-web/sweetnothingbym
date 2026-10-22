@@ -467,3 +467,5 @@ html.sn-maint body > *:not(#maint) { display: none !important; }
 .msg-reply { margin-top: 10px; padding: 10px 12px; border-left: 3px solid var(--coral); background: var(--ground); border-radius: 0 10px 10px 0; font-size: 14px; white-space: pre-wrap; }
 .msg-reply .hint { display: block; margin-bottom: 4px; white-space: normal; }
 .msg-write { margin-top: 10px; }
+/* "This page has been updated" banner for a tab left open across a publish (layout.js). */
+.update-banner { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 60; border-top: 1px solid #E8CF9C; border-bottom: 0; }

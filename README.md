@@ -26,7 +26,13 @@ Settings live in `js/config.js` (`SN_DEFAULTS`). Shared look is in `css/styles.c
 
 ## Publishing updates
 
-Every page loads `styles.css` and the scripts with a version number, for example `styles.css?v=20261022`. Phones and browsers otherwise keep the old file for up to 10 minutes. When you change CSS or JS, change that number on every page: use the date, and find-and-replace across the `.html` files.
+Every page loads `styles.css` and the scripts with a version number, for example `styles.css?v=20261022`. Phones and browsers otherwise keep the old file for up to 10 minutes. When you change CSS or JS, change that number everywhere it appears, using the date (add a letter for more than one publish a day). Find-and-replace the old number with the new one across:
+
+- the `.html` files (`?v=` on every link and script)
+- `config.js` (`SN_BUILD`)
+- `version.json`
+
+A visitor with a tab left open from before the publish gets the new version when they come back to it. The page compares its `SN_BUILD` with `version.json` and reloads itself, or, if their bag or checkout is open, shows a "this page has been updated" banner instead.
 
 ## Owner admin (phase 2)
 

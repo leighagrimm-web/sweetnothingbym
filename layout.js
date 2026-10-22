@@ -105,10 +105,28 @@
 
   // A page left open (a background tab, a locked phone, or one restored by the Back button) checks again when the
   // visitor comes back, at most once a minute: maintenance turned on drops the curtain; turned off reloads the site.
+  // It also checks for a newer published version of the site (version.json vs SN_BUILD): it reloads, or, if the bag
+  // or checkout is open (so typing isn't lost), shows a "this page has been updated" banner.
   let lastCheck = Date.now();
+  function checkVersion() {
+    fetch('version.json?r=' + Date.now(), { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((v) => {
+      if (!v || !v.v || v.v === SN_BUILD) return;
+      const busy = document.querySelector('.panel.open');
+      if (!busy) { location.reload(); return; }
+      if (document.getElementById('update-banner')) return;
+      const bar = document.createElement('div');
+      bar.id = 'update-banner';
+      bar.className = 'preview-banner update-banner';
+      bar.setAttribute('role', 'status');
+      bar.innerHTML = '<span>This page has been updated. Refresh to get the latest (your bag is saved).</span><button type="button">Refresh</button>';
+      bar.querySelector('button').addEventListener('click', () => location.reload());
+      document.body.appendChild(bar);
+    }).catch(() => { /* offline: try next time */ });
+  }
   function recheck(force) {
     if (document.hidden || (!force && Date.now() - lastCheck < 60000)) return;
     lastCheck = Date.now();
+    checkVersion();
     try { sessionStorage.removeItem('sn_live_cfg'); } catch (e) { /* ignore */ }
     SN.fetchConfig().then(() => {
       if (SN.configFailed) return;
