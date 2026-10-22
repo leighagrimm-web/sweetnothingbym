@@ -11,7 +11,7 @@ Keep the site in **maintenance mode** from step 4 until step 8, so nobody can or
 ## 0. Decisions before starting
 
 - [ ] **Which Google account runs the live site?** The live Sheet and script live in this account, and emails are sent from it. The plan so far is `SweetNothingsByM@gmail.com`. (L + M)
-- [x] **Does Leigha need the live admin?** Yes: done with the **Admin helpers** setting (admin → Tax & contact). See step 3.
+- [x] **How does Leigha get into the live admin?** By signing in with Melissa's Google account for go-live. **Admin helpers** (admin → Tax & contact) is there as an option for later, for someone helping with setup under their own Google account. See step 3.
 - [ ] **Where to host the live site:** Cloudflare Pages or Netlify, both free. Both publish automatically from the same GitHub repo, and the test site stays on GitHub Pages. Recommendation: **Cloudflare Pages** (fast, free HTTPS, easy domain setup). (L)
 - [ ] **Go-live date**, and a quiet time to do steps 4–8 (about 2–3 hours, plus waiting for the domain). (L + M)
 
@@ -54,11 +54,13 @@ Everything below is edited in the **test** admin first, so it can be checked on 
 6. [ ] Run **setupSheet** and allow everything Google asks for: Sheets, Gmail sending, Drive, outside services and triggers. It creates the uploads folder and the 5-minute payment check.
 7. [ ] **Deploy → New deployment → Web app**, twice:
    - **Public:** Execute as **Me**, Who has access **Anyone**. Copy the URL: this is `API.prod`.
-   - **Admin:** Execute as **User accessing the web app**, Who has access **Anyone with Google account**. Only the owner and the admin helpers get past the sign-in; everyone else sees "Only the shop owner can do that." Copy the URL: this is `ADMIN.prod`, and it also goes in the Settings tab's `adminUrl`.
+   - **Admin:** Execute as **User accessing the web app**, Who has access **Anyone with Google account**, so helpers can be added later without redeploying. Only the owner and any admin helpers get past the sign-in; everyone else sees "Only the shop owner can do that." Copy the URL: this is `ADMIN.prod`, and it also goes in the Settings tab's `adminUrl`.
 8. [ ] Send both URLs to C to put in `config.js` (step 1).
-9. [ ] **Admin helpers:** M opens the live admin → **Tax & contact** → **Admin helpers**, enters Leigha's Gmail, and saves. This shares the Sheet and the photos folder with Leigha. Leigha then opens the admin link with her own Google account and allows the permissions it asks for.
-   - Emails Leigha sends from the live admin (approvals, messages) wait in a hidden **Outbox** tab and go out from **Melissa's** account at the next 5-minute check. The order shows "Queued" until then.
-   - Only Melissa can start the 5-minute check, which setupSheet does in step 6.
+9. [ ] *(Optional, any time later)* **Admin helpers.** Not needed for go-live, since Leigha signs in with Melissa's account. When someone should use the admin with their **own** Google account (for example, to help set things up):
+   - Signed in as Melissa, go to the live admin → **Tax & contact** → **Admin helpers**, enter their Gmail, and save. This shares the Sheet and the photos folder with them.
+   - They open the admin link with their own Google account and allow the permissions it asks for.
+   - Any emails they send from the admin (approvals, messages) wait in a hidden **Outbox** tab and go out from **Melissa's** account at the next 5-minute check. The order shows "Queued" until then.
+   - Only Melissa's account can start the 5-minute check, which setupSheet does in step 6.
 
 ## 4. Hosting and the domain (L)
 
