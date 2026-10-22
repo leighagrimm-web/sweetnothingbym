@@ -262,6 +262,9 @@
         field('pickupInstructions', 'Pickup instructions (only in the confirmation email)', '<input class="input" id="pickupInstructions" type="text" data-path="pickupInstructions">') +
         field('instagram', 'Instagram link', '<input class="input" id="instagram" type="url" data-path="instagram">') +
         field('instagramHandle', 'Instagram handle', '<input class="input" id="instagramHandle" type="text" data-path="instagramHandle">') +
+        '<div class="field" style="grid-column:1 / -1"><label class="label" for="adminHelpers">Admin helpers (optional)</label>' +
+          '<input class="input" id="adminHelpers" type="text" data-path="adminHelpers" placeholder="e.g. helper@gmail.com, another@gmail.com">' +
+          '<p class="hint">Google emails of people who can also use this admin. Saving shares the Sheet and customer photos with them. Emails they send (approvals, messages) go out from your account within 5 minutes.</p></div>' +
       '</div><p class="hint" style="margin-top:16px">Technical settings (website address, email sender name, test or live) are on the Sheet\'s Settings tab.</p>');
   }
 

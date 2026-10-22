@@ -11,14 +11,13 @@ Keep the site in **maintenance mode** from step 4 until step 8, so nobody can or
 ## 0. Decisions before starting
 
 - [ ] **Which Google account runs the live site?** The live Sheet and script live in this account, and emails are sent from it. The plan so far is `SweetNothingsByM@gmail.com`. (L + M)
-- [ ] **Does Leigha need the live admin?** The admin only lets in the Sheet's owner, so only Melissa could use it. If Leigha should be able to help, C adds an "admin helpers" setting (a list of emails allowed in). (L)
+- [x] **Does Leigha need the live admin?** Yes: done with the **Admin helpers** setting (admin → Tax & contact). See step 3.
 - [ ] **Where to host the live site:** Cloudflare Pages or Netlify, both free. Both publish automatically from the same GitHub repo, and the test site stays on GitHub Pages. Recommendation: **Cloudflare Pages** (fast, free HTTPS, easy domain setup). (L)
 - [ ] **Go-live date**, and a quiet time to do steps 4–8 (about 2–3 hours, plus waiting for the domain). (L + M)
 
 ## 1. Build items still to do (C)
 
 - [ ] **Privacy policy and terms pages.** Intuit requires both links before it gives production QuickBooks keys. C drafts them and M reviews the wording.
-- [ ] **Admin helpers list**, if decided in step 0.
 - [ ] **Point the site at the live script:** fill in `PROD_HOSTS`, `API.prod` and `ADMIN.prod` in `config.js` (after step 3, once the live script's URLs exist).
 - [ ] *(After go-live)* **Portfolio demo:** the admin running on fake data, with no connection to the test or live Sheet, plus a "how it's connected" page.
 
@@ -55,8 +54,11 @@ Everything below is edited in the **test** admin first, so it can be checked on 
 6. [ ] Run **setupSheet** and allow everything Google asks for: Sheets, Gmail sending, Drive, outside services and triggers. It creates the uploads folder and the 5-minute payment check.
 7. [ ] **Deploy → New deployment → Web app**, twice:
    - **Public:** Execute as **Me**, Who has access **Anyone**. Copy the URL: this is `API.prod`.
-   - **Admin:** Execute as **User accessing the web app**, Who has access **Only myself** (or "Anyone with Google account" if there are admin helpers). Copy the URL: this is `ADMIN.prod`, and it also goes in the Settings tab's `adminUrl`.
+   - **Admin:** Execute as **User accessing the web app**, Who has access **Anyone with Google account**. Only the owner and the admin helpers get past the sign-in; everyone else sees "Only the shop owner can do that." Copy the URL: this is `ADMIN.prod`, and it also goes in the Settings tab's `adminUrl`.
 8. [ ] Send both URLs to C to put in `config.js` (step 1).
+9. [ ] **Admin helpers:** M opens the live admin → **Tax & contact** → **Admin helpers**, enters Leigha's Gmail, and saves. This shares the Sheet and the photos folder with Leigha. Leigha then opens the admin link with her own Google account and allows the permissions it asks for.
+   - Emails Leigha sends from the live admin (approvals, messages) wait in a hidden **Outbox** tab and go out from **Melissa's** account at the next 5-minute check. The order shows "Queued" until then.
+   - Only Melissa can start the 5-minute check, which setupSheet does in step 6.
 
 ## 4. Hosting and the domain (L)
 

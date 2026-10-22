@@ -127,6 +127,7 @@ const SETTINGS_SPEC = [
   ['maintenanceTitle', 'Something sweet is in the oven', 'text', 'Heading on the maintenance page.'],
   ['maintenanceMessage', 'We’re mixing up a fresh batch of updates to the site. Check back soon, or follow along on Instagram in the meantime!', 'text', 'Message on the maintenance page.'],
   ['maintenancePassword', '', 'text', 'PRIVATE. Lets you (and anyone you give it to) see and test the site during maintenance.'],
+  ['adminHelpers', '', 'text', 'PRIVATE. Google emails (comma-separated) of people who can use the admin besides the owner. Saving shares the Sheet and photos folder with them; their emails go out from the shop\'s account within 5 minutes.'],
   ['ownerEmail', '', 'text', 'PRIVATE. Where "new order" and "new message" alerts go. Blank = the Google account that runs this.'],
   ['replyToEmail', '', 'text', 'PRIVATE. Where customer replies go. Blank = ownerEmail.'],
   ['senderName', 'Sweet Nothings by M', 'text', 'PRIVATE. Name shown as the email sender.'],
@@ -134,7 +135,7 @@ const SETTINGS_SPEC = [
   ['environment', 'UAT', 'text', 'PRIVATE. UAT or PROD. UAT adds [TEST] to email subjects.'],
   ['adminUrl', '', 'text', 'PRIVATE. Link to the admin page (the admin deployment\'s web app URL). Used in "New order to review" emails.']
 ];
-const PRIVATE_SETTINGS = ['pickupAddress', 'pickupInstructions', 'maintenancePassword', 'ownerEmail', 'replyToEmail', 'senderName', 'siteUrl', 'environment', 'adminUrl'];
+const PRIVATE_SETTINGS = ['pickupAddress', 'pickupInstructions', 'maintenancePassword', 'adminHelpers', 'ownerEmail', 'replyToEmail', 'senderName', 'siteUrl', 'environment', 'adminUrl'];
 
 const STARTER_FLAVORS = [
   ['cc', 'Chocolate Chip', true, false],
@@ -242,7 +243,9 @@ const TABS = {
     text: ['Phone', 'Order'], datetime: ['Received']
   },
   Draft: { headers: ['Key', 'Value', 'Updated'], widths: [100, 600, 150], text: ['Key', 'Value'], datetime: ['Updated'] },
-  Counters: { headers: ['Name', 'Value'], widths: [140, 100] }
+  Counters: { headers: ['Name', 'Value'], widths: [140, 100] },
+  // Emails from admin helpers, waiting for the owner's 5-minute check to send them from the shop's account.
+  Outbox: { headers: ['Queued', 'To', 'Subject', 'Email (data)'], widths: [150, 220, 360, 400], text: ['To', 'Subject', 'Email (data)'], datetime: ['Queued'] }
 };
 
 function setupSheet() {
@@ -290,8 +293,10 @@ function setupSheet() {
 
   // Checks QuickBooks and Square for payments every 5 minutes.
   ensurePaymentTrigger_();
-  // Where customers' photos are saved.
+  // Where customers' photos are saved, shared with any admin helpers.
   uploadFolder_();
+  shareWithHelpers_();
+  ss.getSheetByName('Outbox').hideSheet();
 
   ss.setActiveSheet(ss.getSheetByName('Orders'));
   clearConfigCache_();
@@ -951,12 +956,42 @@ function appendObjects_(sh, objs) {
 // Runs a send and returns a short status for the Sheet ("Sent 10/19 2:14 PM" or "FAILED: ...").
 function sendSafely_(fn) {
   try {
+    mailQueued_ = false;
     fn();
-    return 'Sent ' + Utilities.formatDate(new Date(), tz_(), 'M/d h:mm a');
+    const when = Utilities.formatDate(new Date(), tz_(), 'M/d h:mm a');
+    return mailQueued_ ? 'Queued ' + when + ' (sends from the shop’s email within 5 min)' : 'Sent ' + when;
   } catch (err) {
     console.error('Email failed', err && err.stack || err);
     return 'FAILED: ' + String(err && err.message || err).slice(0, 200);
   }
+}
+
+
+// Every email goes through here. Running as the shop's account it's sent now; from an admin helper it waits in
+// the Outbox tab and the owner's 5-minute check (sendOutbox_) sends it, so customers always hear from the shop.
+let mailQueued_ = false;
+function sendMail_(msg) {
+  if (runningAsOwner_()) { MailApp.sendEmail(msg); return; }
+  appendObject_(SpreadsheetApp.getActive().getSheetByName('Outbox'), {
+    'Queued': new Date(), 'To': msg.to, 'Subject': msg.subject, 'Email (data)': JSON.stringify(msg)
+  });
+  mailQueued_ = true;
+}
+// Called by checkPayments (only when it runs as the owner). Sent emails leave the Outbox; failures stay to retry.
+function sendOutbox_() {
+  if (!runningAsOwner_()) return 0;
+  const sh = SpreadsheetApp.getActive().getSheetByName('Outbox');
+  if (!sh || sh.getLastRow() < 2) return 0;
+  const rows = rowObjects_(sh);
+  let sent = 0;
+  for (let i = rows.length - 1; i >= 0; i--) {   // bottom up, so deleting rows doesn't shift the ones still to do
+    try {
+      MailApp.sendEmail(JSON.parse(rows[i]['Email (data)']));
+      sh.deleteRow(i + 2);
+      sent++;
+    } catch (err) { console.error('Outbox email failed', rows[i].Subject, err); }
+  }
+  return sent;
 }
 
 
@@ -1036,14 +1071,41 @@ function adminPage_() {
 }
 
 // True only for the Google account that owns this Sheet (the email is blank for anonymous visitors).
+// The Sheet's owner (the shop's Google account).
+function ownerEmail_() {
+  const owner = SpreadsheetApp.getActive().getOwner();
+  return String(owner ? owner.getEmail() : Session.getEffectiveUser().getEmail()).toLowerCase();
+}
+// Emails on the Settings tab's adminHelpers list.
+function adminHelpers_() {
+  return String(getConfig_().adminHelpers || '').toLowerCase().split(/[\s,;]+/).filter((e) => /@/.test(e));
+}
+// The admin is for the owner and the people on adminHelpers.
 function isOwner_() {
   const me = String(Session.getActiveUser().getEmail() || '').toLowerCase();
   if (!me) return false;
-  const owner = SpreadsheetApp.getActive().getOwner();
-  const ownerEmail = String(owner ? owner.getEmail() : Session.getEffectiveUser().getEmail()).toLowerCase();
-  return me === ownerEmail;
+  return me === ownerEmail_() || adminHelpers_().indexOf(me) !== -1;
 }
 function requireOwner_() { if (!isOwner_()) throw new Error('Only the shop owner can do that.'); }
+// True when this code runs as the shop's account (the website, the 5-minute check, or the owner in the admin);
+// false for a helper using the admin, whose emails go through the Outbox instead (see sendMail_).
+function runningAsOwner_() { return String(Session.getEffectiveUser().getEmail() || '').toLowerCase() === ownerEmail_(); }
+
+// When the owner saves settings: helpers get edit access to the Sheet and can see customers' photos (the admin
+// needs both, since it runs as whoever is using it). Removing someone from the list doesn't take access away.
+function shareWithHelpers_() {
+  if (!runningAsOwner_()) return;
+  const helpers = adminHelpers_();
+  if (!helpers.length) return;
+  const ss = SpreadsheetApp.getActive();
+  const editors = ss.getEditors().map((u) => u.getEmail().toLowerCase());
+  helpers.filter((e) => editors.indexOf(e) === -1).forEach((e) => { try { ss.addEditor(e); } catch (err) { console.error('Share failed', e, err); } });
+  try {
+    const folder = uploadFolder_();
+    const viewers = folder.getViewers().concat(folder.getEditors()).map((u) => u.getEmail().toLowerCase());
+    helpers.filter((e) => viewers.indexOf(e) === -1).forEach((e) => { try { folder.addViewer(e); } catch (err) { console.error('Folder share failed', e, err); } });
+  } catch (err) { console.error('Folder share failed', err); }
+}
 
 // Everything the admin page shows.
 function adminLoad() {
@@ -1089,6 +1151,7 @@ function adminSaveSettings(c, stamp, force) {
     SpreadsheetApp.flush();
     clearConfigCache_();
     const fresh = buildConfig_(true);
+    shareWithHelpers_();
     return { ok: true, config: fresh, stamp: settingsStamp_(fresh) };
   } finally {
     lock.releaseLock();
@@ -1864,6 +1927,8 @@ function checkPayments() {
         });
     }
     if (summary.classesPaid.length || summary.expired.length || summary.invoicesPaid.length) clearConfigCache_();
+    // Emails an admin helper queued, sent now from the shop's account.
+    try { summary.emailsSent = sendOutbox_(); } catch (e) { summary.errors.push('Outbox: ' + e.message); }
     SCRIPT_PROPS().setProperty('PAYMENTS_LAST_CHECK', JSON.stringify(Object.assign({ at: new Date().toISOString() }, summary)));
     return Object.assign({ ok: true }, summary);
   } finally {
@@ -1902,6 +1967,7 @@ function checkClassPayment_(b) {
 
 // Make sure the 5-minute payment check is scheduled (called from setupSheet).
 function ensurePaymentTrigger_() {
+  if (!runningAsOwner_()) return;   // a helper's trigger would run (and send email) as the helper
   const has = ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'checkPayments');
   if (!has) ScriptApp.newTrigger('checkPayments').timeBased().everyMinutes(5).create();
 }
@@ -1985,7 +2051,7 @@ function sendOrderRequestEmail_(cfg, o) {
     itemsText_(o), '', totalsText_(o, 'Estimated total*'), '',
     'Questions or changes? Just reply to this email and mention your order number.'
   ].filter((l, i, a) => l !== '' || a[i - 1] !== '').join('\n');
-  MailApp.sendEmail({
+  sendMail_({
     to: o.customer.email,
     subject: subjectPrefix_(cfg) + 'Order request received (not yet confirmed) – Sweet Nothings ' + o.number,
     htmlBody: html, body: text, name: cfg.senderName, replyTo: cfg.replyToEmail
@@ -2010,7 +2076,7 @@ function sendOwnerOrderAlert_(cfg, o) {
     o.address ? 'Drop-off to: ' + o.address.street + ', ' + o.address.city + ' ' + o.address.zip : 'Pickup',
     '', itemsText_(o, true), '', totalsText_(o, 'Estimated total'), '', cfg.adminUrl ? 'Review in admin: ' + cfg.adminUrl : 'Orders sheet: ' + SpreadsheetApp.getActive().getUrl()
   ].join('\n');
-  MailApp.sendEmail({
+  sendMail_({
     to: cfg.ownerEmail,
     subject: subjectPrefix_(cfg) + 'New order to review – ' + o.number + ' (' + (o.eventType ? o.eventType + ', ' : '') + prettyDate_(o.dateNeeded) + ')',
     htmlBody: html, body: text, name: cfg.senderName, replyTo: o.customer.email
@@ -2033,7 +2099,7 @@ function sendOwnerMessageAlert_(cfg, m) {
     '</table>' +
     '<div style="background:#FBF7F4;border-radius:12px;padding:14px 16px;font-size:15px;white-space:pre-wrap;margin-bottom:18px">' + esc_(m.message) + '</div>' +
     p_('Just hit Reply to answer ' + esc_(m.name ? m.name.split(' ')[0] : m.email) + '.', 14));
-  MailApp.sendEmail({
+  sendMail_({
     to: cfg.ownerEmail,
     subject: subjectPrefix_(cfg) + 'New message: ' + m.topic + ' – ' + (m.name || m.email),
     htmlBody: html,
@@ -2090,7 +2156,7 @@ function sendConfirmationEmail_(cfg, o) {
     'Subtotal: ' + money_(inv.subtotal), taxLabel + ': ' + money_(tax), isDel ? 'Drop-off: ' + money_(inv.fee) : 'Pickup: Free', inv.credit ? 'Gift card: -' + money_(inv.credit) : '',
     'Amount due: ' + money_(due), '', qb.link ? 'Pay securely here: ' + qb.link : payNote, '', 'Questions or changes? Just reply to this email and mention your order number.'
   ].join('\n');
-  MailApp.sendEmail({
+  sendMail_({
     to: o.customer.email,
     subject: subjectPrefix_(cfg) + 'Order confirmed – please pay your invoice – Sweet Nothings ' + o.number,
     htmlBody: html, body: text, name: cfg.senderName, replyTo: cfg.replyToEmail
@@ -2104,7 +2170,7 @@ function sendDeclineEmail_(cfg, o) {
     '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">Unfortunately I’m not able to take this order. You haven’t been charged anything.</div>' +
     (o.declineNote ? '<div style="font-size:15px;border-left:3px solid ' + C.coral + ';padding:4px 0 4px 14px;margin-bottom:18px"><em>“' + esc_(o.declineNote) + '”</em><br><span style="color:' + C.muted + ';font-size:13px">— M</span></div>' : '') +
     p_('Questions? Just reply to this email and mention your order number.', 14));
-  MailApp.sendEmail({
+  sendMail_({
     to: o.customer.email,
     subject: subjectPrefix_(cfg) + 'About your Sweet Nothings order request ' + o.number,
     htmlBody: html,
@@ -2123,7 +2189,7 @@ function sendClassBookingEmail_(cfg, o) {
       ' saved. ' + classPayLine_(o) + '</div>' +
     classDetails_(o) + totalsBlock_(o, paid ? 'Paid' : 'Total') +
     p_('Questions or need to change your booking? Just reply to this email and mention your order number.', 14));
-  MailApp.sendEmail({
+  sendMail_({
     to: o.customer.email,
     subject: subjectPrefix_(cfg) + 'You’re booked! – Sweet Nothings ' + o.number,
     htmlBody: html,
@@ -2151,7 +2217,7 @@ function sendOwnerClassAlert_(cfg, o, late) {
     classDetails_(o) + totalsBlock_(o, 'Total') +
     (cfg.adminUrl ? button_(cfg.adminUrl, 'Open admin') : '') +
     p_(how + ' Booked automatically; no review needed. Reply to this email to write to the customer.', 13));
-  MailApp.sendEmail({
+  sendMail_({
     to: cfg.ownerEmail,
     subject: subjectPrefix_(cfg) + (late ? 'LATE class payment – ' : 'New class booking – ') + o.number + ' (' + o.items.map((it) => it.qty + ' × ' + it.title).join(', ') + ')',
     htmlBody: html,
@@ -2187,7 +2253,7 @@ function sendOrderMessageEmail_(cfg, o, text) {
     '<p style="margin:0 0 18px;font-size:15px">— M</p>' +
     (o.type === 'Class' ? classDetails_(o) : facts_(o, 'message') + itemsBlock_(o, 'Your order')) + totals +
     p_('Just reply to this email to answer.', 14));
-  MailApp.sendEmail({
+  sendMail_({
     to: o.customer.email,
     subject: subjectPrefix_(cfg) + 'A message about your order ' + o.number + ' – Sweet Nothings',
     htmlBody: html,
