@@ -45,6 +45,12 @@ function doPost(e) {
   try {
     // Spam trap: a hidden "website" field people never see. Bots fill it in; pretend it worked.
     if (body.website) return json_({ ok: true, ignored: true });
+    if (body.action === 'checkBypass') return json_(checkBypass_(body));
+    // Maintenance mode: only people with the password can order or send messages. (A class payment already
+    // under way can still be checked.)
+    if (['submitOrder', 'sendMessage', 'checkCode'].indexOf(body.action) !== -1 && closedForMaintenance_(body)) {
+      return json_({ ok: false, code: 'maintenance', error: 'The site is closed for a little while for updates. Please check back soon!' });
+    }
     if (body.action === 'submitOrder') return json_(submitOrder_(body));
     if (body.action === 'sendMessage') return json_(sendMessage_(body));
     if (body.action === 'checkCode') return json_(checkCode_(body));
@@ -54,6 +60,21 @@ function doPost(e) {
     console.error('doPost failed', body && body.action, err && err.stack || err);
     return json_({ ok: false, error: 'Something went wrong on our end.' });
   }
+}
+
+// True while maintenance mode is on and the request doesn't carry the maintenance password.
+function closedForMaintenance_(body) {
+  const cfg = getConfig_();
+  if (!cfg.maintenanceMode) return false;
+  const pw = String(cfg.maintenancePassword || '').trim();
+  return !pw || String(body.bypass || '').trim() !== pw;
+}
+
+// The maintenance page's "Have a password?" box. Rate-limited so it can't be guessed quickly.
+function checkBypass_(b) {
+  if (rateLimited_('bypass', 'all', 30)) return { ok: false, error: 'Too many tries. Please wait an hour and try again.' };
+  const pw = String(getConfig_().maintenancePassword || '').trim();
+  return pw && String(b.password || '').trim() === pw ? { ok: true } : { ok: false, error: 'That password isn’t right.' };
 }
 
 function json_(x) {
@@ -102,6 +123,10 @@ const SETTINGS_SPEC = [
   ['instagramHandle', '@sweet_nothings_by_m', 'text', 'Instagram name shown on the site.'],
   ['images', '{"custom":"","mini":"","large":""}', 'json', 'Menu photo paths (advanced).'],
   ['classHoldMinutes', 30, 'number', 'Minutes a class spot is held while the customer pays in Square. Unpaid after this, the booking expires and the spot opens up.'],
+  ['maintenanceMode', false, 'bool', 'TRUE shows the "back soon" page to visitors and turns away orders and messages. People with maintenancePassword see the whole site.'],
+  ['maintenanceTitle', 'Something sweet is in the oven', 'text', 'Heading on the maintenance page.'],
+  ['maintenanceMessage', 'We’re mixing up a fresh batch of updates to the site. Check back soon, or follow along on Instagram in the meantime!', 'text', 'Message on the maintenance page.'],
+  ['maintenancePassword', '', 'text', 'PRIVATE. Lets you (and anyone you give it to) see and test the site during maintenance.'],
   ['ownerEmail', '', 'text', 'PRIVATE. Where "new order" and "new message" alerts go. Blank = the Google account that runs this.'],
   ['replyToEmail', '', 'text', 'PRIVATE. Where customer replies go. Blank = ownerEmail.'],
   ['senderName', 'Sweet Nothings by M', 'text', 'PRIVATE. Name shown as the email sender.'],
@@ -109,7 +134,7 @@ const SETTINGS_SPEC = [
   ['environment', 'UAT', 'text', 'PRIVATE. UAT or PROD. UAT adds [TEST] to email subjects.'],
   ['adminUrl', '', 'text', 'PRIVATE. Link to the admin page (the admin deployment\'s web app URL). Used in "New order to review" emails.']
 ];
-const PRIVATE_SETTINGS = ['pickupAddress', 'pickupInstructions','ownerEmail', 'replyToEmail', 'senderName', 'siteUrl', 'environment', 'adminUrl'];
+const PRIVATE_SETTINGS = ['pickupAddress', 'pickupInstructions', 'maintenancePassword', 'ownerEmail', 'replyToEmail', 'senderName', 'siteUrl', 'environment', 'adminUrl'];
 
 const STARTER_FLAVORS = [
   ['cc', 'Chocolate Chip', true, false],

@@ -424,3 +424,22 @@ tr.row-pending td { background: #FFFBF4; }
 .preview-banner { position: sticky; top: 0; z-index: 35; background: #FDF0D5; color: #5C3A00; border-bottom: 1px solid #E8CF9C; font-size: 14px; padding: 10px 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 16px; text-align: center; }
 .preview-banner button { min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #5C3A00; background: transparent; color: #5C3A00; font-weight: 700; cursor: pointer; }
 .qm-panel { max-width: 460px; }
+
+/* Maintenance mode: the "back soon" page replaces the site for visitors (layout.js). */
+html.sn-maint-wait body > * { visibility: hidden; }
+html.sn-maint body > *:not(#maint) { display: none !important; }
+.maint { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 32px 16px; background: var(--ground); }
+.maint-card { width: 100%; max-width: 560px; background: var(--white); border-radius: var(--radius); padding: 40px 28px; text-align: center; box-shadow: 0 10px 40px rgba(31, 42, 68, .08); }
+.maint-logo { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; margin: 0 auto 18px; display: block; }
+.maint-card h1 { margin: 0; font-size: clamp(32px, 7vw, 44px); }
+.maint-card .lead { margin: 14px auto 0; font-size: 17px; color: var(--muted); max-width: 440px; }
+.maint-card .btn { margin-top: 24px; gap: 8px; }
+.maint-card .btn svg { width: 18px; height: 18px; }
+.maint-pw { margin-top: 28px; font-size: 14px; color: var(--muted); }
+.maint-pw summary { cursor: pointer; display: inline-block; }
+.maint-pw form { margin-top: 12px; }
+.maint-pw .input { max-width: 220px; }
+.maint-pw .err { margin-top: 8px; }
+/* Admin: the maintenance mode box (Website pages tab), highlighted while the site is closed. */
+.maint-admin { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 4px 0 8px; background: var(--ground); }
+.maint-admin.on { border-color: var(--coral); background: var(--blush); }

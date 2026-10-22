@@ -207,7 +207,20 @@
   const PAGE_SWITCHES = [['showAbout', 'About'], ['showEvents', 'Special Events'], ['showGallery', 'Gallery'], ['showFaq', 'FAQ']];
   function sectionPages() {
     return card('pages', 'Website pages', 'Headings, text and photos on the Home, About, Special Events and Gallery pages. In longer text, leave a blank line to start a new paragraph.',
-      '<h3 style="font-size:22px;margin:4px 0 6px">Pages in the menu</h3><p class="hint" style="margin:0 0 10px">A hidden page leaves the menu, and visiting it goes to the home page. Hide one while you work on it.</p>' +
+      '<div class="maint-admin">' +
+        '<div class="row-gap" style="gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">' +
+          '<div><h3 style="font-size:22px;margin:0 0 4px" id="maint-label">Maintenance mode</h3>' +
+            '<p class="hint" style="margin:0">Visitors see a “back soon” page instead of the site, and orders and messages are turned away. Anyone with the password sees the whole site and can test it.</p></div>' +
+          '<button type="button" class="switch" role="switch" data-act="toggle-maint" aria-labelledby="maint-label"><span class="track" aria-hidden="true"></span><span id="maint-state"></span></button>' +
+        '</div>' +
+        '<div class="fields" style="margin-top:14px">' +
+          field('maintenancePassword', 'Password to get in', '<input class="input" id="maintenancePassword" type="text" autocomplete="off" data-path="maintenancePassword" placeholder="e.g. sprinkles2026">',
+            'On the “back soon” page, click <strong>Have a password?</strong> and enter this. That browser then sees the site until you click “Lock this browser”.') +
+          field('maintenanceTitle', 'Heading', '<input class="input" id="maintenanceTitle" type="text" data-path="maintenanceTitle">') +
+          '<div class="field" style="grid-column:1 / -1"><label class="label" for="maintenanceMessage">Message</label><textarea class="input" id="maintenanceMessage" rows="2" data-path="maintenanceMessage"></textarea></div>' +
+        '</div>' +
+      '</div>' +
+      '<h3 style="font-size:22px;margin:22px 0 6px">Pages in the menu</h3><p class="hint" style="margin:0 0 10px">A hidden page leaves the menu, and visiting it goes to the home page. Hide one while you work on it.</p>' +
       '<div class="row-gap" style="gap:18px;flex-wrap:wrap">' +
         PAGE_SWITCHES.map(([key, label]) => '<span class="row-gap" style="gap:8px;align-items:center"><strong>' + label + '</strong>' +
           '<button type="button" class="switch" role="switch" data-act="toggle-page" data-key="' + key + '" aria-label="Show ' + label + ' in the menu"><span class="track" aria-hidden="true"></span><span data-page-state="' + key + '"></span></button></span>').join('') +
@@ -284,6 +297,10 @@
       $('[data-act="toggle-page"][data-key="' + key + '"]').setAttribute('aria-checked', String(on));
       $('[data-page-state="' + key + '"]').textContent = on ? 'Showing' : 'Hidden';
     });
+    const maint = cfg.maintenanceMode === true;
+    $('[data-act="toggle-maint"]').setAttribute('aria-checked', String(maint));
+    $('#maint-state').textContent = maint ? 'On: site closed' : 'Off';
+    $('.maint-admin').classList.toggle('on', maint);
   }
   // "Customers can pick up to 4 flavors, or up to 6 once their order reaches 24 cookies (2 dozen)."
   function renderFlavorRule() {
@@ -1262,6 +1279,7 @@
         cfg.flavors.splice(i, 1); renderFlavors(); break;
       case 'del-block': cfg.blockedRanges.splice(i, 1); renderBlocked(); break;
       case 'toggle-page': cfg[b.dataset.key] = cfg[b.dataset.key] === false; fillFields(); break;
+      case 'toggle-maint': cfg.maintenanceMode = !cfg.maintenanceMode; fillFields(); break;
       case 'add-zone': cfg.zones.push({ zip: '', area: '', fee: 5 }); renderZones(); $('#zz-' + (cfg.zones.length - 1)).focus(); break;
       case 'del-zone': cfg.zones.splice(i, 1); renderZones(); break;
       case 'add-faq': cfg.faqs.push({ q: '', a: '' }); renderFaqs(); $('#fq-' + (cfg.faqs.length - 1)).focus(); break;
@@ -1345,6 +1363,12 @@
   function save(force) {
     if (busy) return;
     const c = cleaned();
+    if (cfg.maintenanceMode && !String(cfg.maintenancePassword || '').trim()) {
+      location.hash = 'pages';
+      toast('Maintenance mode needs a password, or no one (including you) could get into the site. Add one on the Website pages tab.', 7000);
+      $('#maintenancePassword').focus();
+      return;
+    }
     const badZip = cfg.zones.find((z) => z.zip && !/^\d{5}$/.test(z.zip));
     if (badZip && !confirm('ZIP "' + badZip.zip + '" isn\'t 5 digits and won\'t be saved. Save anyway?')) return;
     busy = true;

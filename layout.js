@@ -19,7 +19,8 @@
   function render() {
     const cfg = SN.load();
     const preview = SN.isPreview();
-    const sig = JSON.stringify([preview, cfg.instagram, cfg.instagramHandle, cfg.pickupCity, Object.keys(SHOW_KEY).map((k) => shown(cfg, k))]);
+    const testing = cfg.maintenanceMode === true && !!SN.bypassKey();   // maintenance is on, and this browser has the password
+    const sig = JSON.stringify([preview, testing, cfg.instagram, cfg.instagramHandle, cfg.pickupCity, Object.keys(SHOW_KEY).map((k) => shown(cfg, k))]);
     if (sig === drawn) return;
     drawn = sig;
     const count = SN.getBag().reduce((a, it) => a + it.qty, 0);
@@ -28,6 +29,7 @@
       header.innerHTML =
         (preview
           ? '<div class="preview-banner" role="status"><span><strong>Preview mode:</strong> you’re seeing your unsaved changes. Customers can’t see this yet.</span><button type="button" id="exit-preview">Exit preview</button></div>'
+          : testing ? '<div class="preview-banner" role="status"><span><strong>Maintenance mode is on.</strong> Visitors see the “back soon” page; you’re in with the password.</span><button type="button" id="lock-again">Lock this browser</button></div>'
           : SN_ENV.name === 'uat' ? '<div class="proto-banner">Test site: orders and messages here are for testing only.</div>' : '') +
         '<header class="site-header"><div class="wrap">' +
           '<a class="brand" href="index.html"><img src="logo.png" alt="Sweet Nothings by M"><span>Sweet Nothings <em>by M</em></span></a>' +
@@ -45,6 +47,8 @@
 
     const exitBtn = document.getElementById('exit-preview');
     if (exitBtn) exitBtn.addEventListener('click', () => { SN.exitPreview(); location.href = location.pathname; });
+    const lockBtn = document.getElementById('lock-again');
+    if (lockBtn) lockBtn.addEventListener('click', () => { SN.setBypassKey(''); location.reload(); });
 
     const footer = document.getElementById('site-footer');
     if (footer) {
@@ -60,10 +64,52 @@
         '</div></footer>';
     }
   }
+  // Maintenance mode: visitors get the "back soon" page instead of the site (preview mode and people with the
+  // password still see everything). This browser remembers it was on, so a returning visitor doesn't glimpse the
+  // site while settings load. It's a curtain, not a lock: the server is what turns away orders and messages.
+  const closed = (cfg) => cfg.maintenanceMode === true && !SN.isPreview() && !SN.bypassKey();
+  try { if (localStorage.getItem('sn_maint') === '1' && !SN.bypassKey()) document.documentElement.classList.add('sn-maint-wait'); } catch (e) { /* ignore */ }
+  function showMaintenance(cfg) {
+    const box = document.createElement('div');
+    box.id = 'maint';
+    box.className = 'maint';
+    box.innerHTML =
+      '<main class="maint-card">' +
+        '<img class="maint-logo" src="logo.png" alt="Sweet Nothings by M">' +
+        '<p class="eyebrow">Back soon</p>' +
+        '<h1>' + SN.esc(cfg.maintenanceTitle || SN_DEFAULTS.maintenanceTitle) + '</h1>' +
+        SN.paras(cfg.maintenanceMessage || SN_DEFAULTS.maintenanceMessage, ' class="lead"') +
+        (cfg.instagram ? '<a class="btn" href="' + SN.esc(cfg.instagram) + '" target="_blank" rel="noopener">' + SN_ICONS.insta + ' Follow along on Instagram</a>' : '') +
+        '<details class="maint-pw"><summary>Have a password?</summary>' +
+          '<form id="maint-form" novalidate><label class="sr-only" for="maint-pass">Password</label>' +
+            '<div class="row-gap" style="gap:8px;justify-content:center"><input class="input" id="maint-pass" type="password" autocomplete="current-password" placeholder="Password">' +
+            '<button type="submit" class="btn ghost">Enter</button></div>' +
+            '<p class="err" id="maint-err" role="alert" hidden></p></form></details>' +
+      '</main>';
+    document.body.appendChild(box);
+    document.title = (cfg.maintenanceTitle || 'Back soon') + ' · Sweet Nothings by M';
+    document.documentElement.classList.add('sn-maint');
+    document.getElementById('maint-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const pw = document.getElementById('maint-pass').value.trim();
+      const err = document.getElementById('maint-err');
+      if (!pw) return;
+      err.hidden = true;
+      SN.post('checkBypass', { password: pw }).then((r) => {
+        if (!r || !r.ok) throw r;
+        SN.setBypassKey(pw);
+        location.reload();
+      }).catch((r) => { err.textContent = (r && r.error) || 'Couldn’t check that just now. Try again in a minute.'; err.hidden = false; });
+    });
+  }
+
   render();
   SN.ready.then(() => {
-    render();
     const cfg = SN.load();
+    try { localStorage.setItem('sn_maint', cfg.maintenanceMode === true ? '1' : '0'); } catch (e) { /* ignore */ }
+    if (closed(cfg)) { showMaintenance(cfg); document.documentElement.classList.remove('sn-maint-wait'); return; }
+    document.documentElement.classList.remove('sn-maint-wait');
+    render();
     // A hidden page sends visitors to the home page (except while previewing changes).
     if (!shown(cfg, page) && !SN.isPreview()) { location.replace('index.html'); return; }
     // Links to hidden pages elsewhere on the page disappear (with their card, if marked data-page-link).

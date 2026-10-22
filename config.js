@@ -49,6 +49,10 @@ const SN_DEFAULTS = {
   flavorsMaxAt: 24,
   classHoldMinutes: 30,       // a class spot is held this long while the customer pays in Square
   classesPayOnline: true,     // from the server: class checkout goes on to Square
+  // Maintenance mode (admin → Website pages): visitors see a "back soon" page; the password lets you in to test.
+  maintenanceMode: false,
+  maintenanceTitle: 'Something sweet is in the oven',
+  maintenanceMessage: 'We’re mixing up a fresh batch of updates to the site. Check back soon, or follow along on Instagram in the meantime!',
   allergyNote: 'Need allergy-friendly swaps, like gluten-free or dairy-free? Happy to help! Ingredient changes for allergies or dietary needs add an extra cost, which I’ll include in your final price.',
   flavors: [
     { id: 'cc', name: 'Chocolate Chip', on: true, special: false },
@@ -158,7 +162,12 @@ const SN = {
       .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .finally(() => clearTimeout(timer));
   },
-  post(action, data) { return SN.request({ body: Object.assign({ action }, data) }, 45000); },
+  // Every send carries the maintenance password if this browser has one, so testing works while the site is closed.
+  post(action, data) { return SN.request({ body: Object.assign({ action }, data, SN.bypassKey() ? { bypass: SN.bypassKey() } : {}) }, 45000); },
+
+  /* ---------- Maintenance mode bypass ---------- */
+  bypassKey() { try { return localStorage.getItem('sn_bypass') || ''; } catch (e) { return ''; } },
+  setBypassKey(v) { try { if (v) localStorage.setItem('sn_bypass', v); else localStorage.removeItem('sn_bypass'); } catch (e) { /* ignore */ } },
   // Friendly text for a failed send. r is the server's reply ({ ok:false, error | errors }) or a network error.
   sendErrorText(r) {
     if (r && r.code === 'invalid' && r.errors) return 'Please check: ' + r.errors.join(', ') + '.';
