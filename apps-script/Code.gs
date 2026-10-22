@@ -1956,13 +1956,19 @@ function sendConfirmationEmail_(cfg, o) {
     inv.lines.map((l) => '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:15px;padding:6px 0"><tr>' +
       '<td>' + esc_(l.desc) + '<br><span style="color:' + C.muted + ';font-size:13px">' + l.qty + ' × ' + money_(l.unit) + '</span></td>' +
       '<td align="right" style="vertical-align:top">' + money_(l.qty * l.unit) + '</td></tr></table>').join('') + '</div>';
-  const totals = totalsBlock_({ fulfillment: o.fulfillment, subtotal: inv.subtotal, tax: inv.tax, taxRate: o.taxRate, deliveryFee: inv.fee, giftCredit: inv.credit || 0, promoCode: o.promoCode, total: inv.total }, 'Amount due') +
+  // With a QuickBooks invoice, the email shows its amounts: that's what the customer pays. QuickBooks works out
+  // sales tax itself, so its tax is the gap between its total and the untaxed parts (lines, drop-off, gift card).
+  const qb = inv.qb || {};
+  const fromQb = !!(qb.id && isFinite(qb.total));
+  const tax = fromQb ? round2_(qb.total - inv.subtotal - (inv.fee || 0) + (inv.credit || 0)) : inv.tax;
+  const due = fromQb ? qb.total : inv.total;
+  const taxLabel = Math.abs(tax - inv.tax) > 0.009 ? 'Sales tax' : 'Tax (' + o.taxRate + '%)';
+  const totals = totalsBlock_({ fulfillment: o.fulfillment, subtotal: inv.subtotal, tax, taxLabel, deliveryFee: inv.fee, giftCredit: inv.credit || 0, promoCode: o.promoCode, total: due }, 'Amount due') +
     (inv.changed ? p_('Your original estimate was ' + money_(o.total) + '.', 13) : '');
   // The QuickBooks invoice's own Pay page. Without one (QuickBooks not connected, or online payments off), say how it'll come.
-  const qb = inv.qb || {};
   const payNote = qb.link ? '' : qb.id ? 'Your invoice' + (qb.docNumber ? ' #' + qb.docNumber : '') + ' from QuickBooks is in a separate email.' : 'I’ll send your invoice to pay in a separate email.';
   const pay = qb.link
-    ? button_(qb.link, 'Pay ' + money_(qb.total || inv.total) + ' securely') + p_('Card or bank transfer, through QuickBooks' + (qb.docNumber ? ' (invoice #' + qb.docNumber + ')' : '') + '.', 13)
+    ? button_(qb.link, 'Pay ' + money_(due) + ' securely') + p_('Card or bank transfer, through QuickBooks' + (qb.docNumber ? ' (invoice #' + qb.docNumber + ')' : '') + '.', 13)
     : p_(payNote, 14);
   const html = shell_(cfg, 'You’re confirmed' + (first ? ', ' + esc_(first) : '') + '!', o.number,
     '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">' +
@@ -1976,8 +1982,8 @@ function sendConfirmationEmail_(cfg, o) {
     isDel ? 'Drop-off to: ' + o.address.street + ', ' + o.address.city + ' ' + o.address.zip : 'Pickup address: ' + cfg.pickupAddress + (cfg.pickupInstructions ? '\n' + cfg.pickupInstructions : ''),
     'Needed by: ' + prettyDate_(o.dateNeeded), '',
     inv.lines.map((l) => l.desc + ' – ' + l.qty + ' × ' + money_(l.unit) + ' = ' + money_(l.qty * l.unit)).join('\n'), '',
-    'Subtotal: ' + money_(inv.subtotal), 'Tax (' + o.taxRate + '%): ' + money_(inv.tax), isDel ? 'Drop-off: ' + money_(inv.fee) : 'Pickup: Free', inv.credit ? 'Gift card: -' + money_(inv.credit) : '',
-    'Amount due: ' + money_(qb.total || inv.total), '', qb.link ? 'Pay securely here: ' + qb.link : payNote, '', 'Questions or changes? Just reply to this email and mention your order number.'
+    'Subtotal: ' + money_(inv.subtotal), taxLabel + ': ' + money_(tax), isDel ? 'Drop-off: ' + money_(inv.fee) : 'Pickup: Free', inv.credit ? 'Gift card: -' + money_(inv.credit) : '',
+    'Amount due: ' + money_(due), '', qb.link ? 'Pay securely here: ' + qb.link : payNote, '', 'Questions or changes? Just reply to this email and mention your order number.'
   ].join('\n');
   MailApp.sendEmail({
     to: o.customer.email,
@@ -2164,7 +2170,7 @@ function totalsBlock_(o, totalLabel) {
   return '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-top:1px solid ' + C.line + ';padding-top:14px;margin-bottom:10px">' +
     row('Subtotal', money_(o.subtotal)) +
     (o.discount ? row('Promo code ' + esc_(o.promoCode), '−' + money_(o.discount)) : '') +
-    (cookies ? row('Tax (' + o.taxRate + '%)', money_(o.tax)) : '') +
+    (cookies ? row(o.taxLabel || 'Tax (' + o.taxRate + '%)', money_(o.tax)) : '') +
     (cookies ? row(isDel ? 'Drop-off' : 'Pickup', isDel ? money_(o.deliveryFee) : 'Free') : '') +
     (o.giftCredit ? row('Gift card' + (o.promoCode ? ' ' + esc_(o.promoCode) : ''), '−' + money_(o.giftCredit)) : '') +
     '<tr><td style="border-top:1px solid ' + C.line + ';padding-top:10px"><strong>' + totalLabel + '</strong></td>' +
