@@ -512,6 +512,10 @@
     const tile = (label, value, sub) => '<div class="dash-tile"><div class="k">' + label + '</div><div class="v">' + value + '</div>' + (sub || '') + '</div>';
     const bake = bakeList(conf);
     const artRows = (size) => Object.keys(bake.art[size]).sort().map((n) => '<tr><td>' + esc(n) + '</td><td>' + bake.art[size][n] + '</td></tr>').join('');
+    const sum = (obj) => Object.keys(obj).reduce((a, k) => a + obj[k], 0);
+    const bakeTotals = { custom: bake.custom.reduce((a, x) => a + x.it.qty, 0), mini: sum(bake.art.mini), large: sum(bake.art.large) };
+    bakeTotals.all = bakeTotals.custom + bakeTotals.mini + bakeTotals.large;
+    const totalRow = (label, n) => '<tr class="dash-total"><td>' + esc(label) + '</td><td>' + n + '</td></tr>';
     const checks = dataChecks(week, conf);
     const problems = checks.filter((x) => !x.ok).length;
 
@@ -552,10 +556,16 @@
       }).join('') + '</div>' +
       '<div class="dash-cols">' +
         '<div><h3 class="rv-h">Bake list <span class="muted" style="font-size:14px;font-family:var(--sans);font-weight:400">(confirmed orders)</span></h3>' +
-          (bake.custom.length ? '<h4 class="dash-h4">Custom cookies</h4>' + bake.custom.map(({ o, it }) =>
-            '<div class="dash-line"><button type="button" class="link-btn" data-dash-open="' + esc(o.number) + '" style="padding:0">' + esc(o.number) + '</button> · ' + esc(dayLabel(o.dateNeeded)) +
-              ' · <strong>' + it.qty + '</strong> cookies, ' + it.designs + ' design' + (it.designs > 1 ? 's' : '') + (it.desc ? '<div class="hint">“' + esc(it.desc.length > 140 ? it.desc.slice(0, 140) + '…' : it.desc) + '”</div>' : '') + '</div>').join('') : '') +
-          ['mini', 'large'].map((size) => artRows(size) ? '<h4 class="dash-h4">' + (size === 'mini' ? 'Mini' : 'Large') + ' artisan</h4><table class="dash-table"><tbody>' + artRows(size) + '</tbody></table>' : '').join('') +
+          // Every section is a table with counts on the right and its own total, then a total for all cookies.
+          (bake.custom.length ? '<h4 class="dash-h4">Custom cookies</h4><table class="dash-table"><tbody>' + bake.custom.map(({ o, it }) =>
+            '<tr><td><button type="button" class="link-btn" data-dash-open="' + esc(o.number) + '" style="padding:0">' + esc(o.number) + '</button> · ' + esc(dayLabel(o.dateNeeded)) +
+              ' · ' + it.designs + ' design' + (it.designs > 1 ? 's' : '') + (it.desc ? '<div class="hint">“' + esc(it.desc.length > 140 ? it.desc.slice(0, 140) + '…' : it.desc) + '”</div>' : '') + '</td>' +
+              '<td>' + it.qty + '</td></tr>').join('') +
+            totalRow('Total custom', bakeTotals.custom) + '</tbody></table>' : '') +
+          ['mini', 'large'].map((size) => artRows(size)
+            ? '<h4 class="dash-h4">' + (size === 'mini' ? 'Mini' : 'Large') + ' artisan</h4><table class="dash-table"><tbody>' + artRows(size) +
+              totalRow('Total ' + size, bakeTotals[size]) + '</tbody></table>' : '').join('') +
+          (bakeTotals.all ? '<table class="dash-table dash-grand"><tbody>' + totalRow('Total cookies to bake', bakeTotals.all) + '</tbody></table>' : '') +
           (bake.classes.length ? '<h4 class="dash-h4">Classes</h4>' + bake.classes.map((k) => '<div class="dash-line">' + esc(k.title) + ' · ' + esc(dayLabel(k.date)) + ' · <strong>' + k.spots + '</strong> spots</div>').join('') : '') +
           (!conf.length ? '<p class="hint">No confirmed orders this week yet.</p>' : '') +
         '</div>' +

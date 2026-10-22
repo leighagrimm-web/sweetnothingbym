@@ -239,8 +239,13 @@ textarea.input { resize: vertical; }
 .dash-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 28px; }
 .dash-h4 { font-family: var(--sans); font-size: 14px; font-weight: 700; margin: 14px 0 6px; }
 .dash-line { font-size: 14px; padding: 6px 0; border-bottom: 1px solid var(--line); }
-.dash-table td { padding: 6px 0; }
-.dash-table td:last-child { text-align: right; font-weight: 700; }
+.dash-table td { padding: 6px 0; vertical-align: top; border-bottom: 1px solid var(--line); }
+.dash-table td:last-child { text-align: right; font-weight: 700; padding-left: 12px; white-space: nowrap; }
+.dash-table tr.dash-total td { border-bottom: 0; border-top: 2px solid var(--line); font-weight: 700; color: var(--navy); }
+.dash-grand { margin-top: 14px; }
+.dash-grand tr.dash-total td { background: var(--ground); padding: 10px 12px; border-top: 0; font-size: 16px; }
+.dash-grand tr.dash-total td:first-child { border-radius: 10px 0 0 10px; }
+.dash-grand tr.dash-total td:last-child { border-radius: 0 10px 10px 0; }
 .dash-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
 .dash-checks li { display: flex; gap: 10px; align-items: flex-start; }
 .dash-checks li > span:first-child { flex: none; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; }
