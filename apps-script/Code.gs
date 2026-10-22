@@ -2170,7 +2170,7 @@ function sendConfirmationEmail_(cfg, o) {
   const first = (o.customer.name || '').split(' ')[0];
   const isDel = o.fulfillment === 'delivery';
   const note = inv.note
-    ? '<div style="font-size:15px;border-left:3px solid ' + C.coral + ';padding:4px 0 4px 14px;margin-bottom:18px"><em>“' + esc_(inv.note) + '”</em><br><span style="color:' + C.muted + ';font-size:13px">— M</span></div>'
+    ? '<div style="font-size:15px;border-left:3px solid ' + C.coral + ';padding:4px 0 4px 14px;margin-bottom:18px"><em>“' + esc_(inv.note) + '”</em><br><span style="color:' + C.muted + ';font-size:13px">— Sweet Nothings</span></div>'
     : '';
   const pickup = isDel ? '' :
     '<div style="border:1px solid ' + C.line + ';border-radius:12px;padding:14px 18px;font-size:15px;margin-bottom:18px">' +
@@ -2204,7 +2204,7 @@ function sendConfirmationEmail_(cfg, o) {
   const text = [
     'You’re confirmed' + (first ? ', ' + first : '') + '!', 'Order number ' + o.number, '',
     (inv.changed ? 'I’ve reviewed your order and updated the price.' : 'I’ve reviewed your order and it’s all set.') + ' Pay the invoice to lock in your date.',
-    inv.note ? '\n"' + inv.note + '" — M' : '', '',
+    inv.note ? '\n"' + inv.note + '" — Sweet Nothings' : '', '',
     isDel ? 'Drop-off to: ' + o.address.street + ', ' + o.address.city + ' ' + o.address.zip : 'Pickup address: ' + cfg.pickupAddress + (cfg.pickupInstructions ? '\n' + cfg.pickupInstructions : ''),
     'Needed by: ' + prettyDate_(o.dateNeeded), '',
     inv.lines.map((l) => l.desc + ' – ' + l.qty + ' × ' + money_(l.unit) + ' = ' + money_(l.qty * l.unit)).join('\n'), '',
@@ -2223,14 +2223,14 @@ function sendDeclineEmail_(cfg, o) {
   const first = (o.customer.name || '').split(' ')[0];
   const html = shell_(cfg, 'Thank you for thinking of us' + (first ? ', ' + esc_(first) : ''), o.number,
     '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">Unfortunately I’m not able to take this order. You haven’t been charged anything.</div>' +
-    (o.declineNote ? '<div style="font-size:15px;border-left:3px solid ' + C.coral + ';padding:4px 0 4px 14px;margin-bottom:18px"><em>“' + esc_(o.declineNote) + '”</em><br><span style="color:' + C.muted + ';font-size:13px">— M</span></div>' : '') +
+    (o.declineNote ? '<div style="font-size:15px;border-left:3px solid ' + C.coral + ';padding:4px 0 4px 14px;margin-bottom:18px"><em>“' + esc_(o.declineNote) + '”</em><br><span style="color:' + C.muted + ';font-size:13px">— Sweet Nothings</span></div>' : '') +
     p_('Questions? Just reply to this email and mention your order number.', 14));
   sendMail_({
     to: o.customer.email,
     subject: subjectPrefix_(cfg) + 'About your Sweet Nothings order request ' + o.number,
     htmlBody: html,
     body: 'Thank you for thinking of us' + (first ? ', ' + first : '') + '.\n\nUnfortunately I’m not able to take order ' + o.number + '. You haven’t been charged anything.' +
-      (o.declineNote ? '\n\n"' + o.declineNote + '" — M' : '') + '\n\nQuestions? Just reply to this email.',
+      (o.declineNote ? '\n\n"' + o.declineNote + '" — Sweet Nothings' : '') + '\n\nQuestions? Just reply to this email.',
     name: cfg.senderName, replyTo: cfg.replyToEmail
   });
 }
@@ -2305,14 +2305,14 @@ function sendOrderMessageEmail_(cfg, o, text) {
   const html = shell_(cfg, 'A message about your order', o.number,
     (first ? p_('Hi ' + esc_(first) + ',', 15) : '') +
     '<div style="font-size:15px;white-space:pre-wrap;margin-bottom:18px;color:' + C.navy + '">' + esc_(text) + '</div>' +
-    '<p style="margin:0 0 18px;font-size:15px">— M</p>' +
+    '<p style="margin:0 0 18px;font-size:15px">— Sweet Nothings</p>' +
     (o.type === 'Class' ? classDetails_(o) : facts_(o, 'message') + itemsBlock_(o, 'Your order')) + totals +
     p_('Just reply to this email to answer.', 14));
   sendMail_({
     to: o.customer.email,
     subject: subjectPrefix_(cfg) + 'A message about your order ' + o.number + ' – Sweet Nothings',
     htmlBody: html,
-    body: (first ? 'Hi ' + first + ',\n\n' : '') + text + '\n\n— M\n\nYour order ' + o.number + ':\n' +
+    body: (first ? 'Hi ' + first + ',\n\n' : '') + text + '\n\n— Sweet Nothings\n\nYour order ' + o.number + ':\n' +
       (o.type === 'Class' ? classText_(o) : 'Needed by: ' + prettyDate_(o.dateNeeded) + '\n' + itemsText_(o)) + '\n\nJust reply to this email to answer.',
     name: cfg.senderName, replyTo: cfg.replyToEmail
   });

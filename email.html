@@ -9,13 +9,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261026b">
+<link rel="stylesheet" href="styles.css?v=20261026c">
 </head>
 <body>
 <div class="proto-banner" id="banner">Email preview. <a href="index.html">Back to the site</a></div>
 <div class="email-wrap" id="email"></div>
 
-<script src="config.js?v=20261026b"></script>
+<script src="config.js?v=20261026c"></script>
 <script>
 SN.ready.then(function () {
   const cfg = SN.load();
@@ -70,7 +70,7 @@ SN.ready.then(function () {
     intro = '<div style="background:var(--blush);border-radius:12px;padding:16px 18px;font-size:15px">' +
       (inv.changed ? 'I\u2019ve reviewed your order and updated the price. ' : 'I\u2019ve reviewed your order and it\u2019s all set. ') +
       'Pay the invoice below to lock in your date.</div>' +
-      (inv.note ? '<div style="font-size:15px;border-left:3px solid var(--coral);padding:4px 0 4px 14px"><em>\u201c' + esc(inv.note) + '\u201d</em><br><span class="muted" style="font-size:13px">\u2014 M</span></div>' : '') +
+      (inv.note ? '<div style="font-size:15px;border-left:3px solid var(--coral);padding:4px 0 4px 14px"><em>\u201c' + esc(inv.note) + '\u201d</em><br><span class="muted" style="font-size:13px">— Sweet Nothings</span></div>' : '') +
       // Pickup orders: the address is only shared here, in the confirmation (Settings: pickupAddress, pickupInstructions).
       (isDel ? '' : '<div style="border:1px solid var(--line);border-radius:12px;padding:14px 18px;font-size:15px">' +
         '<div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em">Pickup address</div>' +
@@ -87,7 +87,7 @@ SN.ready.then(function () {
     subject = 'About your Sweet Nothings order request ' + o.number;
     title = 'Thank you for thinking of us' + (first ? ', ' + esc(first) : '');
     intro = '<div style="background:var(--blush);border-radius:12px;padding:16px 18px;font-size:15px">Unfortunately I\u2019m not able to take this order. You haven\u2019t been charged anything.</div>' +
-      (o.declineNote ? '<div style="font-size:15px;border-left:3px solid var(--coral);padding:4px 0 4px 14px"><em>\u201c' + esc(o.declineNote) + '\u201d</em><br><span class="muted" style="font-size:13px">\u2014 M</span></div>' : '');
+      (o.declineNote ? '<div style="font-size:15px;border-left:3px solid var(--coral);padding:4px 0 4px 14px"><em>\u201c' + esc(o.declineNote) + '\u201d</em><br><span class="muted" style="font-size:13px">— Sweet Nothings</span></div>' : '');
   } else {
     subject = 'Order request received (not yet confirmed) \u2013 Sweet Nothings ' + o.number;
     title = 'We got your order request' + (first ? ', ' + esc(first) : '') + '!';
@@ -116,9 +116,9 @@ SN.ready.then(function () {
   }
 
   const banners = {
-    request: 'Preview: email #1, sent automatically when the customer sends their request. M gets a matching \u201cNew order to review\u201d email.',
-    invoice: 'Preview: email #2, the confirmation, sent when M approves. In the real site QuickBooks sends the invoice with a Pay button.',
-    declined: 'Preview: email the customer gets if M declines the request.'
+    request: 'Preview: email #1, sent automatically when the customer sends their request. Sweet Nothings gets a matching \u201cNew order to review\u201d email.',
+    invoice: 'Preview: email #2, the confirmation, sent when Sweet Nothings approves. In the real site QuickBooks sends the invoice with a Pay button.',
+    declined: 'Preview: email the customer gets if Sweet Nothings declines the request.'
   };
   document.getElementById('banner').innerHTML = esc(banners[type] || banners.request) + (sample ? ' <em>(sample order)</em>' : '') + ' <a href="index.html">Back to the site</a>';
 

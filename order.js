@@ -178,7 +178,7 @@ SN.ready.then(function () {
       '<div class="panel-body"><div class="stack" style="gap:22px">' +
         '<div class="field"><span class="label" id="designs-label">How many different designs?</span>' +
           '<div class="row-gap" role="group" aria-labelledby="designs-label">' + pills + '</div>' +
-          '<p class="hint">Helps M plan and price your set.</p></div>' +
+          '<p class="hint">Helps Sweet Nothings plan and price your set.</p></div>' +
         '<div class="field"><span class="label" id="qty-label">Quantity</span>' +
           '<div class="qty" role="group" aria-labelledby="qty-label">' +
             '<button type="button" class="step" data-act="qty-dec" aria-label="One fewer cookie">' + SN_ICONS.minus + '</button>' +
@@ -186,7 +186,7 @@ SN.ready.then(function () {
             '<button type="button" class="step" data-act="qty-inc" aria-label="One more cookie">' + SN_ICONS.plus + '</button>' +
             '<span class="muted" style="font-size:14px">× <span id="d-each"></span> each (starting price)</span>' +
           '</div><p class="hint">Minimum ' + cfg.minQty + '. Pick a number or use the + and − buttons.</p></div>' +
-        '<div class="note-box">' + esc(cfg.customNote || '') + ' M will confirm your final price before you pay.' +
+        '<div class="note-box">' + esc(cfg.customNote || '') + ' Sweet Nothings will confirm your final price before you pay.' +
           (cfg.allergyNote ? '<br><span style="display:block;margin-top:8px">* ' + esc(cfg.allergyNote) + '</span>' : '') + '</div>' +
         '<div class="field"><label class="label" for="d-desc">Describe your cookies</label>' +
           '<textarea class="input" id="d-desc" rows="5" data-draft="desc" placeholder="Theme, colors, names or wording, and how many of each design…"></textarea></div>' +
@@ -285,7 +285,7 @@ SN.ready.then(function () {
     add.setAttribute('aria-disabled', String(!!st.err));
   }
 
-  // A bag can hold cookies (sent to M for review) and classes (booked right away).
+  // A bag can hold cookies (sent to Sweet Nothings for review) and classes (booked right away).
   const hasCookies = () => bag.some((it) => it.kind !== 'class');
   const hasClasses = () => bag.some((it) => it.kind === 'class');
   const round2 = (n) => Math.round(n * 100) / 100;
@@ -371,12 +371,12 @@ SN.ready.then(function () {
           '</div>' +
         '</div>';
     const notes = [];
-    if (hasCookies()) notes.push('No payment for cookies today. M will review your request, confirm the final price, and email you an invoice to pay.');
+    if (hasCookies()) notes.push('No payment for cookies today. Sweet Nothings will review your request, confirm the final price, and email you an invoice to pay.');
     if (hasClasses()) {
       notes.push(cfg.classesPayOnline !== false
         ? 'Next you’ll pay for your class securely through Square. Your spot is held for ' +
           (Number(cfg.classHoldMinutes) || 30) + ' minutes while you pay, and your confirmation email comes as soon as payment goes through.'
-        : 'Classes are booked as soon as you send this. M will be in touch about payment.');
+        : 'Classes are booked as soon as you send this. Sweet Nothings will be in touch about payment.');
     }
     return fullHead('Checkout', true) +
       '<div class="panel-body"><div class="checkout-col">' +
@@ -593,7 +593,7 @@ SN.ready.then(function () {
         '<div class="stack" style="margin-top:16px;align-items:center"><a class="btn" href="' + esc(classOrder.payUrl) + '">Pay ' + money(classOrder.total) + ' for your class</a></div>'
       : '<h3>' + (cookieOrder ? 'Your class is booked!' : 'You’re booked!') + '</h3>' +
         '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(classOrder.number) + '</strong></p>' +
-        '<p class="muted" style="margin:12px 0 0">Your spot is saved. We sent the details to ' + esc(email) + '.' + (classOrder.total > 0 ? ' M will be in touch about payment.' : '') + '</p>' +
+        '<p class="muted" style="margin:12px 0 0">Your spot is saved. We sent the details to ' + esc(email) + '.' + (classOrder.total > 0 ? ' Sweet Nothings will be in touch about payment.' : '') + '</p>' +
         '<p style="margin:16px 0 0;font-family:var(--serif);font-size:26px;font-weight:600">Total ' + money(classOrder.total) + '</p>';
     return fullHead(cookieOrder ? 'Request sent' : toPay ? 'Almost booked' : 'You’re booked', false) +
       '<div class="panel-body"><div class="checkout-col done">' +
@@ -601,7 +601,7 @@ SN.ready.then(function () {
         classHtml +
         (cookieOrder ? '<h3' + (classOrder ? ' style="margin-top:28px"' : '') + '>Thanks, we got your cookie request!</h3>' +
           '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(cookieOrder.number) + '</strong></p>' +
-          '<p class="muted" style="margin:12px 0 0"><strong>This is not a final order yet.</strong> We sent a copy of your request to ' + esc(email) + '. M will review it and send a second email with your confirmation, final price and invoice. Your date is reserved once the invoice is paid.</p>' +
+          '<p class="muted" style="margin:12px 0 0"><strong>This is not a final order yet.</strong> We sent a copy of your request to ' + esc(email) + '. Sweet Nothings will review it and send a second email with your confirmation, final price and invoice. Your date is reserved once the invoice is paid.</p>' +
           '<p style="margin:20px 0 0;font-family:var(--serif);font-size:30px;font-weight:600">Estimated total ' + money(cookieOrder.total) + '</p>' : '') +
         '<div class="stack" style="margin-top:24px;align-items:center">' +
           (SN_ENV.name === 'uat' && cookieOrder ? '<a class="btn ghost" href="email.html?o=' + encodeURIComponent(cookieOrder.number) + '" target="_blank" rel="noopener">Preview the request email</a>' : '') +
