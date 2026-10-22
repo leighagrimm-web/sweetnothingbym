@@ -353,7 +353,7 @@
   // Statuses Melissa can pick from the list: cookie orders after approval; class bookings any time.
   // "Awaiting payment" (paying in Square) and "Expired" (didn't pay in time) are set automatically, so they're only
   // in the list while a booking is in them. Picking Booked or Paid from there confirms it and sends the emails.
-  const AFTER_INVOICE = ['Invoice sent', 'Paid', 'Baking', 'Ready', 'Completed'];
+  const AFTER_INVOICE = ['Invoice sent', 'Paid', 'Baking', 'Ready', 'Completed', 'Cancelled'];
   const CLASS_STATUSES = ['Booked', 'Paid', 'Completed', 'Cancelled'];
   const isClass = (o) => o.type === 'Class';
   const pickable = (o) => (isClass(o) ? (CLASS_STATUSES.indexOf(o.status) === -1 ? [o.status] : []).concat(CLASS_STATUSES) : AFTER_INVOICE.indexOf(o.status) !== -1 ? AFTER_INVOICE : null);
@@ -404,18 +404,32 @@
     if (!sel) return;
     const o = orders.find((x) => x.number === sel.dataset.order);
     const prev = o.status;
+    if (prev === 'Cancelled' && !isClass(o)) { sel.value = prev; toast('A cancelled cookie order can’t be reopened (its invoice and gift card were undone). Ask the customer to order again.', 6000); return; }
     if (sel.value === 'Cancelled') {
-      const lines = ['Cancel ' + o.number + '?', '', '• Its class spots open up again on the website.'];
-      if (prev === 'Awaiting payment') lines.push('• Its Square payment link is closed, so it can’t be paid for later.');
-      if (o.giftCredit > 0) lines.push('• The ' + money(o.giftCredit) + ' gift card amount goes back on ' + o.promoCode + '.');
-      if (prev === 'Paid') lines.push('• If they paid by card, refund it in Square (Transactions → the payment → Refund). The website can’t do that part.');
+      const inv = o.invoice || {};
+      const gift = isClass(o) ? o.giftCredit : inv.credit;
+      const lines = ['Cancel ' + o.number + '?', ''];
+      if (isClass(o)) {
+        lines.push('• Its class spots open up again on the website.');
+        if (prev === 'Awaiting payment') lines.push('• Its Square payment link is closed, so it can’t be paid for later.');
+      } else {
+        lines.push('• Its cookies stop counting toward that week’s limit.');
+        if (inv.qb && inv.qb.id) lines.push('• If QuickBooks invoice #' + inv.qb.docNumber + ' is unpaid, it’s voided so it can’t be paid.');
+      }
+      if (gift > 0) lines.push('• The ' + money(gift) + ' gift card amount goes back on ' + o.promoCode + '.');
+      if (prev !== 'Awaiting payment' && prev !== 'Invoice sent' && prev !== 'Booked') {
+        lines.push(isClass(o) ? '• If they paid by card, refund it in Square (Transactions → the payment → Refund). The website can’t do that part.'
+          : '• If they paid, refund it in QuickBooks (the invoice → Refund). The website can’t do that part.');
+      }
+      if (!isClass(o)) lines.push('', 'This can’t be undone.');
       lines.push('', 'Let the customer know: Review → Message the customer.');
       if (!confirm(lines.join('\n'))) { sel.value = prev; return; }
     }
     o.status = sel.value;
     server('adminSetStatus', o.number, sel.value).then((r) => {
       if (!r.ok) { o.status = prev; renderOrders(); toast(r.error); return; }
-      toast(o.number + ' marked ' + o.status);
+      if (r.order) Object.assign(o, r.order);
+      toast(o.number + ' marked ' + o.status + (r.note ? '. ' + r.note : ''), r.note ? 9000 : 3600);
       if (r.weekCounts) { weekCounts = r.weekCounts; renderBusyDays(); }
       renderDashboard();
       renderOrders();
@@ -797,7 +811,7 @@
     const qb = inv.qb;
     if (qb) {
       return '<h3 class="rv-h">QuickBooks</h3>' +
-        '<p class="hint">Invoice <strong>#' + esc(qb.docNumber || qb.id) + '</strong>: ' + money(qb.total) + (qb.balance > 0 ? ', ' + money(qb.balance) + ' still due' : ', paid in full') + '.' +
+        '<p class="hint">Invoice <strong>#' + esc(qb.docNumber || qb.id) + '</strong>: ' + money(qb.total) + (qb.voided ? ', voided when the order was cancelled' : qb.balance > 0 ? ', ' + money(qb.balance) + ' still due' : ', paid in full') + '.' +
           (qb.env === 'sandbox' ? ' (Sandbox: test money.)' : '') + ' <a href="' + esc(qb.url) + '" target="_blank" rel="noopener">Open in QuickBooks</a>' +
           (qb.link ? ' · <a href="' + esc(qb.link) + '" target="_blank" rel="noopener">Customer pay page</a>' : '') + '</p>' +
         (inv.qbMismatch ? '<p class="err">QuickBooks worked out ' + money(qb.total) + ' but the site said ' + money(inv.total) + '. Check the sales tax settings in QuickBooks; the customer pays the QuickBooks amount.</p>' : '') +

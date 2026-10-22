@@ -1433,8 +1433,21 @@ function adminDecline(number, note) {
 function adminSetStatus(number, status) {
   requireOwner_();
   const o = loadOrder_(number);
-  const allowed = o.type === 'Class' ? CLASS_STATUSES : COUNTED_STATUSES;
+  const allowed = o.type === 'Class' ? CLASS_STATUSES : COUNTED_STATUSES.concat(['Cancelled']);
   if (allowed.indexOf(status) === -1) return { ok: false, error: 'Unknown status.' };
+  let note = '';
+  if (o.type !== 'Class') {
+    if (!o.invoice) return { ok: false, error: number + ' hasn’t been approved yet. Use Review → Decline instead.' };
+    if (o.status === 'Cancelled') return { ok: false, error: number + ' was cancelled, and its invoice and gift card were undone, so it can’t be reopened. Ask the customer to order again.' };
+    // Cancelling an approved cookie order: the gift card amount goes back on the card, and an unpaid QuickBooks
+    // invoice is voided so it can't be paid by mistake. Anything already paid is refunded by hand in QuickBooks.
+    if (status === 'Cancelled') {
+      if (o.invoice.credit > 0 && o.promoCode) refundGiftCard_(o.promoCode, o.invoice.credit);
+      note = qbVoidForCancel_(o);
+      o.invoice.cancelled = { at: new Date().toISOString(), note };
+      saveInvoice_(o);
+    }
+  }
   if (o.type === 'Class' && ['Awaiting payment', 'Expired'].indexOf(o.status) !== -1 && ['Booked', 'Paid'].indexOf(status) !== -1) {
     confirmClass_(o, status);
     return { ok: true, weekCounts: weekCountsNow_() };
@@ -1454,7 +1467,26 @@ function adminSetStatus(number, status) {
   setCell_(sh, row, 'Status', status);
   setCell_(sh, row, 'Updated', new Date());
   clearConfigCache_();
-  return { ok: true, weekCounts: weekCountsNow_() };
+  return { ok: true, weekCounts: weekCountsNow_(), note, order: note ? loadOrder_(number) : undefined };
+}
+
+// A cancelled cookie order's QuickBooks invoice: voided if nothing's been paid on it. Returns what happened, for admin.
+function qbVoidForCancel_(o) {
+  const qb = o.invoice.qb;
+  if (!qb || !qb.id) return '';
+  if (!qbReady_()) return 'QuickBooks isn’t connected, so void invoice #' + qb.docNumber + ' in QuickBooks yourself.';
+  try {
+    const cur = qbFetch_('get', '/invoice/' + qb.id).Invoice;
+    if (Number(cur.Balance) < Number(cur.TotalAmt)) {
+      return 'Invoice #' + qb.docNumber + ' has a payment on it, so it wasn’t voided. Refund the payment in QuickBooks.';
+    }
+    qbFetch_('post', '/invoice?operation=void', { Id: cur.Id, SyncToken: cur.SyncToken, sparse: true });
+    qb.balance = 0;
+    qb.voided = new Date().toISOString();
+    return 'QuickBooks invoice #' + qb.docNumber + ' was voided, so it can’t be paid.';
+  } catch (err) {
+    return 'Couldn’t void invoice #' + qb.docNumber + ' (' + err.message + '). Void it in QuickBooks yourself.';
+  }
 }
 
 // "Message customer" from Review: emails the customer with an order summary and keeps a copy on the order.
