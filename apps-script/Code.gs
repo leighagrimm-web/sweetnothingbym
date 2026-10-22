@@ -1490,13 +1490,15 @@ const SCRIPT_PROPS = () => PropertiesService.getScriptProperties();
 
 /* ----- QuickBooks ----- */
 
-function qbEnv_() { return SCRIPT_PROPS().getProperty('QBO_ENV') === 'production' ? 'production' : 'sandbox'; }
-function qbKeysSet_() { const p = SCRIPT_PROPS(); return !!(p.getProperty('QBO_CLIENT_ID') && p.getProperty('QBO_CLIENT_SECRET')); }
+// A Script Property with any stray spaces, line breaks or quotes from copy-and-paste removed.
+function prop_(key) { return String(SCRIPT_PROPS().getProperty(key) || '').replace(/[\s"']/g, ''); }
+function qbEnv_() { return prop_('QBO_ENV').toLowerCase() === 'production' ? 'production' : 'sandbox'; }
+function qbKeysSet_() { return !!(prop_('QBO_CLIENT_ID') && prop_('QBO_CLIENT_SECRET')); }
 function qbReady_() { try { return qbKeysSet_() && !!SCRIPT_PROPS().getProperty('QBO_REALM_ID') && qbService_().hasAccess(); } catch (e) { return false; } }
 
 function qbService_() {
   const p = SCRIPT_PROPS();
-  const id = p.getProperty('QBO_CLIENT_ID'), secret = p.getProperty('QBO_CLIENT_SECRET');
+  const id = prop_('QBO_CLIENT_ID'), secret = prop_('QBO_CLIENT_SECRET');
   return OAuth2.createService('QuickBooks-' + qbEnv_())
     .setAuthorizationBaseUrl('https://appcenter.intuit.com/connect/oauth2')
     .setTokenUrl('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer')
@@ -1506,7 +1508,9 @@ function qbService_() {
     .setCallbackFunction('qbAuthCallback')
     .setPropertyStore(p)
     .setCache(CacheService.getScriptCache())
-    .setTokenHeaders({ Authorization: 'Basic ' + Utilities.base64Encode(id + ':' + secret), Accept: 'application/json' });
+    .setTokenHeaders({ Authorization: 'Basic ' + Utilities.base64Encode(id + ':' + secret), Accept: 'application/json' })
+    // Intuit wants the keys only in the Basic header above, not repeated in the form body.
+    .setTokenPayloadHandler((payload) => { delete payload.client_id; delete payload.client_secret; return payload; });
 }
 
 // Intuit sends the owner back here after they approve the connection.
@@ -1626,14 +1630,14 @@ function qbInvoiceForOrder_(cfg, o) {
 
 /* ----- Square ----- */
 
-function squareEnv_() { return SCRIPT_PROPS().getProperty('SQUARE_ENV') === 'production' ? 'production' : 'sandbox'; }
-function squareReady_() { const p = SCRIPT_PROPS(); return !!(p.getProperty('SQUARE_ACCESS_TOKEN') && p.getProperty('SQUARE_LOCATION_ID')); }
+function squareEnv_() { return prop_('SQUARE_ENV').toLowerCase() === 'production' ? 'production' : 'sandbox'; }
+function squareReady_() { return !!(prop_('SQUARE_ACCESS_TOKEN') && prop_('SQUARE_LOCATION_ID')); }
 
 function squareFetch_(method, path, body) {
   const base = squareEnv_() === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
   const opts = {
     method, muteHttpExceptions: true, contentType: 'application/json',
-    headers: { Authorization: 'Bearer ' + SCRIPT_PROPS().getProperty('SQUARE_ACCESS_TOKEN'), 'Square-Version': '2024-10-17' }
+    headers: { Authorization: 'Bearer ' + prop_('SQUARE_ACCESS_TOKEN'), 'Square-Version': '2024-10-17' }
   };
   if (body !== undefined) opts.payload = JSON.stringify(body);
   const res = UrlFetchApp.fetch(base + path, opts);
@@ -1652,7 +1656,7 @@ function squarePaymentLink_(cfg, o) {
   const data = squareFetch_('post', '/v2/online-checkout/payment-links', {
     idempotency_key: o.number + '-' + Utilities.getUuid().slice(0, 8),
     order: {
-      location_id: SCRIPT_PROPS().getProperty('SQUARE_LOCATION_ID'),
+      location_id: prop_('SQUARE_LOCATION_ID'),
       reference_id: o.number,
       line_items: o.items.map((it) => ({ name: ('Class: ' + it.title).slice(0, 500), note: it.summary || undefined, quantity: String(it.qty), base_price_money: { amount: cents(it.unit), currency: 'USD' } })),
       discounts: discounts.length ? discounts : undefined
@@ -1792,7 +1796,10 @@ function adminPayments() {
   requireOwner_();
   const p = SCRIPT_PROPS();
   const out = {
-    qb: { keys: qbKeysSet_(), env: qbEnv_(), connected: false, company: '', items: null, error: '' },
+    // Enough of the keys to compare against Intuit's page without showing them.
+    qb: { keys: qbKeysSet_(), env: qbEnv_(), connected: false, company: '', items: null, error: '',
+      idHint: prop_('QBO_CLIENT_ID') ? prop_('QBO_CLIENT_ID').slice(0, 4) + '…' + prop_('QBO_CLIENT_ID').slice(-4) + ' (' + prop_('QBO_CLIENT_ID').length + ' characters)' : '',
+      secretLength: prop_('QBO_CLIENT_SECRET').length },
     square: { ready: squareReady_(), env: squareEnv_(), location: '', error: '' },
     lastCheck: JSON.parse(p.getProperty('PAYMENTS_LAST_CHECK') || 'null'),
     trigger: ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'checkPayments'),
@@ -1809,7 +1816,7 @@ function adminPayments() {
     } catch (e) { out.qb.error = e.message; }
   }
   if (out.square.ready) {
-    try { out.square.location = (squareFetch_('get', '/v2/locations/' + p.getProperty('SQUARE_LOCATION_ID')).location || {}).name || ''; }
+    try { out.square.location = (squareFetch_('get', '/v2/locations/' + prop_('SQUARE_LOCATION_ID')).location || {}).name || ''; }
     catch (e) { out.square.error = e.message; }
   }
   return out;

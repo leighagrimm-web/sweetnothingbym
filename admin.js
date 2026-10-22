@@ -974,6 +974,7 @@
           '<button type="button" class="btn ghost small" data-pay="disconnect">Disconnect</button></div>'
         : '<p class="muted">' + (qb.error ? 'Not connected (' + esc(qb.error) + ').' : 'Not connected yet.') + '</p>' +
           '<div class="row-gap" style="gap:8px;margin-top:10px"><button type="button" class="btn small" data-pay="connect">Connect QuickBooks</button></div>' +
+          (qb.idHint ? '<p class="hint">Client ID in use: <code>' + esc(qb.idHint) + '</code>, secret ' + qb.secretLength + ' characters. These should match the ' + (qb.env === 'production' ? 'Production' : 'Development') + ' keys on the Intuit app’s Keys &amp; credentials page.</p>' : '') +
           '<p class="hint">Opens Intuit’s sign-in in a new tab. Pick the company, approve, then come back and click Refresh. If Intuit says the redirect URI is wrong, add this one in the Intuit app’s Keys &amp; credentials: <code style="word-break:break-all">' + esc(p.callbackUrl) + '</code></p>';
     const sq = p.square;
     const sqBody = !sq.ready
