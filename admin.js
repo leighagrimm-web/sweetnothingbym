@@ -107,7 +107,7 @@
         '<div><h2 id="orders-h">Orders</h2><p class="sub">Cookie requests come in as <strong>Pending review</strong>. Click <strong>Review</strong> to approve as-is or with changes, decline, message the customer, or change the date. Class bookings pay in Square at checkout: <strong>Awaiting payment</strong> while they pay, then <strong>Paid</strong> (or <strong>Expired</strong> if they don’t).</p></div>' +
         '<button type="button" class="btn ghost small" id="orders-toggle"></button>' +
       '</div>' +
-      '<div class="table-wrap"><table class="orders-table"><thead><tr><th>Order</th><th>Customer</th><th>Needed by</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>' +
+      '<div class="table-wrap"><table class="orders-table"><thead><tr><th>Order &amp; order date</th><th>Customer</th><th>Date needed</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>' +
       '<tbody id="orders-body"></tbody></table></div></section>';
   }
   function sectionMessages() {
@@ -365,9 +365,10 @@
             opts.map((s) => '<option' + (s === o.status ? ' selected' : '') + '>' + s + '</option>').join('') + '</select>'
         : badge(o.status);
       const action = '<button type="button" class="btn ' + (o.status === 'Pending review' ? '' : 'ghost ') + 'small" data-rv="open" data-n="' + esc(o.number) + '">' + (o.status === 'Pending review' ? 'Review' : 'View') + '</button>';
-      const received = o.createdAt ? new Date(o.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+      const at = o.createdAt ? new Date(o.createdAt) : null;
+      const received = at ? { date: at.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), time: at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) } : null;
       return '<tr' + (o.status === 'Pending review' ? ' class="row-pending"' : '') + '>' +
-        '<td><div class="order-cell">' + action + '<div><strong>' + esc(o.number) + '</strong>' + small(esc(received)) +
+        '<td><div class="order-cell">' + action + '<div><strong>' + esc(o.number) + '</strong>' + (received ? '<br><span style="font-size:13px;white-space:nowrap">Ordered ' + esc(received.date) + '</span>' + small(esc(received.time)) : '') +
           (o.allergies ? '<br><span class="status-badge" style="background:#FBEDEA;color:#B23A2B;margin-top:4px">Allergy</span>' : '') + '</div></div></td>' +
         '<td class="wrap-any">' + esc(o.customer.name) + small(esc(o.customer.email)) + small(esc(isClass(o) ? 'Class' : o.eventType || 'Occasion not given')) + '</td>' +
         '<td class="nowrap">' + esc(o.dateNeeded ? SN.prettyDate(o.dateNeeded, { weekday: 'short', month: 'short', day: 'numeric' }) : '—') + small(ful) + '</td>' +

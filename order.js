@@ -544,8 +544,20 @@ SN.ready.then(function () {
   }
 
   // "Apply" checks the code with the server; "Remove" takes it off.
+  // Applying or removing a code redraws the checkout; keep the page where it was and focus on the code box.
+  function rerenderAtCode() {
+    const scrollers = [panel].concat($$('.panel-body', panel));
+    const tops = scrollers.map((el) => el.scrollTop);
+    const winTop = window.scrollY;
+    renderPanel();
+    [panel].concat($$('.panel-body', panel)).forEach((el, i) => { if (tops[i] != null) el.scrollTop = tops[i]; });
+    window.scrollTo(0, winTop);
+    const f = $('[data-act="apply-code"]', panel);
+    if (f) f.focus({ preventScroll: true });
+  }
+
   function applyCode() {
-    if (appliedCode) { appliedCode = null; checkout.code = ''; renderPanel(); return; }
+    if (appliedCode) { appliedCode = null; checkout.code = ''; rerenderAtCode(); return; }
     const code = checkout.code.trim();
     const msg = $('#code-msg');
     if (!code) { msg.textContent = 'Enter a code first.'; return; }
@@ -557,7 +569,7 @@ SN.ready.then(function () {
       if (!r || !r.ok) { msg.textContent = (r && r.error) || 'That code isn’t valid.'; msg.style.color = 'var(--error)'; return; }
       appliedCode = { code: r.code, type: r.type, amount: Number(r.amount) };
       checkout.code = r.code;
-      renderPanel();
+      rerenderAtCode();
     }).catch((r) => { codeChecking = false; msg.textContent = SN.sendErrorText(r); msg.style.color = 'var(--error)'; });
   }
 
