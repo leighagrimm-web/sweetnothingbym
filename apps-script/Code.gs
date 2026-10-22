@@ -1611,14 +1611,22 @@ function qbInvoiceForOrder_(cfg, o) {
       AllowOnlineCreditCardPayment: true,
       AllowOnlineACHPayment: true
     }).Invoice;
+    // Read it back: QuickBooks' automated sales tax is added after the create call answers, so the first
+    // TotalAmt can be the pre-tax amount. The read-back has the real total, tax and balance (and the pay link).
     let link = '';
-    try { link = qbFetch_('get', '/invoice/' + created.Id + '?include=invoiceLink').Invoice.InvoiceLink || ''; } catch (e) { /* online payments off */ }
+    let saved = created;
+    try {
+      saved = qbFetch_('get', '/invoice/' + created.Id + '?include=invoiceLink').Invoice || created;
+      link = saved.InvoiceLink || '';
+    } catch (e) {
+      try { saved = qbFetch_('get', '/invoice/' + created.Id).Invoice || created; } catch (e2) { /* keep the create answer */ }
+    }
     // Our confirmation email carries the Pay button. Without a pay link, QuickBooks emails the invoice itself instead.
     let sent = '';
     if (!link) {
       try { qbFetch_('post', '/invoice/' + created.Id + '/send?sendTo=' + encodeURIComponent(o.customer.email), '', 'application/octet-stream'); sent = new Date().toISOString(); } catch (e) { sent = 'FAILED: ' + e.message; }
     }
-    inv.qb = { id: created.Id, docNumber: created.DocNumber, total: Number(created.TotalAmt), tax: Number((created.TxnTaxDetail || {}).TotalTax || 0), balance: Number(created.Balance), link, sent, env: qbEnv_(), url: qbAppUrl_(created.Id) };
+    inv.qb = { id: created.Id, docNumber: saved.DocNumber || created.DocNumber, total: Number(saved.TotalAmt), tax: Number((saved.TxnTaxDetail || {}).TotalTax || 0), balance: Number(saved.Balance), link, sent, env: qbEnv_(), url: qbAppUrl_(created.Id) };
     // QuickBooks' total wins if its tax settings work it out differently; admin shows both.
     inv.qbMismatch = Math.abs(inv.qb.total - inv.total) > 0.009;
     delete inv.qbError;
@@ -1706,10 +1714,14 @@ function checkPayments() {
       for (let i = 0; i < open.length; i += 30) {
         const batch = open.slice(i, i + 30);
         try {
-          const found = qbQuery_('select Id, Balance, TotalAmt from Invoice where Id in (' + batch.map((x) => "'" + x.inv.qb.id + "'").join(',') + ')').Invoice || [];
+          const found = qbQuery_('select * from Invoice where Id in (' + batch.map((x) => "'" + x.inv.qb.id + "'").join(',') + ')').Invoice || [];
           batch.forEach((x) => {
             const q = found.find((f) => f.Id === x.inv.qb.id);
             if (!q) return;
+            // Total and tax too: QuickBooks may add its sales tax after the invoice is made, or Melissa may edit it there.
+            x.inv.qb.total = Number(q.TotalAmt);
+            if (q.TxnTaxDetail) x.inv.qb.tax = Number(q.TxnTaxDetail.TotalTax || 0);
+            x.inv.qbMismatch = Math.abs(x.inv.qb.total - x.inv.total) > 0.009;
             x.inv.qb.balance = Number(q.Balance);
             x.inv.qb.checkedAt = new Date().toISOString();
             if (x.inv.qb.balance <= 0) {
