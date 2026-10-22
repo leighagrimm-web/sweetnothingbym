@@ -229,19 +229,70 @@ const SN = {
   // (the page that's open still has them in memory and sends them).
   setBag(bag) {
     try { sessionStorage.setItem('sn_bag', JSON.stringify(bag)); } catch (e) {
-      try { sessionStorage.setItem('sn_bag', JSON.stringify(bag.map((it) => Object.assign({}, it, { photoData: undefined })))); } catch (e2) { /* ignore */ }
+      try { sessionStorage.setItem('sn_bag', JSON.stringify(bag.map((it) => Object.assign({}, it, { photos: undefined, photoData: undefined })))); } catch (e2) { /* ignore */ }
     }
   },
 
-  // A customer's photo, shrunk in the browser to a JPEG (longest side max px) so it uploads quickly from a phone.
-  // Resolves { name, data } where data is a data: URL; rejects if the browser can't read the image.
+  // Most photos a customer can attach to a custom cookie item or a message (the server allows the same).
+  maxPhotos: 5,
+
+  // The "add up to 5 photos" box on the order and contact pages: previews with × to remove, and an add button.
+  // el is an empty container; opts: { id (for the file input), label, photos (to start with), onChange }.
+  // Returns { photos() → [{ name, data }], busy() → true while a photo is still being shrunk }.
+  photoPicker(el, opts) {
+    const photos = (opts.photos || []).slice();
+    let pending = 0, note = '';
+    function draw() {
+      const room = SN.maxPhotos - photos.length - pending;
+      el.innerHTML =
+        (photos.length || pending
+          ? '<div class="photo-picks">' +
+              photos.map((p, i) => '<span class="photo-pick"><img src="' + p.data + '" alt="Photo ' + (i + 1) + '">' +
+                '<button type="button" class="photo-x" data-photo-x="' + i + '" aria-label="Remove photo ' + (i + 1) + '">×</button></span>').join('') +
+              '<span class="photo-pick loading" aria-hidden="true"></span>'.repeat(pending) +
+            '</div>'
+          : '') +
+        (room > 0
+          ? '<label class="upload" for="' + opts.id + '"><span>' + SN_ICONS.upload + '</span>' +
+              '<span><strong>' + (pending ? 'Preparing your photos…' : photos.length ? 'Add more photos' : opts.label) + '</strong><br>' +
+              '<span class="hint">' + SN.esc(note || 'Up to ' + SN.maxPhotos + ' photos from your phone or computer') + '</span></span>' +
+              '<input type="file" id="' + opts.id + '" accept="image/*" multiple class="sr-only"></label>'
+          : '<p class="hint">' + SN.maxPhotos + ' photos is the most you can add. Remove one to swap it for another.</p>');
+    }
+    const changed = () => { draw(); if (opts.onChange) opts.onChange(); };
+    el.addEventListener('change', (e) => {
+      if (e.target.id !== opts.id) return;
+      const files = Array.from(e.target.files || []);
+      const room = SN.maxPhotos - photos.length - pending;
+      note = files.length > room ? 'Only ' + SN.maxPhotos + ' photos fit, so the first ' + room + ' were added.' : '';
+      files.slice(0, room).forEach((f) => {
+        pending++;
+        SN.shrinkPhoto(f).then((p) => { photos.push(p); }).catch((err) => { note = err.message; })
+          .then(() => { pending--; changed(); });
+      });
+      changed();
+    });
+    el.addEventListener('click', (e) => {
+      const x = e.target.closest('[data-photo-x]');
+      if (!x) return;
+      photos.splice(Number(x.dataset.photoX), 1);
+      note = '';
+      changed();
+    });
+    draw();
+    return { photos: () => photos.slice(), busy: () => pending > 0 };
+  },
+
+  // A customer's photo, shrunk in the browser to a JPEG (longest side max px, about half a megabyte) so up to 5
+  // upload quickly from a phone and fit in the bag. Resolves { name, data } where data is a data: URL; rejects if
+  // the browser can't read the image.
   shrinkPhoto(file, max) {
     return new Promise((resolve, reject) => {
       if (!file) { reject(new Error('No file')); return; }
       const src = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
-        const scale = Math.min(1, (max || 1600) / Math.max(img.naturalWidth, img.naturalHeight));
+        const scale = Math.min(1, (max || 1280) / Math.max(img.naturalWidth, img.naturalHeight));
         const c = document.createElement('canvas');
         c.width = Math.max(1, Math.round(img.naturalWidth * scale));
         c.height = Math.max(1, Math.round(img.naturalHeight * scale));
@@ -251,7 +302,7 @@ const SN = {
         ctx.drawImage(img, 0, 0, c.width, c.height);
         URL.revokeObjectURL(src);
         let q = 0.82, data = c.toDataURL('image/jpeg', q);
-        while (data.length > 1200000 && q > 0.4) { q -= 0.12; data = c.toDataURL('image/jpeg', q); }
+        while (data.length > 700000 && q > 0.4) { q -= 0.12; data = c.toDataURL('image/jpeg', q); }
         resolve({ name: String(file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg', data });
       };
       img.onerror = () => { URL.revokeObjectURL(src); reject(new Error('That photo couldn’t be read. Try a JPG or PNG.')); };

@@ -758,13 +758,15 @@
   // server (adminPhoto) by loadPhotos() after it's on the page; clicking opens it full size in Drive.
   const photoCache = {};
   function customerPhoto(x, label) {
-    if (x.photoId) {
-      return '<div class="cust-photo"><span class="hint">' + label + '</span>' +
-        '<a href="' + esc(x.photoUrl) + '" target="_blank" rel="noopener" title="Open full size in Google Drive">' +
-          '<img data-photo-id="' + esc(x.photoId) + '" alt="' + esc(label) + '"' + (photoCache[x.photoId] ? ' src="' + photoCache[x.photoId] + '"' : '') + '></a></div>';
-    }
-    // Just a file name: sent before photo uploads were turned on, or saving it failed.
-    return x.photoName ? '<div class="hint" style="margin-top:4px">' + label + ': <strong>' + esc(x.photoName) + '</strong> <span class="muted">(not saved; ask them to email it)</span></div>' : '';
+    const photos = x.photos || [], names = x.photoNames || [];
+    const html = photos.length
+      ? '<div class="cust-photo"><span class="hint">' + label + (photos.length > 1 ? 's (' + photos.length + ')' : '') + '</span><div class="cust-photo-row">' +
+          photos.map((p, i) => '<a href="' + esc(p.url) + '" target="_blank" rel="noopener" title="Open full size in Google Drive">' +
+            '<img data-photo-id="' + esc(p.id) + '" alt="' + esc(label) + ' ' + (i + 1) + '"' + (photoCache[p.id] ? ' src="' + photoCache[p.id] + '"' : '') + '></a>').join('') +
+        '</div></div>'
+      : '';
+    // Just file names: sent before photo uploads were turned on, or saving them failed.
+    return html + (names.length ? '<div class="hint" style="margin-top:4px">' + label + (names.length > 1 ? 's' : '') + ': <strong>' + esc(names.join(', ')) + '</strong> <span class="muted">(not saved; ask them to email ' + (names.length > 1 ? 'them' : 'it') + ')</span></div>' : '');
   }
   function loadPhotos(root) {
     $$('img[data-photo-id]:not([src])', root).forEach((img) => {

@@ -104,7 +104,7 @@ SN.ready.then(function () {
     mode = kind;
     draftTried = false;
     draft = kind === 'custom'
-      ? { kind, qty: cfg.minQty, designs: 1, desc: '', photoName: '', photoData: '', photoBusy: false }
+      ? { kind, qty: cfg.minQty, designs: 1, desc: '', picker: null }
       : { kind, fq: {} };
     renderPanel();
     showPanel(el);
@@ -129,6 +129,7 @@ SN.ready.then(function () {
     else if (mode === 'done') panel.innerHTML = renderDone();
     else if (mode === 'paid') panel.innerHTML = renderPaid();
     panel.classList.toggle('full', mode === 'checkout' || mode === 'done' || mode === 'paid');
+    if (mode === 'custom') draft.picker = SN.photoPicker($('#d-photos'), { id: 'd-photo', label: 'Upload inspiration photos', photos: draft.picker ? draft.picker.photos() : [] });
     if (mode === 'custom' || mode === 'mini' || mode === 'large') updateDraftUI();
     if (mode === 'checkout') updateCheckoutUI();
   }
@@ -190,10 +191,7 @@ SN.ready.then(function () {
           (cfg.allergyNote ? '<br><span style="display:block;margin-top:8px">* ' + esc(cfg.allergyNote) + '</span>' : '') + '</div>' +
         '<div class="field"><label class="label" for="d-desc">Describe your cookies</label>' +
           '<textarea class="input" id="d-desc" rows="5" data-draft="desc" placeholder="Theme, colors, names or wording, and how many of each design…"></textarea></div>' +
-        '<div class="field"><span class="label">Inspiration photo (optional)</span>' +
-          '<label class="upload" for="d-photo"><span id="d-photo-thumb">' + SN_ICONS.upload + '</span>' +
-          '<span><strong id="d-photo-label">Upload an inspiration photo</strong><br><span class="hint">A photo from your phone or computer</span></span>' +
-          '<input type="file" id="d-photo" accept="image/*" class="sr-only"></label></div>' +
+        '<div class="field"><span class="label">Inspiration photos (optional)</span><div id="d-photos"></div></div>' +
       '</div></div>' +
       '<div class="panel-foot"><p class="err" id="draft-err" hidden style="margin-bottom:10px"></p>' +
         '<button type="button" class="btn block" data-act="add" id="add-btn"></button></div>';
@@ -671,27 +669,7 @@ SN.ready.then(function () {
       updateDraftUI();
       return;
     }
-    if (t.id === 'd-photo') {
-      // Shrunk right away (see SN.shrinkPhoto); "Add to bag" waits for it.
-      const f = t.files && t.files[0];
-      const d = draft;
-      d.photoName = ''; d.photoData = '';
-      $('#d-photo-thumb').innerHTML = SN_ICONS.upload;
-      if (!f) { $('#d-photo-label').textContent = 'Upload an inspiration photo'; return; }
-      d.photoBusy = true;
-      $('#d-photo-label').textContent = 'Preparing your photo…';
-      SN.shrinkPhoto(f).then((p) => {
-        d.photoName = f.name; d.photoData = p.data;
-        if (draft !== d) return;
-        $('#d-photo-label').textContent = 'Attached: ' + f.name;
-        $('#d-photo-thumb').innerHTML = '<img src="' + p.data + '" alt="">';
-      }).catch((err) => {
-        if (draft !== d) return;
-        t.value = '';
-        $('#d-photo-label').textContent = err.message;
-      }).then(() => { d.photoBusy = false; });
-      return;
-    }
+    if (t.id === 'd-photo') return;   // the photo picker handles it (SN.photoPicker)
     if (t.dataset.co) { checkout[t.dataset.co] = t.value; if (t.dataset.co === 'eventType') $('#other-wrap').hidden = t.value !== 'Other'; updateCheckoutUI(); }
   });
 
@@ -708,15 +686,15 @@ SN.ready.then(function () {
   function addToBag() {
     const st = draftState();
     if (st.err) { draftTried = true; updateDraftUI(); return; }
-    if (draft.photoBusy) {
+    if (draft.picker && draft.picker.busy()) {
       const e = $('#draft-err');
       e.hidden = false;
-      e.textContent = 'One moment: your photo is still being prepared.';
+      e.textContent = 'One moment: your photos are still being prepared.';
       return;
     }
     const item = { id: Date.now(), kind: draft.kind };
     if (draft.kind === 'custom') {
-      Object.assign(item, { qty: draft.qty, designs: draft.designs, desc: draft.desc.trim(), photoName: draft.photoName, photoData: draft.photoData });
+      Object.assign(item, { qty: draft.qty, designs: draft.designs, desc: draft.desc.trim(), photos: draft.picker ? draft.picker.photos() : [] });
     } else {
       const names = {};
       cfg.flavors.forEach((f) => { if (draft.fq[f.id]) names[f.id] = f.name; });
@@ -756,7 +734,7 @@ SN.ready.then(function () {
     SN.post('submitOrder', {
       items: bag.map((it) => (it.kind === 'class'
         ? { kind: 'class', eventId: it.eventId, qty: it.qty }
-        : { kind: it.kind, qty: it.qty, designs: it.designs, desc: it.desc, photoName: it.photoName, photoData: it.photoData || '', fq: it.fq })),
+        : { kind: it.kind, qty: it.qty, designs: it.designs, desc: it.desc, photos: it.photos || [], fq: it.fq })),
       eventType: checkout.eventType,
       eventOther: checkout.eventOther.trim(),
       dateNeeded: checkout.date,

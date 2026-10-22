@@ -452,3 +452,14 @@ html.sn-maint body > *:not(#maint) { display: none !important; }
 .ask-box li { margin: 0 0 6px; }
 .ask-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
 .btn.danger { background: var(--error); border-color: var(--error); color: var(--white); }
+/* Photo picker (order and contact pages): previews with a remove button, up to 5. */
+.photo-picks { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.photo-pick { position: relative; width: 76px; height: 76px; border-radius: 10px; overflow: hidden; background: var(--oat); border: 1px solid var(--line); }
+.photo-pick img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-pick.loading { animation: photo-pulse 1s ease-in-out infinite alternate; }
+@keyframes photo-pulse { from { opacity: .5; } to { opacity: 1; } }
+.photo-x { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgba(31, 42, 68, .75); color: var(--white); font-size: 16px; line-height: 24px; padding: 0; cursor: pointer; }
+.photo-x:hover, .photo-x:focus-visible { background: var(--navy); }
+.cust-photo-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.cust-photo-row img { width: 120px; height: 100px; }
+.cust-photo-row a:only-child img { width: 180px; height: 140px; }

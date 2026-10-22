@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261026c">
+<link rel="stylesheet" href="styles.css?v=20261026d">
 </head>
 <body data-page="contact">
 <div id="site-header"></div>
@@ -62,11 +62,8 @@
               <p class="err" id="m-msg-err" hidden>Please add a message.</p>
             </div>
             <div class="field">
-              <span class="label">Photo (optional)</span>
-              <label class="upload" for="m-photo"><span id="m-photo-thumb"></span>
-                <span><strong id="m-photo-label">Add an inspiration photo</strong><br><span class="hint">A photo from your phone or computer</span></span>
-                <input type="file" id="m-photo" accept="image/*" class="sr-only">
-              </label>
+              <span class="label">Photos (optional)</span>
+              <div id="m-photos"></div>
             </div>
             <div class="hp" aria-hidden="true"><label>Website <input type="text" id="m-website" tabindex="-1" autocomplete="off"></label></div>
             <div>
@@ -88,15 +85,14 @@
   </section>
 </main>
 <div id="site-footer"></div>
-<script src="config.js?v=20261026c"></script>
-<script src="layout.js?v=20261026c"></script>
+<script src="config.js?v=20261026d"></script>
+<script src="layout.js?v=20261026d"></script>
 <script>
 (function () {
   const $ = (s) => document.querySelector(s);
   $('#ig-link').href = SN.load().instagram;
   SN.ready.then(() => { $('#ig-link').href = SN.load().instagram; });
   $('#ig-icon').innerHTML = SN_ICONS.insta;
-  $('#m-photo-thumb').innerHTML = SN_ICONS.upload;
 
   // Preselect topic from a link like contact.html?topic=design
   const topicParam = new URLSearchParams(location.search).get('topic');
@@ -106,25 +102,8 @@
   $('#m-topic').addEventListener('change', syncOrderField);
   syncOrderField();
 
-  // The photo is shrunk in the browser (SN.shrinkPhoto) and sent with the message; Send waits while it's prepared.
-  let photoName = '', photoData = '', photoBusy = null;
-  $('#m-photo').addEventListener('change', (e) => {
-    const f = e.target.files && e.target.files[0];
-    photoName = ''; photoData = '';
-    $('#m-photo-thumb').innerHTML = SN_ICONS.upload;
-    if (!f) { $('#m-photo-label').textContent = 'Add an inspiration photo'; photoBusy = null; return; }
-    $('#m-photo-label').textContent = 'Preparing your photo…';
-    const job = photoBusy = SN.shrinkPhoto(f).then((p) => {
-      if (photoBusy !== job) return;
-      photoName = f.name; photoData = p.data;
-      $('#m-photo-label').textContent = 'Attached: ' + f.name;
-      $('#m-photo-thumb').innerHTML = '<img src="' + p.data + '" alt="">';
-    }).catch((err) => {
-      if (photoBusy !== job) return;
-      e.target.value = '';
-      $('#m-photo-label').textContent = err.message;
-    });
-  });
+  // Up to 5 photos, shrunk in the browser and sent with the message (SN.photoPicker). Send waits while they're prepared.
+  const picker = SN.photoPicker($('#m-photos'), { id: 'm-photo', label: 'Add inspiration photos' });
 
   SN.phoneInput($('#m-phone'));
   // Phone is optional, but if they type one it must be a full 10-digit number.
@@ -152,10 +131,10 @@
     const firstBad = check(true);
     if (firstBad) { firstBad.focus(); return; }
     if ($('#m-send').getAttribute('aria-disabled') === 'true') return;
-    // Wait for the photo to finish shrinking, then send.
+    // Wait for the photos to finish shrinking, then send.
     $('#m-send').setAttribute('aria-disabled', 'true');
-    $('#m-send').textContent = photoBusy ? 'Preparing photo…' : 'Sending…';
-    Promise.resolve(photoBusy).then(sendNow);
+    $('#m-send').textContent = picker.busy() ? 'Preparing photos…' : 'Sending…';
+    const wait = setInterval(() => { if (!picker.busy()) { clearInterval(wait); sendNow(); } }, 200);
   });
 
   function sendNow() {
@@ -166,8 +145,7 @@
       topic: $('#m-topic').value,
       orderNumber: $('#m-topic').value === 'An existing order' ? $('#m-order').value.trim() : '',
       message: $('#m-msg').value.trim(),
-      photoName,
-      photoData,   // saved to a private Drive folder by the server
+      photos: picker.photos(),   // saved to a private Drive folder by the server
       source: 'contact',
       website: $('#m-website').value
     };

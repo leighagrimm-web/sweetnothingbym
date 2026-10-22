@@ -632,9 +632,11 @@ function submitOrder_(b) {
   const photoFiles = [];
   if (v.cookie) {
     v.cookie.items.forEach((it) => {
-      const saved = it.photoData ? savePhoto_(it.photoData, 'Order photo – ' + v.customer.name) : null;
-      delete it.photoData;
-      if (saved) { it.photoUrl = saved.url; photoFiles.push({ it, id: saved.id }); }
+      if (!it.photos) return;
+      const r = savePhotos_(it.photos, 'Order photo – ' + v.customer.name);
+      it.photoCell = r.cell;
+      it.photos = r.saved;
+      r.saved.forEach((s) => photoFiles.push(s.id));
     });
   }
 
@@ -686,7 +688,7 @@ function submitOrder_(b) {
       appendObjects_(ss.getSheetByName('OrderItems'), o.items.map((it, i) => ({
         'Order': o.number, 'Line': i + 1, 'Item': itemLabel_(it.kind) + (it.kind === 'class' ? ': ' + it.title : ''), 'Kind': it.kind, 'Qty': it.qty,
         'Designs': it.kind === 'custom' ? it.designs : '', 'Flavors': it.kind === 'mini' || it.kind === 'large' ? it.summary : '',
-        'Flavors (data)': it.fq ? JSON.stringify(it.fq) : '', 'Description': it.kind === 'class' ? it.summary : (it.desc || ''), 'Photo': it.photoUrl || it.photoName || '',
+        'Flavors (data)': it.fq ? JSON.stringify(it.fq) : '', 'Description': it.kind === 'class' ? it.summary : (it.desc || ''), 'Photo': it.photoCell || '',
         'Unit price': it.unit, 'Line total': it.lineTotal, 'Event ID': it.eventId || ''
       })));
       placed.push({ order: o, row });
@@ -698,7 +700,7 @@ function submitOrder_(b) {
     lock.releaseLock();
   }
   clearConfigCache_();   // class spots changed
-  photoFiles.forEach((p, i) => renamePhoto_(p.id, v.cookie.number + ' photo ' + (i + 1) + ' – ' + v.customer.name));
+  photoFiles.forEach((id, i) => renamePhoto_(id, v.cookie.number + ' photo ' + (i + 1) + ' – ' + v.customer.name));
 
   const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
   placed.forEach(({ order: o, row }) => {
@@ -763,8 +765,8 @@ function validateOrder_(cfg, b) {
       if (!desc) errors.push(label + ': a description of your cookies');
       const unit = Number(cfg.customBasePrice) || 0;
       cookies.push({
-        kind, qty, designs, desc, photoName: clean_(raw.photoName, 200), photoData: raw.photoData, unit: round2_(unit), lineTotal: round2_(qty * unit),
-        summary: designs + ' design' + (designs > 1 ? 's' : '') + ' · estimated at ' + money_(unit) + ' each' + (raw.photoName ? ' · photo attached' : '')
+        kind, qty, designs, desc, photos: incomingPhotos_(raw), unit: round2_(unit), lineTotal: round2_(qty * unit),
+        summary: designs + ' design' + (designs > 1 ? 's' : '') + ' · estimated at ' + money_(unit) + ' each' + photoCount_(incomingPhotos_(raw).length)
       });
     } else if (kind === 'mini' || kind === 'large') {
       const fq = {};
@@ -1012,8 +1014,7 @@ function sendMessage_(b) {
     topic: clean_(b.topic, 60),
     orderNumber: clean_(b.orderNumber, 20),
     message: clean_(b.message, 5000),
-    photoName: clean_(b.photoName, 200),
-    photoUrl: '',
+    photos: [], photoNames: [],
     source: b.source === 'quick' ? 'Message me' : 'Contact page'
   };
   // The "Message me" button can set its own topic (e.g. "Special events or classes"); anything unexpected becomes "Other".
@@ -1026,8 +1027,8 @@ function sendMessage_(b) {
   if (errors.length) return { ok: false, code: 'invalid', errors };
   if (rateLimited_('msg', m.email, 10)) return { ok: false, code: 'rate', error: 'You’ve sent several messages in the last hour. Please try again a little later.' };
 
-  const photo = b.photoData ? savePhoto_(b.photoData, 'Message photo – ' + (m.name || m.email)) : null;
-  if (photo) m.photoUrl = photo.url;
+  const pics = savePhotos_(incomingPhotos_(b), 'Message photo – ' + (m.name || m.email));
+  Object.assign(m, photosFromCell_(pics.cell));
 
   const cfg = getConfig_();
   const sh = SpreadsheetApp.getActive().getSheetByName('Messages');
@@ -1039,13 +1040,13 @@ function sendMessage_(b) {
     m.createdAt = new Date();
     row = appendObject_(sh, {
       'ID': m.id, 'Received': m.createdAt, 'Status': 'New', 'Topic': m.topic, 'Name': m.name, 'Email': m.email,
-      'Phone': m.phone, 'Order': m.orderNumber, 'Message': m.message, 'Photo': m.photoUrl || m.photoName, 'Source': m.source, 'Owner alert': 'Sending…'
+      'Phone': m.phone, 'Order': m.orderNumber, 'Message': m.message, 'Photo': pics.cell, 'Source': m.source, 'Owner alert': 'Sending…'
     });
     SpreadsheetApp.flush();
   } finally {
     lock.releaseLock();
   }
-  if (photo) renamePhoto_(photo.id, 'Message ' + m.id + ' photo – ' + (m.name || m.email));
+  pics.saved.forEach((s, i) => renamePhoto_(s.id, 'Message ' + m.id + ' photo' + (pics.saved.length > 1 ? ' ' + (i + 1) : '') + ' – ' + (m.name || m.email)));
   setCell_(sh, row, 'Owner alert', sendSafely_(() => sendOwnerMessageAlert_(cfg, m)));
   return { ok: true, id: m.id };
 }
@@ -1268,13 +1269,14 @@ function readOrders_() {
       });
       return;
     }
-    (items[num] = items[num] || []).push({
-      kind, qty: Number(g('Qty')) || 0, designs, desc: String(g('Description') || ''), photoName: photoId_(g('Photo')) ? 'Photo' : String(g('Photo') || ''), photoId: photoId_(g('Photo')), photoUrl: photoId_(g('Photo')) ? String(g('Photo')) : '', fq,
+    const pics = photosFromCell_(g('Photo'));
+    (items[num] = items[num] || []).push(Object.assign({
+      kind, qty: Number(g('Qty')) || 0, designs, desc: String(g('Description') || ''), fq,
       unit, lineTotal: Number(g('Line total')) || 0,
       summary: kind === 'custom'
-        ? designs + ' design' + (designs > 1 ? 's' : '') + ' · estimated at ' + money_(unit) + ' each' + (g('Photo') ? ' · photo attached' : '')
+        ? designs + ' design' + (designs > 1 ? 's' : '') + ' · estimated at ' + money_(unit) + ' each' + photoCount_(pics.photos.length + pics.photoNames.length)
         : String(g('Flavors') || '')
-    });
+    }, pics));
   });
   const sh = ss.getSheetByName('Orders');
   const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
@@ -1594,11 +1596,11 @@ function readMessages_() {
   return rows_(sh).map((r) => {
     const g = (k) => r[h.indexOf(k)];
     const when = g('Received');
-    return {
+    return Object.assign({
       id: Number(g('ID')) || 0, createdAt: when instanceof Date ? when.toISOString() : String(when || ''), status: String(g('Status') || 'New'),
       topic: String(g('Topic') || ''), name: String(g('Name') || ''), email: String(g('Email') || ''), phone: String(g('Phone') || ''),
-      orderNumber: String(g('Order') || ''), message: String(g('Message') || ''), photoName: photoId_(g('Photo')) ? 'Photo' : String(g('Photo') || ''), photoId: photoId_(g('Photo')), photoUrl: photoId_(g('Photo')) ? String(g('Photo')) : '', source: String(g('Source') || '')
-    };
+      orderNumber: String(g('Order') || ''), message: String(g('Message') || ''), source: String(g('Source') || '')
+    }, photosFromCell_(g('Photo')));
   }).filter((m) => m.id).reverse();
 }
 
@@ -1651,6 +1653,34 @@ function savePhoto_(data, label) {
     return null;
   }
 }
+
+const MAX_PHOTOS = 5;   // per custom cookie item or message
+
+// The photos a page sent: [{ name, data }]. (Pages from before multiple photos sent photoName/photoData.)
+function incomingPhotos_(raw) {
+  const list = Array.isArray(raw && raw.photos) ? raw.photos : raw && raw.photoData ? [{ name: raw.photoName, data: raw.photoData }] : [];
+  return list.slice(0, MAX_PHOTOS).map((p) => ({ name: clean_(p && p.name, 200), data: p && p.data }));
+}
+// Save a list of photos. cell: what goes in the Photo column, one Drive link per line (or the file name, if that one
+// couldn't be saved). saved: [{ id, url }] in order.
+function savePhotos_(list, label) {
+  const saved = [], lines = [];
+  list.forEach((p, i) => {
+    const s = savePhoto_(p.data, label + (list.length > 1 ? ' ' + (i + 1) : ''));
+    if (s) { saved.push(s); lines.push(s.url); } else if (p.name) lines.push(p.name);
+  });
+  return { saved, cell: lines.join('\n') };
+}
+// A Photo cell back into { photos: [{ id, url }], photoNames: [file names that weren't saved] }.
+function photosFromCell_(v) {
+  const photos = [], photoNames = [];
+  String(v || '').split('\n').map((s) => s.trim()).filter(Boolean).forEach((s) => {
+    const id = photoId_(s);
+    if (id) photos.push({ id, url: s }); else photoNames.push(s);
+  });
+  return { photos, photoNames };
+}
+const photoCount_ = (n) => n ? ' · ' + n + ' photo' + (n > 1 ? 's' : '') + ' attached' : '';
 
 function renamePhoto_(id, name) {
   try { const f = DriveApp.getFileById(id); f.setName(clean_(name, 150) + f.getName().replace(/^.*(\.\w+)$/, '$1')); } catch (e) { /* keep the first name */ }
@@ -2144,8 +2174,8 @@ function sendOwnerMessageAlert_(cfg, m) {
     ['From', esc_(m.name || '(no name)') + '<br><a href="mailto:' + esc_(m.email) + '" style="color:' + C.navy + '">' + esc_(m.email) + '</a>' + (m.phone ? '<br>' + esc_(m.phone) : '')],
     ['Topic', esc_(m.topic)],
     m.orderNumber ? ['Order', esc_(m.orderNumber)] : null,
-    m.photoUrl ? ['Photo', '<a href="' + esc_(m.photoUrl) + '" style="color:' + C.navy + '">View their photo</a>']
-      : m.photoName ? ['Photo', esc_(m.photoName) + ' <span style="color:' + C.muted + '">(the photo couldn’t be saved; ask them to reply with it)</span>'] : null,
+    m.photos.length ? ['Photo' + (m.photos.length > 1 ? 's' : ''), photoLinks_(m.photos, 'their photo')] : null,
+    m.photoNames.length ? ['Not saved', esc_(m.photoNames.join(', ')) + ' <span style="color:' + C.muted + '">(couldn’t be saved; ask them to reply with ' + (m.photoNames.length > 1 ? 'them' : 'it') + ')</span>'] : null,
     ['Sent from', esc_(m.source)]
   ].filter(Boolean);
   const html = shell_(cfg, 'New message', '',
@@ -2159,7 +2189,7 @@ function sendOwnerMessageAlert_(cfg, m) {
     subject: subjectPrefix_(cfg) + 'New message: ' + m.topic + ' – ' + (m.name || m.email),
     htmlBody: html,
     body: ['New message (' + m.source + ')', 'From: ' + (m.name ? m.name + ' ' : '') + '<' + m.email + '>' + (m.phone ? ' ' + m.phone : ''),
-      'Topic: ' + m.topic, m.orderNumber ? 'Order: ' + m.orderNumber : '', m.photoUrl ? 'Photo: ' + m.photoUrl : m.photoName ? 'Photo: ' + m.photoName + ' (couldn’t be saved)' : '', '', m.message].filter((l) => l !== null).join('\n'),
+      'Topic: ' + m.topic, m.orderNumber ? 'Order: ' + m.orderNumber : '', m.photos.map((p, i) => 'Photo' + (m.photos.length > 1 ? ' ' + (i + 1) : '') + ': ' + p.url).join('\n'), m.photoNames.length ? 'Not saved: ' + m.photoNames.join(', ') : '', '', m.message].filter((l) => l !== null).join('\n'),
     name: cfg.senderName, replyTo: m.email
   });
 }
@@ -2386,7 +2416,7 @@ function itemsBlock_(o, heading, forOwner) {
         '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:15px"><tr><td><strong>' + esc_(itemHeading_(it)) + '</strong></td><td align="right">' + (it.kind === 'custom' ? 'from ' : '') + money_(it.lineTotal) + '</td></tr></table>' +
         '<div style="color:' + C.muted + ';font-size:14px">' + esc_(it.summary) + '</div>' +
         (it.desc ? '<div style="font-size:14px;color:' + C.muted + ';background:#FBF7F4;border-radius:10px;padding:10px 12px;margin-top:6px"><strong style="color:' + C.navy + '">Description:</strong> ' + esc_(it.desc) + '</div>' : '') +
-        (forOwner && it.photoUrl ? '<div style="font-size:14px;margin-top:6px"><a href="' + esc_(it.photoUrl) + '" style="color:' + C.navy + ';font-weight:600">View their inspiration photo</a></div>' : '') +
+        (forOwner && it.photos && it.photos.length ? '<div style="font-size:14px;margin-top:6px">' + photoLinks_(it.photos, 'their inspiration photo') + '</div>' : '') +
       '</div>').join('') +
   '</div>';
 }
@@ -2412,7 +2442,15 @@ function button_(href, label) {
 
 function itemsText_(o, forOwner) {
   return o.items.map((it) => itemHeading_(it) + ' – ' + (it.kind === 'custom' ? 'from ' : '') + money_(it.lineTotal) +
-    '\n   ' + it.summary + (it.desc ? '\n   Description: ' + it.desc : '') + (forOwner && it.photoUrl ? '\n   Inspiration photo: ' + it.photoUrl : '')).join('\n');
+    '\n   ' + it.summary + (it.desc ? '\n   Description: ' + it.desc : '') +
+    (forOwner && it.photos ? it.photos.map((p, i) => '\n   Inspiration photo' + (it.photos.length > 1 ? ' ' + (i + 1) : '') + ': ' + p.url).join('') : '')).join('\n');
+}
+
+// Owner emails: "View their photo", or "Their photos: Photo 1 · Photo 2 · …" (private Drive links).
+function photoLinks_(photos, what) {
+  const a = (p, label) => '<a href="' + esc_(p.url) + '" style="color:' + C.navy + ';font-weight:600">' + label + '</a>';
+  return photos.length === 1 ? a(photos[0], 'View ' + what)
+    : 'Their photos: ' + photos.map((p, i) => a(p, 'Photo ' + (i + 1))).join(' · ');
 }
 
 function totalsText_(o, totalLabel) {
