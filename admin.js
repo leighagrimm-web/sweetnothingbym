@@ -145,10 +145,15 @@
       '<div class="fields">' +
         field('miniPerDozen', 'Mini, per dozen', numInput('miniPerDozen', 'min="0" step="0.5"', '$')) +
         field('largePerDozen', 'Large, per dozen', numInput('largePerDozen', 'min="0" step="0.5"', '$')) +
-        field('flavorsPerDozen', 'Flavors allowed', numInput('flavorsPerDozen', 'min="1" max="12"', '', 'flavors', 'int'), 'For orders under the cookie count below.') +
-        field('flavorsMax', 'Flavors allowed for bigger orders', numInput('flavorsMax', 'min="1" max="12"', '', 'flavors', 'int')) +
-        field('flavorsMaxAt', '…starting at', numInput('flavorsMaxAt', 'min="12" step="12"', '', 'cookies', 'int'), '24 = 2 dozen.') +
       '</div>' +
+      // Flavor limit on its own row, short labels so the boxes line up, with a plain-English summary underneath.
+      '<h3 style="font-size:22px;margin:26px 0 12px">Flavor limit</h3>' +
+      '<div class="fields">' +
+        field('flavorsPerDozen', 'Smaller orders', numInput('flavorsPerDozen', 'min="1" max="12"', '', 'flavors', 'int')) +
+        field('flavorsMax', 'Bigger orders', numInput('flavorsMax', 'min="1" max="12"', '', 'flavors', 'int')) +
+        field('flavorsMaxAt', 'Bigger orders start at', numInput('flavorsMaxAt', 'min="12" step="12"', '', 'cookies', 'int')) +
+      '</div>' +
+      '<p class="hint" id="flavor-rule" style="margin-top:8px"></p>' +
       '<h3 style="font-size:22px;margin:26px 0 6px">Flavors</h3><div id="flavor-list" style="border-top:1px solid var(--line)"></div>' +
       '<form id="add-flavor" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;align-items:flex-end">' +
         '<div class="field" style="flex:1 1 240px"><label class="label" for="new-flavor">Add a new flavor</label><input class="input" id="new-flavor" type="text" placeholder="e.g. Salted Caramel" autocomplete="off"></div>' +
@@ -267,6 +272,7 @@
   function fillFields() {
     $$('[data-path]').forEach((el) => { const v = cfg[el.dataset.path]; el.value = v == null ? '' : v; });
     $$('[data-page]').forEach((el) => { el.value = (cfg.pages || {})[el.dataset.page] || ''; thumb(el); });
+    renderFlavorRule();
     $('#accepting').setAttribute('aria-checked', String(!!cfg.acceptingOrders));
     $('#accepting-text').textContent = cfg.acceptingOrders ? 'Open' : 'Paused';
     PAGE_SWITCHES.forEach(([key]) => {
@@ -274,6 +280,12 @@
       $('[data-act="toggle-page"][data-key="' + key + '"]').setAttribute('aria-checked', String(on));
       $('[data-page-state="' + key + '"]').textContent = on ? 'Showing' : 'Hidden';
     });
+  }
+  // "Customers can pick up to 4 flavors, or up to 6 once their order reaches 24 cookies (2 dozen)."
+  function renderFlavorRule() {
+    const at = Number(cfg.flavorsMaxAt) || 0;
+    $('#flavor-rule').textContent = 'Customers can pick up to ' + (cfg.flavorsPerDozen || 0) + ' flavors, or up to ' + (cfg.flavorsMax || 0) +
+      ' once their order reaches ' + at + ' cookies' + (at && at % 12 === 0 ? ' (' + at / 12 + ' dozen)' : '') + '.';
   }
   // Small preview next to a photo box.
   function thumb(input) {
@@ -290,6 +302,7 @@
       if (el.dataset.type === 'int') v = v === '' ? 0 : parseInt(v, 10);
       if (el.dataset.type === 'num') v = v === '' ? 0 : parseFloat(v);
       cfg[el.dataset.path] = v;
+      if (/^flavors/.test(el.dataset.path)) renderFlavorRule();
       markDirty();
       return;
     }
