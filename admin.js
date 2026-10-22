@@ -690,7 +690,7 @@
   // Melissa comes back to the tab. Not while she's in an order panel or busy, so nothing she's typing moves.
   const AUTO_REFRESH_MS = 2 * 60000;
   function autoRefresh() {
-    if (!dashRefreshed || document.hidden || busy || rv || Date.now() - (dashRefreshed ? dashRefreshed.getTime() : 0) < AUTO_REFRESH_MS - 5000) return;
+    if (!dashRefreshed || document.hidden || busy || rv || Object.keys(replyOpen).length || Date.now() - (dashRefreshed ? dashRefreshed.getTime() : 0) < AUTO_REFRESH_MS - 5000) return;
     refreshOrders().catch(() => { /* try again next time */ });
   }
   setInterval(autoRefresh, AUTO_REFRESH_MS);
@@ -1383,6 +1383,8 @@
   }
 
   /* ---------- Messages ---------- */
+  // Replies being written on the Messages tab: { message id: text so far }. Kept here so a redraw doesn't lose them.
+  const replyOpen = {};
   function renderMessages() {
     const unread = messages.filter((m) => m.status === 'New').length;
     $('#messages-h').innerHTML = 'Messages' + (unread ? ' <span class="count-pill">' + unread + ' new</span>' : '');
@@ -1396,17 +1398,54 @@
         '<div class="hint">' + esc(m.email) + (m.phone ? ' · ' + esc(m.phone) : '') + '</div>' +
         '<div class="msg-body">' + esc(m.message) + '</div>' +
         customerPhoto(m, 'Their photo') +
-        '<div class="row-gap" style="margin-top:6px;gap:8px">' +
-          '<a class="btn small" href="mailto:' + esc(m.email) + '?subject=' + subject + '" data-msg="reply" data-id="' + m.id + '">Reply by email</a>' +
-          '<button type="button" class="btn ghost small" data-msg="toggle" data-id="' + m.id + '">' + (m.status === 'New' ? 'Mark replied' : 'Mark as new') + '</button>' +
-          '<button type="button" class="icon-del" data-msg="delete" data-id="' + m.id + '" aria-label="Delete message from ' + esc(m.name || m.email) + '">' + SN_ICONS.trash + '</button>' +
-        '</div></div>';
+        (m.replies || []).map((r) => '<div class="msg-reply"><span class="hint">You replied · ' +
+          esc(new Date(r.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) +
+          (/^Queued/.test(r.emailStatus || '') ? ' · sending from the shop’s email within 5 min' : '') + '</span><div>' + esc(r.text) + '</div></div>').join('') +
+        (replyOpen[m.id] !== undefined
+          ? '<div class="msg-write"><label class="sr-only" for="reply-' + m.id + '">Your reply to ' + esc(m.name || m.email) + '</label>' +
+              '<textarea class="input" id="reply-' + m.id + '" rows="4" data-msg-draft="' + m.id + '" placeholder="Hi! Thanks for reaching out…">' + esc(replyOpen[m.id]) + '</textarea>' +
+              '<p class="hint" style="margin:6px 0 0">Sent from the shop’s email to ' + esc(m.email) + ', with their message quoted underneath.</p>' +
+              '<div class="row-gap" style="margin-top:8px;gap:8px;align-items:center">' +
+                '<button type="button" class="btn small" data-msg="send" data-id="' + m.id + '">Send reply</button>' +
+                '<button type="button" class="btn ghost small" data-msg="close" data-id="' + m.id + '">Cancel</button>' +
+                '<a class="link-btn" style="font-size:13px" href="mailto:' + esc(m.email) + '?subject=' + subject + '" data-msg="reply" data-id="' + m.id + '">Open in my email instead</a>' +
+              '</div></div>'
+          : '<div class="row-gap" style="margin-top:6px;gap:8px">' +
+              '<button type="button" class="btn small" data-msg="write" data-id="' + m.id + '">Reply</button>' +
+              '<button type="button" class="btn ghost small" data-msg="toggle" data-id="' + m.id + '">' + (m.status === 'New' ? 'Mark replied' : 'Mark as new') + '</button>' +
+              '<button type="button" class="icon-del" data-msg="delete" data-id="' + m.id + '" aria-label="Delete message from ' + esc(m.name || m.email) + '">' + SN_ICONS.trash + '</button>' +
+            '</div>') +
+        '</div>';
     }).join('') : '<p class="hint">No messages yet.</p>';
     loadPhotos($('#msg-list'));
   }
   async function onMessageClick(b) {
     const m = messages.find((x) => String(x.id) === b.dataset.id);
     if (!m) return;
+    if (b.dataset.msg === 'write') {
+      replyOpen[m.id] = replyOpen[m.id] || '';
+      renderMessages();
+      const box = $('#reply-' + m.id);
+      if (box) box.focus();
+      return;
+    }
+    if (b.dataset.msg === 'close') { delete replyOpen[m.id]; renderMessages(); return; }
+    if (b.dataset.msg === 'send') {
+      const text = (replyOpen[m.id] || '').trim();
+      if (!text) { toast('Write your reply first.'); $('#reply-' + m.id).focus(); return; }
+      if (busy) return;
+      busy = true;
+      b.textContent = 'Sending…';
+      server('adminReplyMessage', m.id, text).then((r) => {
+        busy = false;
+        if (!r.ok) { toast(r.error, 7000); renderMessages(); return; }
+        Object.assign(m, r.message);
+        delete replyOpen[m.id];
+        renderMessages();
+        toast(/^Queued/.test(r.emailStatus) ? 'Reply saved. It goes out from the shop’s email within 5 minutes.' : 'Reply sent to ' + m.email);
+      }).catch(failed);
+      return;
+    }
     if (b.dataset.msg === 'reply' || b.dataset.msg === 'toggle') {
       const next = b.dataset.msg === 'reply' ? 'Replied' : (m.status === 'New' ? 'Replied' : 'New');
       if (m.status === next) return;
@@ -1494,6 +1533,7 @@
   function wire() {
     document.addEventListener('input', (e) => {
       if (e.target.closest('#review')) { onReviewInput(e); return; }
+      if (e.target.dataset.msgDraft) { replyOpen[e.target.dataset.msgDraft] = e.target.value; return; }
       onInput(e);
     });
     document.addEventListener('change', (e) => {

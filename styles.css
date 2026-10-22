@@ -463,3 +463,7 @@ html.sn-maint body > *:not(#maint) { display: none !important; }
 .cust-photo-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .cust-photo-row img { width: 120px; height: 100px; }
 .cust-photo-row a:only-child img { width: 180px; height: 140px; }
+/* Admin Messages: replies sent from the admin, and the reply box. */
+.msg-reply { margin-top: 10px; padding: 10px 12px; border-left: 3px solid var(--coral); background: var(--ground); border-radius: 0 10px 10px 0; font-size: 14px; white-space: pre-wrap; }
+.msg-reply .hint { display: block; margin-bottom: 4px; white-space: normal; }
+.msg-write { margin-top: 10px; }

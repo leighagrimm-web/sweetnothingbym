@@ -238,9 +238,9 @@ const TABS = {
     text: ['Order', 'Event ID'], money: ['Unit price', 'Line total']
   },
   Messages: {
-    headers: ['ID', 'Received', 'Status', 'Topic', 'Name', 'Email', 'Phone', 'Order', 'Message', 'Photo', 'Source', 'Owner alert'],
-    widths: [60, 150, 90, 170, 150, 200, 120, 80, 420, 160, 100, 160],
-    text: ['Phone', 'Order'], datetime: ['Received']
+    headers: ['ID', 'Received', 'Status', 'Topic', 'Name', 'Email', 'Phone', 'Order', 'Message', 'Photo', 'Source', 'Owner alert', 'Replies'],
+    widths: [60, 150, 90, 170, 150, 200, 120, 80, 420, 160, 100, 160, 300],
+    text: ['Phone', 'Order', 'Replies'], datetime: ['Received']
   },
   Draft: { headers: ['Key', 'Value', 'Updated'], widths: [100, 600, 150], text: ['Key', 'Value'], datetime: ['Updated'] },
   Counters: { headers: ['Name', 'Value'], widths: [140, 100] },
@@ -1599,7 +1599,8 @@ function readMessages_() {
     return Object.assign({
       id: Number(g('ID')) || 0, createdAt: when instanceof Date ? when.toISOString() : String(when || ''), status: String(g('Status') || 'New'),
       topic: String(g('Topic') || ''), name: String(g('Name') || ''), email: String(g('Email') || ''), phone: String(g('Phone') || ''),
-      orderNumber: String(g('Order') || ''), message: String(g('Message') || ''), source: String(g('Source') || '')
+      orderNumber: String(g('Order') || ''), message: String(g('Message') || ''), source: String(g('Source') || ''),
+      replies: (() => { try { return JSON.parse(g('Replies') || '[]'); } catch (e) { return []; } })()
     }, photosFromCell_(g('Photo')));
   }).filter((m) => m.id).reverse();
 }
@@ -1616,6 +1617,27 @@ function adminSetMessageStatus(id, status) {
   const row = messageRow_(sh, id);
   if (row !== -1) setCell_(sh, row, 'Status', status === 'Replied' ? 'Replied' : 'New');
   return { ok: true };
+}
+
+// The Messages tab's "Send reply": emails the customer from the shop's account (quoting what they wrote), keeps a
+// copy in the message's Replies column, and marks it Replied.
+function adminReplyMessage(id, text) {
+  requireOwner_();
+  const reply = clean_(text, 4000);
+  if (!reply) return { ok: false, error: 'Write your reply first.' };
+  const m = readMessages_().find((x) => x.id === Number(id));
+  if (!m) return { ok: false, error: 'That message was deleted.' };
+  const emailStatus = sendSafely_(() => sendMessageReplyEmail_(getConfig_(), m, reply));
+  if (/^FAILED/.test(emailStatus)) return { ok: false, error: 'The reply didn’t send: ' + emailStatus.replace(/^FAILED: /, '') };
+  m.replies = (m.replies || []).concat([{ at: new Date().toISOString(), text: reply, emailStatus }]);
+  m.status = 'Replied';
+  const sh = SpreadsheetApp.getActive().getSheetByName('Messages');
+  const row = messageRow_(sh, m.id);
+  if (row !== -1) {
+    setCell_(sh, row, 'Replies', JSON.stringify(m.replies));
+    setCell_(sh, row, 'Status', 'Replied');
+  }
+  return { ok: true, message: m, emailStatus };
 }
 
 function adminDeleteMessage(id) {
@@ -2344,6 +2366,28 @@ function sendOrderMessageEmail_(cfg, o, text) {
     htmlBody: html,
     body: (first ? 'Hi ' + first + ',\n\n' : '') + text + '\n\n— Sweet Nothings\n\nYour order ' + o.number + ':\n' +
       (o.type === 'Class' ? classText_(o) : 'Needed by: ' + prettyDate_(o.dateNeeded) + '\n' + itemsText_(o)) + '\n\nJust reply to this email to answer.',
+    name: cfg.senderName, replyTo: cfg.replyToEmail
+  });
+}
+
+/* ---------- Reply to a message (customer) ---------- */
+function sendMessageReplyEmail_(cfg, m, text) {
+  const first = (m.name || '').split(' ')[0];
+  const when = m.createdAt ? Utilities.formatDate(new Date(m.createdAt), tz_(), 'MMM d') : '';
+  const html = shell_(cfg, 'A reply from Sweet Nothings', '',
+    (first ? p_('Hi ' + esc_(first) + ',', 15) : '') +
+    '<div style="font-size:15px;white-space:pre-wrap;margin-bottom:18px;color:' + C.navy + '">' + esc_(text) + '</div>' +
+    '<p style="margin:0 0 18px;font-size:15px">— Sweet Nothings</p>' +
+    '<div style="border-left:3px solid ' + C.line + ';padding:4px 0 4px 14px;margin-bottom:18px;font-size:14px;color:' + C.muted + '">' +
+      '<div style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">You wrote' + (when ? ' on ' + esc_(when) : '') + '</div>' +
+      '<div style="white-space:pre-wrap">' + esc_(m.message) + '</div></div>' +
+    p_('Just reply to this email to answer.', 14));
+  sendMail_({
+    to: m.email,
+    subject: subjectPrefix_(cfg) + 'Re: ' + (m.topic && m.topic !== 'Quick message' ? m.topic : 'your message') + ' – Sweet Nothings',
+    htmlBody: html,
+    body: (first ? 'Hi ' + first + ',\n\n' : '') + text + '\n\n— Sweet Nothings\n\n' +
+      'You wrote' + (when ? ' on ' + when : '') + ':\n' + m.message.split('\n').map((l) => '> ' + l).join('\n') + '\n\nJust reply to this email to answer.',
     name: cfg.senderName, replyTo: cfg.replyToEmail
   });
 }
