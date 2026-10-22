@@ -57,7 +57,7 @@
             '<p>Use <strong>Preview changes</strong> to see the site with your edits before anything goes live. Customers only see changes after you save.</p></div>' +
             '<div class="row-gap" style="gap:10px"><button type="button" class="btn ghost" data-preview>Preview changes</button><button type="button" class="btn" data-save>Save changes</button></div>' +
           '</div>' +
-          sectionOrders() + sectionMessages() + sectionCodes() + sectionCustom() + sectionArtisan() + sectionRules() + sectionZones() + sectionFaq() +
+          sectionDashboard() + sectionOrders() + sectionMessages() + sectionCodes() + sectionCustom() + sectionArtisan() + sectionRules() + sectionZones() + sectionFaq() +
           sectionPages() + sectionEvents() + sectionGallery() + sectionSettings() +
         '</main>' +
       '</div>' +
@@ -73,16 +73,16 @@
 
   // Each tab shows one section. Orders and Messages are day-to-day; the rest are shop settings (saved together).
   const TAB_GROUPS = [
-    ['Orders &amp; messages', [['orders', 'Orders'], ['messages', 'Messages'], ['codes', 'Promo &amp; gift codes']]],
+    ['Orders &amp; messages', [['dashboard', 'Dashboard'], ['orders', 'Orders'], ['messages', 'Messages'], ['codes', 'Promo &amp; gift codes']]],
     ['Shop settings', [['custom', 'Custom pricing'], ['artisan', 'Artisan &amp; flavors'], ['rules', 'Ordering rules'], ['zones', 'Drop-off zones'],
       ['faq', 'FAQ'], ['pages', 'Website pages'], ['events', 'Events'], ['gallery', 'Gallery'], ['settings', 'Tax &amp; contact']]]
   ];
   const TAB_IDS = TAB_GROUPS.reduce((a, g) => a.concat(g[1].map((t) => t[0])), []);
 
   function showTab() {
-    const id = TAB_IDS.indexOf(location.hash.slice(1)) !== -1 ? location.hash.slice(1) : 'orders';
+    const id = TAB_IDS.indexOf(location.hash.slice(1)) !== -1 ? location.hash.slice(1) : 'dashboard';
     $$('.admin-main > .panel-card').forEach((s) => { s.hidden = s.id !== id; });
-    $('#settings-title').hidden = id === 'orders' || id === 'messages' || id === 'codes';
+    $('#settings-title').hidden = ['dashboard', 'orders', 'messages', 'codes'].indexOf(id) !== -1;
     $$('.admin-nav a').forEach((a) => { if (a.dataset.tab === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     window.scrollTo(0, 0);
   }
@@ -106,7 +106,7 @@
         '<div><h2 id="orders-h">Orders</h2><p class="sub">Cookie requests come in as <strong>Pending review</strong>. Click <strong>Review</strong> to approve as-is or with changes, decline, message the customer, or change the date. Class bookings come in already <strong>Booked</strong>.</p></div>' +
         '<button type="button" class="btn ghost small" id="orders-toggle"></button>' +
       '</div>' +
-      '<div class="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Needed by</th><th>Event</th><th>Items</th><th>Pickup / drop-off</th><th>Total</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>' +
+      '<div class="table-wrap"><table class="orders-table"><thead><tr><th>Order</th><th>Customer</th><th>Needed by</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>' +
       '<tbody id="orders-body"></tbody></table></div></section>';
   }
   function sectionMessages() {
@@ -328,33 +328,36 @@
     $('#orders-toggle').textContent = showAllOrders ? 'Hide completed, declined & cancelled' : 'Show completed, declined & cancelled (' + (orders.length - orders.filter(isActive).length) + ')';
     const body = $('#orders-body');
     if (!list.length) {
-      body.innerHTML = '<tr class="empty-row"><td colspan="9">' + (orders.length ? 'No open orders.' : 'No orders yet. They\'ll show up here as soon as a customer sends a request or books a class.') + '</td></tr>';
+      body.innerHTML = '<tr class="empty-row"><td colspan="6">' + (orders.length ? 'No open orders.' : 'No orders yet. They\'ll show up here as soon as a customer sends a request or books a class.') + '</td></tr>';
       return;
     }
+    // Six columns with related details stacked, so the table fits a laptop screen without scrolling sideways.
+    const small = (t) => '<br><span class="muted" style="font-size:13px">' + t + '</span>';
     body.innerHTML = list.map((o) => {
       const items = o.items.map((it) => esc(it.kind === 'class' ? it.qty + ' × ' + it.title : it.qty + ' ' + SN.itemLabel(it.kind))).join('<br>');
       const ful = isClass(o) ? 'Class' : o.fulfillment === 'delivery' && o.address ? 'Drop-off · ' + esc(o.address.zip) : 'Pickup';
       const total = o.invoice
-        ? '<strong>' + money(o.invoice.total) + '</strong>' + (o.invoice.changed ? '<br><span class="muted" style="font-size:12px">was est. ' + money(o.total) + '</span>' : '')
-        : money(o.total) + '<br><span class="muted" style="font-size:12px">estimate</span>';
+        ? '<strong>' + money(o.invoice.total) + '</strong>' + (o.invoice.changed ? small('was est. ' + money(o.total)) : '')
+        : money(o.total) + small(isClass(o) ? '' : 'estimate');
       const opts = pickable(o);
       const status = opts
         ? '<label class="sr-only" for="st-' + esc(o.number) + '">Status for ' + esc(o.number) + '</label><select class="status" id="st-' + esc(o.number) + '" data-order="' + esc(o.number) + '">' +
             opts.map((s) => '<option' + (s === o.status ? ' selected' : '') + '>' + s + '</option>').join('') + '</select>'
         : badge(o.status);
       const action = '<button type="button" class="btn ' + (o.status === 'Pending review' ? '' : 'ghost ') + 'small" data-rv="open" data-n="' + esc(o.number) + '">' + (o.status === 'Pending review' ? 'Review' : 'View') + '</button>';
+      const received = o.createdAt ? new Date(o.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
       return '<tr' + (o.status === 'Pending review' ? ' class="row-pending"' : '') + '>' +
-        '<td class="nowrap"><strong>' + esc(o.number) + '</strong>' + (o.allergies ? '<br><span class="status-badge" style="background:#FBEDEA;color:#B23A2B">Allergy</span>' : '') + '</td>' +
-        '<td>' + esc(o.customer.name) + '<br><span class="muted" style="font-size:13px">' + esc(o.customer.email) + '</span></td>' +
-        '<td class="nowrap">' + esc(o.dateNeeded ? SN.prettyDate(o.dateNeeded, { month: 'short', day: 'numeric', year: 'numeric' }) : '—') + '</td>' +
-        '<td>' + esc(isClass(o) ? 'Class' : o.eventType || '—') + '</td>' +
-        '<td class="nowrap">' + items + '</td>' +
-        '<td class="nowrap">' + ful + '</td>' +
+        '<td><div class="order-cell">' + action + '<div><strong>' + esc(o.number) + '</strong>' + small(esc(received)) +
+          (o.allergies ? '<br><span class="status-badge" style="background:#FBEDEA;color:#B23A2B;margin-top:4px">Allergy</span>' : '') + '</div></div></td>' +
+        '<td class="wrap-any">' + esc(o.customer.name) + small(esc(o.customer.email)) + small(esc(isClass(o) ? 'Class' : o.eventType || 'Occasion not given')) + '</td>' +
+        '<td class="nowrap">' + esc(o.dateNeeded ? SN.prettyDate(o.dateNeeded, { weekday: 'short', month: 'short', day: 'numeric' }) : '—') + small(ful) + '</td>' +
+        '<td>' + items + '</td>' +
         '<td class="nowrap">' + total + '</td>' +
-        '<td>' + status + '</td>' +
-        '<td>' + action + '</td></tr>';
+        '<td>' + status + '</td></tr>';
     }).join('');
   }
+  // Newest first, by when the customer sent it.
+  function sortOrders() { orders.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '') || b.number.localeCompare(a.number, undefined, { numeric: true })); }
   function onStatusChange(e) {
     const sel = e.target.closest('[data-order]');
     if (!sel) return;
@@ -366,6 +369,7 @@
       if (!r.ok) { o.status = prev; renderOrders(); toast(r.error); return; }
       toast(o.number + ' marked ' + o.status);
       if (r.weekCounts) { weekCounts = r.weekCounts; renderBusyDays(); }
+      renderDashboard();
       renderOrders();
     }).catch((err) => { o.status = prev; renderOrders(); failed(err); });
   }
@@ -385,6 +389,194 @@
         full.map((k) => ' <span class="status-badge" style="background:#FBEDEA;color:#B23A2B">Full: ' + k + ' (Mon ' + esc(shortDate(w).replace(/^\w+, /, '')) + ' – Sun ' + esc(shortDate(SN.isoDate(new Date(new Date(w + 'T12:00').getTime() + 6 * 864e5))).replace(/^\w+, /, '')) + ')</span>').join('') +
       '</div>';
     }).join('') + '</div>' : '<span class="hint">No upcoming cookie orders yet.</span>';
+  }
+
+  /* ---------- Dashboard: plan the week (Mon-Sun, by the date orders are needed) ---------- */
+  // Confirmed = approved cookie orders and booked classes. Pending requests are shown, but always separately.
+  let dashWeek = '';          // Monday of the week shown
+  let dashRefreshed = null;   // when orders were last loaded from the Sheet
+  const COUNTED = ['Invoice sent', 'Paid', 'Baking', 'Ready', 'Completed'];
+  const isConfirmed = (o) => (isClass(o) ? ['Booked', 'Paid', 'Completed'].indexOf(o.status) !== -1 : COUNTED.indexOf(o.status) !== -1);
+  const isPending = (o) => o.status === 'Pending review';
+  const addDays = (iso, n) => { const d = new Date(iso + 'T12:00'); d.setDate(d.getDate() + n); return SN.isoDate(d); };
+  const dayLabel = (iso, opts) => SN.prettyDate(iso, opts || { weekday: 'short', month: 'short', day: 'numeric' });
+
+  function sectionDashboard() {
+    return '<section class="panel-card" id="dashboard" aria-labelledby="dashboard-h"><div id="dash"></div></section>';
+  }
+
+  // Cookies, class spots and money in a set of orders.
+  function tally(list) {
+    const t = { orders: list.length, custom: 0, mini: 0, large: 0, spots: 0, money: 0 };
+    list.forEach((o) => {
+      o.items.forEach((it) => { if (it.kind === 'class') t.spots += it.qty; else t[it.kind] += it.qty; });
+      t.money += o.invoice ? Number(o.invoice.total) || 0 : Number(o.total) || 0;
+    });
+    return t;
+  }
+
+  // What to bake: artisan cookies added up by size and flavor; custom orders listed one by one.
+  function bakeList(list) {
+    const names = {};
+    (cfg.flavors || []).forEach((f) => { names[f.id] = f.name; });
+    const art = { mini: {}, large: {} };
+    const custom = [], classes = {};
+    list.forEach((o) => o.items.forEach((it) => {
+      if (it.kind === 'custom') custom.push({ o, it });
+      else if (it.kind === 'class') { const k = it.title; classes[k] = classes[k] || { title: it.title, spots: 0, date: o.dateNeeded }; classes[k].spots += it.qty; }
+      else Object.keys(it.fq || {}).forEach((id) => { const n = names[id] || (it.flavorNames || {})[id] || id; art[it.kind][n] = (art[it.kind][n] || 0) + it.fq[id]; });
+    }));
+    return { art, custom, classes: Object.keys(classes).map((k) => classes[k]) };
+  }
+
+  // Checks that the numbers on this page can be trusted. Each returns { ok, text, n } (n = order number to open).
+  function dataChecks(week, weekConfirmed) {
+    const out = [];
+    const today = SN.isoDate(new Date());
+    const open = orders.filter((o) => ['Declined', 'Cancelled', 'Completed'].indexOf(o.status) === -1);
+    const live = orders.filter((o) => ['Declined', 'Cancelled'].indexOf(o.status) === -1);
+
+    // 1. This week's approved cookie totals match the Sheet's own weekly count (worked out separately on the server).
+    const mine = tally(weekConfirmed.filter((o) => !isClass(o)));
+    const sheet = weekCounts[week] || zeroWeek();
+    const same = mine.custom === sheet.custom.approved && mine.mini + mine.large === sheet.artisan.approved;
+    out.push(same
+      ? { ok: true, text: 'This week’s cookie totals match the Sheet’s weekly count (' + mine.custom + ' custom, ' + (mine.mini + mine.large) + ' artisan).' }
+      : { ok: false, text: 'This week’s totals don’t match the Sheet’s weekly count (here: ' + mine.custom + ' custom, ' + (mine.mini + mine.large) + ' artisan; Sheet: ' + sheet.custom.approved + ' custom, ' + sheet.artisan.approved + ' artisan). Click Refresh; if it stays, check the OrderItems tab.' });
+
+    // 2. Each order's items add up to its subtotal.
+    const badSum = live.filter((o) => o.items.length && Math.abs(o.items.reduce((a, it) => a + (Number(it.lineTotal) || 0), 0) - (Number(o.subtotal) || 0)) > 0.01);
+    out.push(badSum.length ? { ok: false, text: badSum.map((o) => o.number).join(', ') + ': items don’t add up to the order’s subtotal.', n: badSum[0].number } : { ok: true, text: 'Every order’s items add up to its subtotal.' });
+
+    // 3. Orders missing a date or items.
+    const missing = live.filter((o) => !o.items.length || (!isClass(o) && !o.dateNeeded));
+    out.push(missing.length ? { ok: false, text: missing.map((o) => o.number).join(', ') + ': missing a date or items.', n: missing[0].number } : { ok: true, text: 'Every order has items and a date.' });
+
+    // 4. Past their date but not marked Completed (or declined/cancelled).
+    const pastDue = open.filter((o) => o.dateNeeded && o.dateNeeded < today);
+    pastDue.forEach((o) => out.push({ ok: false, text: o.number + ' was needed ' + dayLabel(o.dateNeeded) + ' but is still ' + o.status + '.', n: o.number }));
+    if (!pastDue.length) out.push({ ok: true, text: 'No past-due orders left open.' });
+
+    // 5. Requests still waiting for review that are needed within 3 days.
+    const soon = orders.filter((o) => isPending(o) && o.dateNeeded && o.dateNeeded >= today && o.dateNeeded <= addDays(today, 3));
+    soon.forEach((o) => out.push({ ok: false, text: o.number + ' is needed ' + dayLabel(o.dateNeeded) + ' and still needs review.', n: o.number }));
+
+    // 6. This week over the weekly caps.
+    const c = caps();
+    if (c.custom && mine.custom > c.custom) out.push({ ok: false, text: 'This week has ' + mine.custom + ' approved custom cookies, over your limit of ' + c.custom + '.' });
+    if (c.artisan && mine.mini + mine.large > c.artisan) out.push({ ok: false, text: 'This week has ' + (mine.mini + mine.large) + ' approved artisan cookies, over your limit of ' + c.artisan + '.' });
+
+    // 7. Orders on a blocked date.
+    const blocked = (cfg.blockedRanges || []);
+    const onBlocked = live.filter((o) => !isClass(o) && o.dateNeeded && blocked.some((r) => o.dateNeeded >= r.start && o.dateNeeded <= r.end));
+    onBlocked.forEach((o) => out.push({ ok: false, text: o.number + ' is on a blocked date (' + dayLabel(o.dateNeeded) + ').', n: o.number }));
+
+    // 8. Possible duplicates: same email, same date, same total.
+    const seen = {}, dupes = [];
+    live.forEach((o) => { const k = o.customer.email.toLowerCase() + '|' + o.dateNeeded + '|' + o.total; if (seen[k]) dupes.push([seen[k], o.number]); else seen[k] = o.number; });
+    dupes.forEach(([a, b]) => out.push({ ok: false, text: a + ' and ' + b + ' look like the same order sent twice (same email, date and total).', n: b }));
+
+    // 9. Classes booked past their max.
+    (cfg.events || []).filter((e) => e.max !== '' && e.max != null && (e.booked || 0) > e.max)
+      .forEach((e) => out.push({ ok: false, text: e.title + ' has ' + e.booked + ' spots booked but a max of ' + e.max + '.' }));
+
+    if (!onBlocked.length && !dupes.length && !soon.length) out.push({ ok: true, text: 'No orders on blocked dates, no likely duplicates, nothing urgent waiting for review.' });
+    return out;
+  }
+
+  function renderDashboard() {
+    const box = $('#dash');
+    if (!box) return;
+    const today = SN.isoDate(new Date());
+    if (!dashWeek) dashWeek = SN.mondayOf(today);
+    const week = dashWeek, sunday = addDays(week, 6);
+    const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
+    const inWeek = orders.filter((o) => o.dateNeeded >= week && o.dateNeeded <= sunday && ['Declined', 'Cancelled'].indexOf(o.status) === -1);
+    const conf = inWeek.filter(isConfirmed), pend = inWeek.filter(isPending);
+    const tc = tally(conf), tp = tally(pend), c = caps();
+    const waiting = orders.filter(isPending).length;
+    const plus = (n) => (n ? '<span class="dash-pend">+' + n + ' pending</span>' : '');
+    const tile = (label, value, sub) => '<div class="dash-tile"><div class="k">' + label + '</div><div class="v">' + value + '</div>' + (sub || '') + '</div>';
+    const bake = bakeList(conf);
+    const artRows = (size) => Object.keys(bake.art[size]).sort().map((n) => '<tr><td>' + esc(n) + '</td><td>' + bake.art[size][n] + '</td></tr>').join('');
+    const checks = dataChecks(week, conf);
+    const problems = checks.filter((x) => !x.ok).length;
+
+    box.innerHTML =
+      '<div class="dash-head">' +
+        '<div><h2 id="dashboard-h">Week of ' + esc(dayLabel(week, { month: 'long', day: 'numeric' })) + '</h2>' +
+          '<p class="sub" style="margin:2px 0 0">' + esc(dayLabel(week)) + ' – ' + esc(dayLabel(sunday)) + ' · by the date orders are needed' +
+          (dashRefreshed ? ' · updated ' + esc(dashRefreshed.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })) : '') + '</p></div>' +
+        '<div class="row-gap dash-nav" style="gap:8px">' +
+          '<button type="button" class="btn ghost small" data-dash="prev" aria-label="Previous week">‹ Previous</button>' +
+          '<button type="button" class="btn ghost small" data-dash="today"' + (week === SN.mondayOf(today) ? ' aria-disabled="true"' : '') + '>This week</button>' +
+          '<button type="button" class="btn ghost small" data-dash="next" aria-label="Next week">Next ›</button>' +
+          '<button type="button" class="btn ghost small" data-dash="refresh">Refresh</button>' +
+          '<button type="button" class="btn ghost small" data-dash="print">Print</button>' +
+        '</div>' +
+      '</div>' +
+      (waiting ? '<div class="dash-alert">' + waiting + ' order' + (waiting > 1 ? 's are' : ' is') + ' waiting for review' +
+        (tp.orders ? ' (' + tp.orders + ' this week)' : '') + '. Pending orders aren’t in the totals until you approve them. <a href="#orders" target="_self">Review them</a></div>' : '') +
+      '<div class="dash-tiles">' +
+        tile('Confirmed orders', tc.orders, plus(tp.orders)) +
+        tile('Custom cookies', tc.custom + (c.custom ? '<span class="muted" style="font-size:16px"> / ' + c.custom + '</span>' : ''), plus(tp.custom)) +
+        tile('Artisan cookies', (tc.mini + tc.large) + (c.artisan ? '<span class="muted" style="font-size:16px"> / ' + c.artisan + '</span>' : ''),
+          '<div class="hint">' + tc.mini + ' mini · ' + tc.large + ' large</div>' + plus(tp.mini + tp.large)) +
+        tile('Class spots', tc.spots, '') +
+        tile('Confirmed sales', money(tc.money), tp.orders ? '<span class="dash-pend">+' + money(tp.money) + ' estimated pending</span>' : '') +
+      '</div>' +
+      '<div class="dash-cal">' + days.map((d) => {
+        const list = inWeek.filter((o) => o.dateNeeded === d).sort((a, b) => Number(isPending(a)) - Number(isPending(b)));
+        return '<div class="dash-day' + (d === today ? ' today' : '') + '"><div class="dash-day-h">' + esc(dayLabel(d)) + (d === today ? ' · today' : '') + '</div>' +
+          (list.length ? list.map((o) => {
+            const what = o.items.map((it) => it.kind === 'class' ? it.qty + ' × ' + it.title : it.qty + ' ' + (it.kind === 'custom' ? 'custom' : it.kind)).join(', ');
+            const how = isClass(o) ? 'Class' : o.fulfillment === 'delivery' ? 'Drop-off' : 'Pickup';
+            return '<button type="button" class="dash-order' + (isPending(o) ? ' pending' : '') + '" data-dash-open="' + esc(o.number) + '" style="border-left-color:' + ((STATUS_STYLE[o.status] || '').match(/color:([^;]+)/) || [, 'var(--navy)'])[1] + '">' +
+              '<strong>' + esc(o.number) + '</strong> ' + esc((o.customer.name || '').split(' ')[0]) +
+              '<span>' + esc(what) + '</span><span>' + esc(how) + ' · ' + esc(o.status) + (o.allergies ? ' · Allergy' : '') + '</span></button>';
+          }).join('') : '<p class="hint" style="margin:6px 0 0">Nothing due</p>') +
+        '</div>';
+      }).join('') + '</div>' +
+      '<div class="dash-cols">' +
+        '<div><h3 class="rv-h">Bake list <span class="muted" style="font-size:14px;font-family:var(--sans);font-weight:400">(confirmed orders)</span></h3>' +
+          (bake.custom.length ? '<h4 class="dash-h4">Custom cookies</h4>' + bake.custom.map(({ o, it }) =>
+            '<div class="dash-line"><button type="button" class="link-btn" data-dash-open="' + esc(o.number) + '" style="padding:0">' + esc(o.number) + '</button> · ' + esc(dayLabel(o.dateNeeded)) +
+              ' · <strong>' + it.qty + '</strong> cookies, ' + it.designs + ' design' + (it.designs > 1 ? 's' : '') + (it.desc ? '<div class="hint">“' + esc(it.desc.length > 140 ? it.desc.slice(0, 140) + '…' : it.desc) + '”</div>' : '') + '</div>').join('') : '') +
+          ['mini', 'large'].map((size) => artRows(size) ? '<h4 class="dash-h4">' + (size === 'mini' ? 'Mini' : 'Large') + ' artisan</h4><table class="dash-table"><tbody>' + artRows(size) + '</tbody></table>' : '').join('') +
+          (bake.classes.length ? '<h4 class="dash-h4">Classes</h4>' + bake.classes.map((k) => '<div class="dash-line">' + esc(k.title) + ' · ' + esc(dayLabel(k.date)) + ' · <strong>' + k.spots + '</strong> spots</div>').join('') : '') +
+          (!conf.length ? '<p class="hint">No confirmed orders this week yet.</p>' : '') +
+        '</div>' +
+        '<div><h3 class="rv-h">Data checks <span class="muted" style="font-size:14px;font-family:var(--sans);font-weight:400">' +
+            (problems ? problems + ' to look at' : 'all good') + '</span></h3>' +
+          '<ul class="dash-checks">' + checks.map((x) => '<li class="' + (x.ok ? 'ok' : 'warn') + '"><span aria-hidden="true">' + (x.ok ? '✓' : '!') + '</span><span>' + esc(x.text) +
+            (x.n ? ' <button type="button" class="link-btn" data-dash-open="' + esc(x.n) + '" style="padding:0">Open</button>' : '') + '</span></li>').join('') + '</ul>' +
+        '</div>' +
+      '</div>';
+  }
+
+  // Reload orders (not settings, so unsaved setting edits stay) and redraw.
+  function refreshOrders() {
+    return server('adminLoad').then((d) => {
+      orders = d.orders;
+      sortOrders();
+      weekCounts = d.weekCounts || {};
+      messages = d.messages;
+      codes = d.codes || [];
+      cfg.events = cfg.events.map((e) => { const fresh = (d.config.events || []).find((x) => x.id === e.id); return fresh ? Object.assign(e, { booked: fresh.booked, spotsLeft: fresh.spotsLeft }) : e; });
+      dashRefreshed = new Date();
+      renderOrders(); renderMessages(); renderCodes(); renderBusyDays(); renderDashboard();
+    });
+  }
+
+  function onDashClick(b) {
+    if (b.dataset.dashOpen) { openReview(b.dataset.dashOpen, b); return; }
+    const act = b.dataset.dash;
+    if (act === 'prev') dashWeek = addDays(dashWeek, -7);
+    if (act === 'next') dashWeek = addDays(dashWeek, 7);
+    if (act === 'today') dashWeek = SN.mondayOf(SN.isoDate(new Date()));
+    if (act === 'print') { window.print(); return; }
+    if (act === 'refresh') { b.textContent = 'Refreshing…'; refreshOrders().then(() => toast('Orders refreshed from the Sheet')).catch(failed); return; }
+    renderDashboard();
   }
 
   /* ---------- Review panel ---------- */
@@ -596,6 +788,7 @@
     if (counts) weekCounts = counts;
     renderOrders();
     renderBusyDays();
+    renderDashboard();
     if (rv && rv.number === o.number) renderReview();
   }
 
@@ -1021,6 +1214,8 @@
     document.addEventListener('click', (e) => {
       const rvb = e.target.closest('[data-rv]');
       if (rvb) { onReviewClick(rvb); return; }
+      const db = e.target.closest('[data-dash], [data-dash-open]');
+      if (db) { onDashClick(db); return; }
       const mb = e.target.closest('[data-msg]');
       if (mb) { onMessageClick(mb); return; }
       const ab = e.target.closest('[data-act]');
@@ -1082,6 +1277,7 @@
       cfg = d.config;
       stamp = d.stamp;
       orders = d.orders;
+      sortOrders();
       messages = d.messages;
       codes = d.codes || [];
       weekCounts = d.weekCounts || {};
@@ -1102,6 +1298,8 @@
       renderMessages();
       renderCodes();
       fillCodeForm(null);
+      dashRefreshed = new Date();
+      renderDashboard();
     });
   }
   load().catch((err) => {

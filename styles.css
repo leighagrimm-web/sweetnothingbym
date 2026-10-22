@@ -214,6 +214,44 @@ textarea.input { resize: vertical; }
   .admin-nav a { white-space: nowrap; flex: none; padding: 10px 14px; }
   .admin-nav a[aria-current="page"] { box-shadow: inset 0 -3px 0 var(--coral); }
 }
+/* Admin orders table: Review button first, details stacked so it fits a laptop without scrolling sideways. */
+.orders-table td { vertical-align: top; padding-top: 14px; padding-bottom: 14px; }
+.orders-table .order-cell { display: flex; gap: 12px; align-items: flex-start; }
+.orders-table .order-cell .btn { flex: none; min-width: 78px; }
+.orders-table .wrap-any { overflow-wrap: anywhere; min-width: 150px; }
+/* Admin dashboard: week planner. */
+.dash-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 16px; }
+.dash-head h2 { margin: 0; }
+.dash-alert { background: #FDF0D5; color: #5C3A00; border-radius: 12px; padding: 12px 16px; font-size: 14px; margin-bottom: 16px; }
+.dash-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.dash-tile { background: var(--ground); border-radius: 14px; padding: 14px 16px; }
+.dash-tile .k { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.dash-tile .v { font-family: var(--serif); font-size: 32px; font-weight: 600; line-height: 1.2; margin-top: 2px; }
+.dash-pend { display: block; font-size: 13px; color: #7A4B00; margin-top: 2px; }
+.dash-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; margin-bottom: 22px; }
+.dash-day { background: #FBF7F4; border-radius: 12px; padding: 10px; min-height: 120px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dash-day.today { box-shadow: inset 0 0 0 2px var(--coral); }
+.dash-day-h { font-size: 13px; font-weight: 700; color: var(--navy); }
+.dash-order { text-align: left; background: var(--white); border: 1px solid var(--line); border-left: 4px solid var(--navy); border-radius: 8px; padding: 8px; font: inherit; font-size: 13px; color: var(--navy); cursor: pointer; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.dash-order span { color: var(--muted); font-size: 12px; }
+.dash-order.pending { border-style: dashed; border-left-style: solid; background: #FFFBF4; }
+.dash-order:hover { border-color: var(--coral); }
+.dash-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 28px; }
+.dash-h4 { font-family: var(--sans); font-size: 14px; font-weight: 700; margin: 14px 0 6px; }
+.dash-line { font-size: 14px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.dash-table td { padding: 6px 0; }
+.dash-table td:last-child { text-align: right; font-weight: 700; }
+.dash-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.dash-checks li { display: flex; gap: 10px; align-items: flex-start; }
+.dash-checks li > span:first-child { flex: none; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; }
+.dash-checks li.ok > span:first-child { background: #DDEFE3; color: #1E5A35; }
+.dash-checks li.warn > span:first-child { background: #FBEDEA; color: #B23A2B; }
+@media (max-width: 1100px) { .dash-cal { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
+@media print {
+  .admin-nav, .admin-header, .proto-banner, .save-bar, .dash-nav, .toast, #settings-title { display: none !important; }
+  .admin-main > .panel-card:not(#dashboard) { display: none !important; }
+  .dash-cal { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+}
 /* The admin uses more of a wide screen than the public site (tables and forms need the room). */
 .admin-header .wrap, .wrap.admin-layout { max-width: 1440px; }
 .admin-main { flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 22px; }
