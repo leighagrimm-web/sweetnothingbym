@@ -1903,21 +1903,27 @@ function checkPayments() {
       }
     }
 
-    if (squareReady_()) {
+    // Class bookings waiting on Square. The Square order number comes from the "Square order" column, or the
+    // booking's saved invoice details if that column is missing (a Sheet that hadn't run setupSheet since payments
+    // were added). An unpaid hold always expires on time, even if Square can't be reached.
+    {
       const hold = (Number(cfg.classHoldMinutes) || 30) * 60000;
       const now = Date.now();
-      rows.filter((r) => r['Square order'] && (r.Status === 'Awaiting payment' || (r.Status === 'Expired' && now - new Date(r.Received).getTime() < 864e5)))
+      const age = (r) => now - new Date(r.Received).getTime();
+      rows.filter((r) => r.Status === 'Awaiting payment' || (r.Status === 'Expired' && age(r) < 864e5))
         .forEach((r) => {
           try {
-            if (squareOrderPaid_(r['Square order'])) {
+            const inv = json(r.Invoice) || {};
+            const sqOrder = String(r['Square order'] || (inv.square && inv.square.orderId) || '');
+            if (r.Status === 'Expired' && !sqOrder) return;
+            if (sqOrder && squareReady_() && squareOrderPaid_(sqOrder)) {
               const late = r.Status === 'Expired';
               // Paid after the hold ran out: the gift card amount it gave back is used again.
               if (late && Number(r['Gift card credit']) > 0) { const g = lookupCode_(r['Promo code']); if (g) useCode_(g, Number(r['Gift card credit'])); }
               confirmClass_(loadOrder_(String(r.Order)), 'Paid', late);
               summary.classesPaid.push(r.Order);
-            } else if (r.Status === 'Awaiting payment' && now - new Date(r.Received).getTime() > hold) {
-              const inv = json(r.Invoice) || {};
-              try { if (inv.square && inv.square.linkId) squareFetch_('delete', '/v2/online-checkout/payment-links/' + inv.square.linkId); } catch (e) { /* already gone */ }
+            } else if (r.Status === 'Awaiting payment' && age(r) > hold) {
+              try { if (inv.square && inv.square.linkId && squareReady_()) squareFetch_('delete', '/v2/online-checkout/payment-links/' + inv.square.linkId); } catch (e) { /* already gone */ }
               setCell_(sh, r._row, 'Status', 'Expired');
               setCell_(sh, r._row, 'Updated', new Date());
               if (Number(r['Gift card credit']) > 0) refundGiftCard_(r['Promo code'], Number(r['Gift card credit']));
@@ -1985,6 +1991,13 @@ function adminPayments() {
     square: { ready: squareReady_(), env: squareEnv_(), location: '', error: '' },
     lastCheck: JSON.parse(p.getProperty('PAYMENTS_LAST_CHECK') || 'null'),
     trigger: ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'checkPayments'),
+    // Columns or tabs added by an update that setupSheet hasn't added to this Sheet yet.
+    setupNeeded: Object.keys(TABS).some((name) => {
+      const sh = SpreadsheetApp.getActive().getSheetByName(name);
+      if (!sh) return true;
+      const have = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0].map(String);
+      return TABS[name].headers.some((h) => have.indexOf(h) === -1);
+    }),
     callbackUrl: 'https://script.google.com/macros/d/' + ScriptApp.getScriptId() + '/usercallback'
   };
   if (out.qb.keys && p.getProperty('QBO_REALM_ID')) {

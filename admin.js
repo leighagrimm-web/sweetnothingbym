@@ -1048,6 +1048,7 @@
         (lc.errors.length ? ' <span class="err">' + esc(lc.errors.join(' · ')) + '</span>' : '')
       : 'No check has run yet.';
     $('#pay-box').innerHTML =
+      (p.setupNeeded ? '<p class="err" style="margin-bottom:14px"><strong>The Sheet needs updating:</strong> some tabs or columns from a recent update are missing, so parts of payments can’t save. In the Apps Script editor, run <strong>setupSheet</strong> once (it only adds what’s missing).</p>' : '') +
       '<div class="fields">' +
         '<div class="field"><h3 class="rv-h" style="margin-top:0">QuickBooks ' + (qb.keys ? env(qb.env) : '') + '</h3>' + qbBody + '</div>' +
         '<div class="field"><h3 class="rv-h" style="margin-top:0">Square ' + (sq.ready ? env(sq.env) : '') + '</h3>' + sqBody + '</div>' +
