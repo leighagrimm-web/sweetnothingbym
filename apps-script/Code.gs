@@ -265,6 +265,8 @@ function setupSheet() {
 
   // Checks QuickBooks and Square for payments every 5 minutes.
   ensurePaymentTrigger_();
+  // Where customers' photos are saved.
+  uploadFolder_();
 
   ss.setActiveSheet(ss.getSheetByName('Orders'));
   clearConfigCache_();
@@ -596,6 +598,16 @@ function submitOrder_(b) {
     return { ok: false, code: 'rate', error: 'We’ve received several requests from this email in the last hour. Please try again later or send a message instead.' };
   }
 
+  // Inspiration photos go to Drive before the lock (it's the slow part); renamed with the order number below.
+  const photoFiles = [];
+  if (v.cookie) {
+    v.cookie.items.forEach((it) => {
+      const saved = it.photoData ? savePhoto_(it.photoData, 'Order photo – ' + v.customer.name) : null;
+      delete it.photoData;
+      if (saved) { it.photoUrl = saved.url; photoFiles.push({ it, id: saved.id }); }
+    });
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   const placed = [];   // [{ order, row }]
@@ -644,7 +656,7 @@ function submitOrder_(b) {
       appendObjects_(ss.getSheetByName('OrderItems'), o.items.map((it, i) => ({
         'Order': o.number, 'Line': i + 1, 'Item': itemLabel_(it.kind) + (it.kind === 'class' ? ': ' + it.title : ''), 'Kind': it.kind, 'Qty': it.qty,
         'Designs': it.kind === 'custom' ? it.designs : '', 'Flavors': it.kind === 'mini' || it.kind === 'large' ? it.summary : '',
-        'Flavors (data)': it.fq ? JSON.stringify(it.fq) : '', 'Description': it.kind === 'class' ? it.summary : (it.desc || ''), 'Photo': it.photoName || '',
+        'Flavors (data)': it.fq ? JSON.stringify(it.fq) : '', 'Description': it.kind === 'class' ? it.summary : (it.desc || ''), 'Photo': it.photoUrl || it.photoName || '',
         'Unit price': it.unit, 'Line total': it.lineTotal, 'Event ID': it.eventId || ''
       })));
       placed.push({ order: o, row });
@@ -656,6 +668,7 @@ function submitOrder_(b) {
     lock.releaseLock();
   }
   clearConfigCache_();   // class spots changed
+  photoFiles.forEach((p, i) => renamePhoto_(p.id, v.cookie.number + ' photo ' + (i + 1) + ' – ' + v.customer.name));
 
   const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
   placed.forEach(({ order: o, row }) => {
@@ -720,7 +733,7 @@ function validateOrder_(cfg, b) {
       if (!desc) errors.push(label + ': a description of your cookies');
       const unit = Number(cfg.customBasePrice) || 0;
       cookies.push({
-        kind, qty, designs, desc, photoName: clean_(raw.photoName, 200), unit: round2_(unit), lineTotal: round2_(qty * unit),
+        kind, qty, designs, desc, photoName: clean_(raw.photoName, 200), photoData: raw.photoData, unit: round2_(unit), lineTotal: round2_(qty * unit),
         summary: designs + ' design' + (designs > 1 ? 's' : '') + ' · estimated at ' + money_(unit) + ' each' + (raw.photoName ? ' · photo attached' : '')
       });
     } else if (kind === 'mini' || kind === 'large') {
@@ -940,6 +953,7 @@ function sendMessage_(b) {
     orderNumber: clean_(b.orderNumber, 20),
     message: clean_(b.message, 5000),
     photoName: clean_(b.photoName, 200),
+    photoUrl: '',
     source: b.source === 'quick' ? 'Message me' : 'Contact page'
   };
   // The "Message me" button can set its own topic (e.g. "Special events or classes"); anything unexpected becomes "Other".
@@ -952,6 +966,9 @@ function sendMessage_(b) {
   if (errors.length) return { ok: false, code: 'invalid', errors };
   if (rateLimited_('msg', m.email, 10)) return { ok: false, code: 'rate', error: 'You’ve sent several messages in the last hour. Please try again a little later.' };
 
+  const photo = b.photoData ? savePhoto_(b.photoData, 'Message photo – ' + (m.name || m.email)) : null;
+  if (photo) m.photoUrl = photo.url;
+
   const cfg = getConfig_();
   const sh = SpreadsheetApp.getActive().getSheetByName('Messages');
   const lock = LockService.getScriptLock();
@@ -962,12 +979,13 @@ function sendMessage_(b) {
     m.createdAt = new Date();
     row = appendObject_(sh, {
       'ID': m.id, 'Received': m.createdAt, 'Status': 'New', 'Topic': m.topic, 'Name': m.name, 'Email': m.email,
-      'Phone': m.phone, 'Order': m.orderNumber, 'Message': m.message, 'Photo': m.photoName, 'Source': m.source, 'Owner alert': 'Sending…'
+      'Phone': m.phone, 'Order': m.orderNumber, 'Message': m.message, 'Photo': m.photoUrl || m.photoName, 'Source': m.source, 'Owner alert': 'Sending…'
     });
     SpreadsheetApp.flush();
   } finally {
     lock.releaseLock();
   }
+  if (photo) renamePhoto_(photo.id, 'Message ' + m.id + ' photo – ' + (m.name || m.email));
   setCell_(sh, row, 'Owner alert', sendSafely_(() => sendOwnerMessageAlert_(cfg, m)));
   return { ok: true, id: m.id };
 }
@@ -1163,7 +1181,7 @@ function readOrders_() {
       return;
     }
     (items[num] = items[num] || []).push({
-      kind, qty: Number(g('Qty')) || 0, designs, desc: String(g('Description') || ''), photoName: String(g('Photo') || ''), fq,
+      kind, qty: Number(g('Qty')) || 0, designs, desc: String(g('Description') || ''), photoName: photoId_(g('Photo')) ? 'Photo' : String(g('Photo') || ''), photoId: photoId_(g('Photo')), photoUrl: photoId_(g('Photo')) ? String(g('Photo')) : '', fq,
       unit, lineTotal: Number(g('Line total')) || 0,
       summary: kind === 'custom'
         ? designs + ' design' + (designs > 1 ? 's' : '') + ' · estimated at ' + money_(unit) + ' each' + (g('Photo') ? ' · photo attached' : '')
@@ -1449,7 +1467,7 @@ function readMessages_() {
     return {
       id: Number(g('ID')) || 0, createdAt: when instanceof Date ? when.toISOString() : String(when || ''), status: String(g('Status') || 'New'),
       topic: String(g('Topic') || ''), name: String(g('Name') || ''), email: String(g('Email') || ''), phone: String(g('Phone') || ''),
-      orderNumber: String(g('Order') || ''), message: String(g('Message') || ''), photoName: String(g('Photo') || ''), source: String(g('Source') || '')
+      orderNumber: String(g('Order') || ''), message: String(g('Message') || ''), photoName: photoId_(g('Photo')) ? 'Photo' : String(g('Photo') || ''), photoId: photoId_(g('Photo')), photoUrl: photoId_(g('Photo')) ? String(g('Photo')) : '', source: String(g('Source') || '')
     };
   }).filter((m) => m.id).reverse();
 }
@@ -1474,6 +1492,61 @@ function adminDeleteMessage(id) {
   const row = messageRow_(sh, id);
   if (row !== -1) sh.deleteRow(row);
   return { ok: true };
+}
+
+/* ============================== Photos ============================== */
+
+/*
+ * Customers' inspiration photos (custom cookie orders and messages). The site shrinks them to a JPEG in the browser
+ * and sends them as a data: URL; they're saved, private, in the "Sweet Nothings uploads" Drive folder of the account
+ * that runs the script, and the Photo column holds the file's Drive link. Admin shows them via adminPhoto.
+ */
+const PHOTO_MAX_CHARS = 4000000;   // base64 characters (about 3 MB); the site sends ~1 MB
+
+// Save one photo. Returns { id, url }, or null if it isn't a JPEG/PNG/WebP image or Drive refuses (the order still goes through).
+function savePhoto_(data, label) {
+  const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(data || ''));
+  if (!m || m[2].length > PHOTO_MAX_CHARS) return null;
+  try {
+    const bytes = Utilities.base64Decode(m[2]);
+    const isImage = (bytes[0] === -1 && bytes[1] === -40) ||                       // JPEG FF D8
+      (bytes[0] === -119 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71) || // PNG 89 50 4E 47
+      (bytes[8] === 87 && bytes[9] === 69 && bytes[10] === 66 && bytes[11] === 80);   // WebP ....WEBP
+    if (!isImage) return null;
+    const ext = m[1] === 'jpeg' ? 'jpg' : m[1];
+    const file = uploadFolder_().createFile(Utilities.newBlob(bytes, 'image/' + m[1], clean_(label, 150) + '.' + ext));
+    return { id: file.getId(), url: file.getUrl() };
+  } catch (err) {
+    console.error('Photo save failed', err && err.stack || err);
+    return null;
+  }
+}
+
+function renamePhoto_(id, name) {
+  try { const f = DriveApp.getFileById(id); f.setName(clean_(name, 150) + f.getName().replace(/^.*(\.\w+)$/, '$1')); } catch (e) { /* keep the first name */ }
+}
+
+// The Drive folder photos go in, made the first time (setupSheet makes it too, so Drive permission is asked for there).
+function uploadFolder_() {
+  const id = SCRIPT_PROPS().getProperty('UPLOAD_FOLDER_ID');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) { /* deleted: make a new one */ } }
+  const folder = DriveApp.createFolder('Sweet Nothings uploads');
+  folder.setDescription('Inspiration photos customers send with orders and messages. Created by the Sweet Nothings website.');
+  SCRIPT_PROPS().setProperty('UPLOAD_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+// The Drive file ID in a Photo cell ('' for just a file name, from before uploads or when saving failed).
+function photoId_(v) { const m = String(v || '').match(/\/d\/([\w-]{20,})/); return m ? m[1] : ''; }
+
+// Admin: a photo as a data: URL (the admin page can't load private Drive images directly). Only files in the uploads folder.
+function adminPhoto(id) {
+  requireOwner_();
+  const file = DriveApp.getFileById(String(id));
+  const inFolder = file.getParents().hasNext() && file.getParents().next().getId() === SCRIPT_PROPS().getProperty('UPLOAD_FOLDER_ID');
+  if (!inFolder) throw new Error('That isn’t a customer photo.');
+  const blob = file.getBlob();
+  return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
 }
 
 /* ============================== Payments ============================== */
@@ -1902,7 +1975,7 @@ function sendOwnerOrderAlert_(cfg, o) {
   const contact = '<div style="font-size:15px;margin-bottom:18px"><strong>' + esc_(o.customer.name) + '</strong><br>' +
     '<a href="mailto:' + esc_(o.customer.email) + '" style="color:' + C.navy + '">' + esc_(o.customer.email) + '</a><br>' + esc_(o.customer.phone) + '</div>';
   const html = shell_(cfg, 'New order to review', o.number,
-    allergy + contact + facts_(o, true) + itemsBlock_(o, 'Request') + totalsBlock_(o, 'Estimated total') +
+    allergy + contact + facts_(o, true) + itemsBlock_(o, 'Request', true) + totalsBlock_(o, 'Estimated total') +
     (cfg.adminUrl ? button_(cfg.adminUrl, 'Review in admin') : button_(SpreadsheetApp.getActive().getUrl(), 'Open the orders sheet')) +
     p_('Approve or decline it in the admin page. Reply to this email to write to the customer.', 13));
   const text = [
@@ -1910,7 +1983,7 @@ function sendOwnerOrderAlert_(cfg, o) {
     o.allergies ? 'ALLERGIES / DIETARY NEEDS: ' + o.allergies + '\n' : '',
     'Needed by: ' + prettyDate_(o.dateNeeded), 'Occasion: ' + occasion_(o),
     o.address ? 'Drop-off to: ' + o.address.street + ', ' + o.address.city + ' ' + o.address.zip : 'Pickup',
-    '', itemsText_(o), '', totalsText_(o, 'Estimated total'), '', cfg.adminUrl ? 'Review in admin: ' + cfg.adminUrl : 'Orders sheet: ' + SpreadsheetApp.getActive().getUrl()
+    '', itemsText_(o, true), '', totalsText_(o, 'Estimated total'), '', cfg.adminUrl ? 'Review in admin: ' + cfg.adminUrl : 'Orders sheet: ' + SpreadsheetApp.getActive().getUrl()
   ].join('\n');
   MailApp.sendEmail({
     to: cfg.ownerEmail,
@@ -1925,7 +1998,8 @@ function sendOwnerMessageAlert_(cfg, m) {
     ['From', esc_(m.name || '(no name)') + '<br><a href="mailto:' + esc_(m.email) + '" style="color:' + C.navy + '">' + esc_(m.email) + '</a>' + (m.phone ? '<br>' + esc_(m.phone) : '')],
     ['Topic', esc_(m.topic)],
     m.orderNumber ? ['Order', esc_(m.orderNumber)] : null,
-    m.photoName ? ['Photo', esc_(m.photoName) + ' <span style="color:' + C.muted + '">(photo uploads are coming in a later update)</span>'] : null,
+    m.photoUrl ? ['Photo', '<a href="' + esc_(m.photoUrl) + '" style="color:' + C.navy + '">View their photo</a>']
+      : m.photoName ? ['Photo', esc_(m.photoName) + ' <span style="color:' + C.muted + '">(the photo couldn’t be saved; ask them to reply with it)</span>'] : null,
     ['Sent from', esc_(m.source)]
   ].filter(Boolean);
   const html = shell_(cfg, 'New message', '',
@@ -1939,7 +2013,7 @@ function sendOwnerMessageAlert_(cfg, m) {
     subject: subjectPrefix_(cfg) + 'New message: ' + m.topic + ' – ' + (m.name || m.email),
     htmlBody: html,
     body: ['New message (' + m.source + ')', 'From: ' + (m.name ? m.name + ' ' : '') + '<' + m.email + '>' + (m.phone ? ' ' + m.phone : ''),
-      'Topic: ' + m.topic, m.orderNumber ? 'Order: ' + m.orderNumber : '', m.photoName ? 'Photo: ' + m.photoName + ' (not saved yet)' : '', '', m.message].filter((l) => l !== null).join('\n'),
+      'Topic: ' + m.topic, m.orderNumber ? 'Order: ' + m.orderNumber : '', m.photoUrl ? 'Photo: ' + m.photoUrl : m.photoName ? 'Photo: ' + m.photoName + ' (couldn’t be saved)' : '', '', m.message].filter((l) => l !== null).join('\n'),
     name: cfg.senderName, replyTo: m.email
   });
 }
@@ -2158,13 +2232,15 @@ function facts_(o, forOwner) {
   '</table>';
 }
 
-function itemsBlock_(o, heading) {
+// forOwner: also link the inspiration photo (a private Drive file only the owner can open).
+function itemsBlock_(o, heading, forOwner) {
   return '<div style="border-top:1px solid ' + C.line + ';padding-top:14px;margin-bottom:18px">' + h2_(heading) +
     o.items.map((it) =>
       '<div style="padding:8px 0">' +
         '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:15px"><tr><td><strong>' + esc_(itemHeading_(it)) + '</strong></td><td align="right">' + (it.kind === 'custom' ? 'from ' : '') + money_(it.lineTotal) + '</td></tr></table>' +
         '<div style="color:' + C.muted + ';font-size:14px">' + esc_(it.summary) + '</div>' +
         (it.desc ? '<div style="font-size:14px;color:' + C.muted + ';background:#FBF7F4;border-radius:10px;padding:10px 12px;margin-top:6px"><strong style="color:' + C.navy + '">Description:</strong> ' + esc_(it.desc) + '</div>' : '') +
+        (forOwner && it.photoUrl ? '<div style="font-size:14px;margin-top:6px"><a href="' + esc_(it.photoUrl) + '" style="color:' + C.navy + ';font-weight:600">View their inspiration photo</a></div>' : '') +
       '</div>').join('') +
   '</div>';
 }
@@ -2188,9 +2264,9 @@ function button_(href, label) {
   return '<div style="text-align:center;margin:8px 0 18px"><a href="' + esc_(href) + '" style="display:inline-block;background:' + C.coral + ';color:#FFFFFF;text-decoration:none;font-weight:700;padding:14px 26px;border-radius:999px;font-size:16px">' + esc_(label) + '</a></div>';
 }
 
-function itemsText_(o) {
+function itemsText_(o, forOwner) {
   return o.items.map((it) => itemHeading_(it) + ' – ' + (it.kind === 'custom' ? 'from ' : '') + money_(it.lineTotal) +
-    '\n   ' + it.summary + (it.desc ? '\n   Description: ' + it.desc : '')).join('\n');
+    '\n   ' + it.summary + (it.desc ? '\n   Description: ' + it.desc : '') + (forOwner && it.photoUrl ? '\n   Inspiration photo: ' + it.photoUrl : '')).join('\n');
 }
 
 function totalsText_(o, totalLabel) {

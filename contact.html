@@ -64,7 +64,7 @@
             <div class="field">
               <span class="label">Photo (optional)</span>
               <label class="upload" for="m-photo"><span id="m-photo-thumb"></span>
-                <span><strong id="m-photo-label">Add an inspiration photo</strong><br><span class="hint">JPG or PNG, up to 10 MB</span></span>
+                <span><strong id="m-photo-label">Add an inspiration photo</strong><br><span class="hint">A photo from your phone or computer</span></span>
                 <input type="file" id="m-photo" accept="image/*" class="sr-only">
               </label>
             </div>
@@ -106,14 +106,24 @@
   $('#m-topic').addEventListener('change', syncOrderField);
   syncOrderField();
 
-  let photoName = '', photoUrl = '';
+  // The photo is shrunk in the browser (SN.shrinkPhoto) and sent with the message; Send waits while it's prepared.
+  let photoName = '', photoData = '', photoBusy = null;
   $('#m-photo').addEventListener('change', (e) => {
     const f = e.target.files && e.target.files[0];
-    if (photoUrl) URL.revokeObjectURL(photoUrl);
-    photoName = f ? f.name : '';
-    photoUrl = f ? URL.createObjectURL(f) : '';
-    $('#m-photo-label').textContent = f ? 'Attached: ' + f.name : 'Add an inspiration photo';
-    $('#m-photo-thumb').innerHTML = f ? '<img src="' + photoUrl + '" alt="">' : SN_ICONS.upload;
+    photoName = ''; photoData = '';
+    $('#m-photo-thumb').innerHTML = SN_ICONS.upload;
+    if (!f) { $('#m-photo-label').textContent = 'Add an inspiration photo'; photoBusy = null; return; }
+    $('#m-photo-label').textContent = 'Preparing your photo…';
+    const job = photoBusy = SN.shrinkPhoto(f).then((p) => {
+      if (photoBusy !== job) return;
+      photoName = f.name; photoData = p.data;
+      $('#m-photo-label').textContent = 'Attached: ' + f.name;
+      $('#m-photo-thumb').innerHTML = '<img src="' + p.data + '" alt="">';
+    }).catch((err) => {
+      if (photoBusy !== job) return;
+      e.target.value = '';
+      $('#m-photo-label').textContent = err.message;
+    });
   });
 
   SN.phoneInput($('#m-phone'));
@@ -141,6 +151,14 @@
     e.preventDefault();
     const firstBad = check(true);
     if (firstBad) { firstBad.focus(); return; }
+    if ($('#m-send').getAttribute('aria-disabled') === 'true') return;
+    // Wait for the photo to finish shrinking, then send.
+    $('#m-send').setAttribute('aria-disabled', 'true');
+    $('#m-send').textContent = photoBusy ? 'Preparing photo…' : 'Sending…';
+    Promise.resolve(photoBusy).then(sendNow);
+  });
+
+  function sendNow() {
     const msg = {
       name: $('#m-name').value.trim(),
       email: $('#m-email').value.trim(),
@@ -148,13 +166,12 @@
       topic: $('#m-topic').value,
       orderNumber: $('#m-topic').value === 'An existing order' ? $('#m-order').value.trim() : '',
       message: $('#m-msg').value.trim(),
-      photoName,   // the photo itself is saved to Drive in a later phase
+      photoName,
+      photoData,   // saved to a private Drive folder by the server
       source: 'contact',
       website: $('#m-website').value
     };
     const btn = $('#m-send');
-    if (btn.getAttribute('aria-disabled') === 'true') return;
-    btn.setAttribute('aria-disabled', 'true');
     btn.textContent = 'Sending…';
     $('#m-send-err').hidden = true;
     SN.post('sendMessage', msg)
@@ -165,7 +182,7 @@
         $('#m-send-err').textContent = SN.sendErrorText(r);
         $('#m-send-err').hidden = false;
       });
-  });
+  }
 
   function sent(msg) {
     const first = msg.name ? msg.name.split(' ')[0] : '';

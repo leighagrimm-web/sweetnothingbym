@@ -148,6 +148,9 @@ textarea.input { resize: vertical; }
 /* Admin: small preview next to a photo link box. */
 .photo-thumb { width: 46px; height: 46px; border-radius: 8px; background: var(--oat); display: inline-flex; align-items: center; justify-content: center; overflow: hidden; flex: none; color: var(--muted); font-size: 12px; }
 .photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+/* A customer's photo in the admin (order review, messages). */
+.cust-photo { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.cust-photo img { display: block; width: 180px; height: 140px; object-fit: cover; border-radius: 10px; background: var(--oat); border: 1px solid var(--line); }
 /* Checkout and "request sent" fill the screen, with the content in a centered column. */
 .panel.full { max-width: none; box-shadow: none; }
 .checkout-col { max-width: 680px; margin: 0 auto; width: 100%; }

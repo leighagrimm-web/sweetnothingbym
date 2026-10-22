@@ -216,7 +216,39 @@ const SN = {
 
   // Bag lives in sessionStorage so it survives moving between pages.
   getBag() { try { return JSON.parse(sessionStorage.getItem('sn_bag') || '[]'); } catch (e) { return []; } },
-  setBag(bag) { try { sessionStorage.setItem('sn_bag', JSON.stringify(bag)); } catch (e) { /* ignore */ } },
+  // Photos ride along in the bag. If they don't fit in the browser's storage, the bag is kept without them
+  // (the page that's open still has them in memory and sends them).
+  setBag(bag) {
+    try { sessionStorage.setItem('sn_bag', JSON.stringify(bag)); } catch (e) {
+      try { sessionStorage.setItem('sn_bag', JSON.stringify(bag.map((it) => Object.assign({}, it, { photoData: undefined })))); } catch (e2) { /* ignore */ }
+    }
+  },
+
+  // A customer's photo, shrunk in the browser to a JPEG (longest side max px) so it uploads quickly from a phone.
+  // Resolves { name, data } where data is a data: URL; rejects if the browser can't read the image.
+  shrinkPhoto(file, max) {
+    return new Promise((resolve, reject) => {
+      if (!file) { reject(new Error('No file')); return; }
+      const src = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, (max || 1600) / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff';   // transparent PNGs get a white background, not black
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(src);
+        let q = 0.82, data = c.toDataURL('image/jpeg', q);
+        while (data.length > 1200000 && q > 0.4) { q -= 0.12; data = c.toDataURL('image/jpeg', q); }
+        resolve({ name: String(file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg', data });
+      };
+      img.onerror = () => { URL.revokeObjectURL(src); reject(new Error('That photo couldn’t be read. Try a JPG or PNG.')); };
+      img.src = src;
+    });
+  },
 
   getMessages() { try { return JSON.parse(localStorage.getItem('sn_messages') || '[]'); } catch (e) { return []; } },
   setMessages(m) { try { localStorage.setItem('sn_messages', JSON.stringify(m)); } catch (e) { /* ignore */ } },

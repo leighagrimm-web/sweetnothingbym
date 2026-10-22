@@ -669,12 +669,35 @@
     return { text: 'Week of ' + SN.prettyDate(SN.mondayOf(o.dateNeeded), { month: 'short', day: 'numeric' }) + ' · ' + (parts.join(' · ') || 'nothing else yet'), over: over.join(', ') };
   }
 
+  // A customer's photo (order item or message). Saved privately in Drive, so the image is fetched through the
+  // server (adminPhoto) by loadPhotos() after it's on the page; clicking opens it full size in Drive.
+  const photoCache = {};
+  function customerPhoto(x, label) {
+    if (x.photoId) {
+      return '<div class="cust-photo"><span class="hint">' + label + '</span>' +
+        '<a href="' + esc(x.photoUrl) + '" target="_blank" rel="noopener" title="Open full size in Google Drive">' +
+          '<img data-photo-id="' + esc(x.photoId) + '" alt="' + esc(label) + '"' + (photoCache[x.photoId] ? ' src="' + photoCache[x.photoId] + '"' : '') + '></a></div>';
+    }
+    // Just a file name: sent before photo uploads were turned on, or saving it failed.
+    return x.photoName ? '<div class="hint" style="margin-top:4px">' + label + ': <strong>' + esc(x.photoName) + '</strong> <span class="muted">(not saved; ask them to email it)</span></div>' : '';
+  }
+  function loadPhotos(root) {
+    $$('img[data-photo-id]:not([src])', root).forEach((img) => {
+      const id = img.dataset.photoId;
+      const show = (src) => { $$('img[data-photo-id="' + id + '"]').forEach((el) => { el.src = src; }); };
+      if (photoCache[id]) { show(photoCache[id]); return; }
+      photoCache[id] = '';   // loading
+      server('adminPhoto', id).then((src) => { photoCache[id] = src; show(src); })
+        .catch(() => { delete photoCache[id]; img.alt = 'Photo couldn’t load: click to open it in Drive'; });
+    });
+  }
+
   function requestHtml(o) {
     const it = o.items.map((x) =>
       '<div class="rv-item"><div style="display:flex;justify-content:space-between;gap:12px"><strong>' + esc(SN.itemHeading(x)) + '</strong><span class="muted">' + (isClass(o) ? '' : 'est. ') + money(x.lineTotal) + '</span></div>' +
       '<div class="hint">' + esc(x.summary) + '</div>' +
       (x.desc ? '<div class="rv-quote">“' + esc(x.desc) + '”</div>' : '') +
-      (x.photoName ? '<div class="hint" style="margin-top:4px">Inspiration photo: <strong>' + esc(x.photoName) + '</strong> <span class="muted">(photo uploads come in the next update)</span></div>' : '') +
+      customerPhoto(x, 'Inspiration photo') +
       '</div>').join('');
     const where = isClass(o) ? 'Class booking'
       : o.fulfillment === 'delivery' && o.address ? 'Drop-off · ' + esc(o.address.street) + ', ' + esc(o.address.city) + ' ' + esc(o.address.zip)
@@ -778,6 +801,7 @@
       }
       bodyHtml += messageHtml(o);
       review.innerHTML = head + '<div class="panel-body">' + bodyHtml + '</div>' + (foot ? '<div class="panel-foot">' + foot + '</div>' : '');
+      loadPhotos(review);
       return;
     }
 
@@ -817,6 +841,7 @@
         '<button type="button" class="btn block" data-rv="approve" id="approve-btn"></button>' +
         '<div style="text-align:center;margin-top:8px"><button type="button" class="link-btn" data-rv="decline">Can’t take this order? Decline it</button></div>';
     review.innerHTML = head + '<div class="panel-body">' + body + '</div><div class="panel-foot">' + foot + '</div>';
+    loadPhotos(review);
     updateReviewTotals();
   }
 
@@ -1278,13 +1303,14 @@
           '<span class="muted" style="font-size:13px">' + esc(when) + (m.status === 'New' ? ' · <strong style="color:var(--coral-dark)">New</strong>' : ' · Replied') + '</span></div>' +
         '<div class="hint">' + esc(m.email) + (m.phone ? ' · ' + esc(m.phone) : '') + '</div>' +
         '<div class="msg-body">' + esc(m.message) + '</div>' +
-        (m.photoName ? '<div class="hint">Photo attached: <strong>' + esc(m.photoName) + '</strong> <span class="muted">(photo uploads come in a later update)</span></div>' : '') +
+        customerPhoto(m, 'Their photo') +
         '<div class="row-gap" style="margin-top:6px;gap:8px">' +
           '<a class="btn small" href="mailto:' + esc(m.email) + '?subject=' + subject + '" data-msg="reply" data-id="' + m.id + '">Reply by email</a>' +
           '<button type="button" class="btn ghost small" data-msg="toggle" data-id="' + m.id + '">' + (m.status === 'New' ? 'Mark replied' : 'Mark as new') + '</button>' +
           '<button type="button" class="icon-del" data-msg="delete" data-id="' + m.id + '" aria-label="Delete message from ' + esc(m.name || m.email) + '">' + SN_ICONS.trash + '</button>' +
         '</div></div>';
     }).join('') : '<p class="hint">No messages yet.</p>';
+    loadPhotos($('#msg-list'));
   }
   function onMessageClick(b) {
     const m = messages.find((x) => String(x.id) === b.dataset.id);
