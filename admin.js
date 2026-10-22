@@ -716,7 +716,7 @@
     if (!o) return;
     const lines = o.invoice ? SN.clone(o.invoice.lines) : SN.linesFromOrder(cfg, o);
     const fee = o.invoice ? o.invoice.fee : (o.fulfillment === 'delivery' ? Number(o.deliveryFee) || 0 : 0);
-    rv = { number, lines, fee, note: o.invoice ? o.invoice.note || '' : '', declining: false, declineNote: '', editingDate: false, message: '' };
+    rv = { number, lines, fee, note: o.invoice ? o.invoice.note || '' : '', declining: false, declineNote: '', editingDate: false, message: greeting(o.customer.name) };
     rv.original = JSON.stringify({ lines: SN.linesFromOrder(cfg, o), fee: o.fulfillment === 'delivery' ? Number(o.deliveryFee) || 0 : 0 });
     rvOpener = el || document.activeElement;
     renderReview();
@@ -1007,7 +1007,7 @@
       }
       case 'send-msg': {
         const text = rv.message.trim();
-        if (!text) { toast('Write a message first.'); $('#rv-msg').focus(); return; }
+        if (!text || text === greeting(o.customer.name).trim()) { toast('Write a message first.'); $('#rv-msg').focus(); return; }
         if (busy) return;
         busy = true; b.textContent = 'Sending…';
         server('adminMessageCustomer', o.number, text).then((r) => {
@@ -1385,6 +1385,8 @@
   /* ---------- Messages ---------- */
   // Replies being written on the Messages tab: { message id: text so far }. Kept here so a redraw doesn't lose them.
   const replyOpen = {};
+  // How a reply or order message starts ("Hi Everleigh,"): typed into the box so Melissa can see and change it.
+  const greeting = (name) => { const first = String(name || '').trim().split(/\s+/)[0]; return first ? 'Hi ' + first + ',\n\n' : ''; };
   function renderMessages() {
     const unread = messages.filter((m) => m.status === 'New').length;
     $('#messages-h').innerHTML = 'Messages' + (unread ? ' <span class="count-pill">' + unread + ' new</span>' : '');
@@ -1423,16 +1425,16 @@
     const m = messages.find((x) => String(x.id) === b.dataset.id);
     if (!m) return;
     if (b.dataset.msg === 'write') {
-      replyOpen[m.id] = replyOpen[m.id] || '';
+      if (replyOpen[m.id] === undefined) replyOpen[m.id] = greeting(m.name);
       renderMessages();
       const box = $('#reply-' + m.id);
-      if (box) box.focus();
+      if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }   // cursor after the greeting
       return;
     }
     if (b.dataset.msg === 'close') { delete replyOpen[m.id]; renderMessages(); return; }
     if (b.dataset.msg === 'send') {
       const text = (replyOpen[m.id] || '').trim();
-      if (!text) { toast('Write your reply first.'); $('#reply-' + m.id).focus(); return; }
+      if (!text || text === greeting(m.name).trim()) { toast('Write your reply first.'); $('#reply-' + m.id).focus(); return; }
       if (busy) return;
       busy = true;
       b.textContent = 'Sending…';

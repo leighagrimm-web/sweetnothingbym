@@ -178,6 +178,9 @@
   function form() {
     body.innerHTML =
       '<form id="qm-form" novalidate><div class="stack" style="gap:16px">' +
+        '<div class="field"><label class="label" for="qm-name">Your name</label>' +
+          '<input class="input" id="qm-name" type="text" autocomplete="name" required aria-describedby="qm-name-err">' +
+          '<p class="err" id="qm-name-err" hidden>Please add your name.</p></div>' +
         '<div class="field"><label class="label" for="qm-email">Your email</label>' +
           '<input class="input" id="qm-email" type="email" autocomplete="email" required aria-describedby="qm-email-err">' +
           '<p class="err" id="qm-email-err" hidden>Please enter a valid email so I can reply.</p></div>' +
@@ -197,7 +200,7 @@
     panel.classList.add('open');
     scrim.classList.add('open');
     document.body.classList.add('locked');
-    setTimeout(() => { const f = document.getElementById('qm-email'); (f || panel).focus(); }, 80);
+    setTimeout(() => { const f = document.getElementById('qm-name'); (f || panel).focus(); }, 80);
   }
   function close() {
     panel.classList.remove('open');
@@ -224,28 +227,33 @@
   // Clear an error as soon as the field is fixed.
   body.addEventListener('input', (e) => {
     const t = e.target;
+    if (t.id === 'qm-name' && t.value.trim()) { document.getElementById('qm-name-err').hidden = true; t.setAttribute('aria-invalid', 'false'); }
     if (t.id === 'qm-email' && SN.validEmail(t.value)) { document.getElementById('qm-email-err').hidden = true; t.setAttribute('aria-invalid', 'false'); }
     if (t.id === 'qm-msg' && t.value.trim()) { document.getElementById('qm-msg-err').hidden = true; t.setAttribute('aria-invalid', 'false'); }
   });
 
   body.addEventListener('submit', (e) => {
     e.preventDefault();
+    const name = document.getElementById('qm-name');
     const email = document.getElementById('qm-email');
     const msg = document.getElementById('qm-msg');
+    const nBad = !name.value.trim();
     const eBad = !SN.validEmail(email.value);
     const mBad = !msg.value.trim();
+    document.getElementById('qm-name-err').hidden = !nBad;
     document.getElementById('qm-email-err').hidden = !eBad;
     document.getElementById('qm-msg-err').hidden = !mBad;
+    name.setAttribute('aria-invalid', String(nBad));
     email.setAttribute('aria-invalid', String(eBad));
     msg.setAttribute('aria-invalid', String(mBad));
-    if (eBad || mBad) { (eBad ? email : msg).focus(); return; }
+    if (nBad || eBad || mBad) { (nBad ? name : eBad ? email : msg).focus(); return; }
     const btn = document.getElementById('qm-send');
     const sendErr = document.getElementById('qm-send-err');
     if (btn.getAttribute('aria-disabled') === 'true') return;
     btn.setAttribute('aria-disabled', 'true');
     btn.textContent = 'Sending…';
     sendErr.hidden = true;
-    SN.post('sendMessage', { email: email.value.trim(), message: msg.value.trim(), topic, source: 'quick', website: document.getElementById('qm-website').value })
+    SN.sendMessage({ name: name.value.trim(), email: email.value.trim(), message: msg.value.trim(), topic, source: 'quick', website: document.getElementById('qm-website').value })
       .then((r) => { if (!r || !r.ok) throw r; sent(email.value.trim()); })
       .catch((r) => {
         btn.removeAttribute('aria-disabled');

@@ -1007,6 +1007,17 @@ function sendOutbox_() {
 const MESSAGE_TOPICS = ['General question', 'Custom design idea', 'Allergies or dietary needs', 'An existing order', 'Special events or classes', 'Other', 'Quick message'];
 
 function sendMessage_(b) {
+  // A retry of a message that already went through (the reply got lost on the way back) gets the same answer
+  // instead of saving it twice. Same idea as orders' submissionId.
+  const sid = clean_(b.submissionId, 60);
+  const cache = CacheService.getScriptCache();
+  if (sid) { const seen = cache.get('msg_' + sid); if (seen) return JSON.parse(seen); }
+  const result = sendMessageOnce_(b);
+  if (sid && result.ok) cache.put('msg_' + sid, JSON.stringify(result), 21600);
+  return result;
+}
+
+function sendMessageOnce_(b) {
   const m = {
     name: clean_(b.name, 120),
     email: clean_(b.email, 200),
@@ -2348,14 +2359,13 @@ function classText_(o) {
 }
 
 /* ---------- "A message about your order" (customer), sent from Review ---------- */
+// The greeting ("Hi Pat,") is typed into the admin's message box, where Melissa can see and change it.
 function sendOrderMessageEmail_(cfg, o, text) {
-  const first = (o.customer.name || '').split(' ')[0];
   const inv = o.invoice;
   const totals = inv
     ? totalsBlock_({ fulfillment: o.fulfillment, subtotal: inv.subtotal, tax: inv.tax, taxRate: o.taxRate, deliveryFee: inv.fee, giftCredit: inv.credit || 0, promoCode: o.promoCode, total: inv.total }, o.type === 'Class' ? 'Total' : 'Amount due')
     : totalsBlock_(o, 'Estimated total');
   const html = shell_(cfg, 'A message about your order', o.number,
-    (first ? p_('Hi ' + esc_(first) + ',', 15) : '') +
     '<div style="font-size:15px;white-space:pre-wrap;margin-bottom:18px;color:' + C.navy + '">' + esc_(text) + '</div>' +
     '<p style="margin:0 0 18px;font-size:15px">— Sweet Nothings</p>' +
     (o.type === 'Class' ? classDetails_(o) : facts_(o, 'message') + itemsBlock_(o, 'Your order')) + totals +
@@ -2364,7 +2374,7 @@ function sendOrderMessageEmail_(cfg, o, text) {
     to: o.customer.email,
     subject: subjectPrefix_(cfg) + 'A message about your order ' + o.number + ' – Sweet Nothings',
     htmlBody: html,
-    body: (first ? 'Hi ' + first + ',\n\n' : '') + text + '\n\n— Sweet Nothings\n\nYour order ' + o.number + ':\n' +
+    body: text + '\n\n— Sweet Nothings\n\nYour order ' + o.number + ':\n' +
       (o.type === 'Class' ? classText_(o) : 'Needed by: ' + prettyDate_(o.dateNeeded) + '\n' + itemsText_(o)) + '\n\nJust reply to this email to answer.',
     name: cfg.senderName, replyTo: cfg.replyToEmail
   });
@@ -2372,10 +2382,8 @@ function sendOrderMessageEmail_(cfg, o, text) {
 
 /* ---------- Reply to a message (customer) ---------- */
 function sendMessageReplyEmail_(cfg, m, text) {
-  const first = (m.name || '').split(' ')[0];
   const when = m.createdAt ? Utilities.formatDate(new Date(m.createdAt), tz_(), 'MMM d') : '';
   const html = shell_(cfg, 'A reply from Sweet Nothings', '',
-    (first ? p_('Hi ' + esc_(first) + ',', 15) : '') +
     '<div style="font-size:15px;white-space:pre-wrap;margin-bottom:18px;color:' + C.navy + '">' + esc_(text) + '</div>' +
     '<p style="margin:0 0 18px;font-size:15px">— Sweet Nothings</p>' +
     '<div style="border-left:3px solid ' + C.line + ';padding:4px 0 4px 14px;margin-bottom:18px;font-size:14px;color:' + C.muted + '">' +
@@ -2386,7 +2394,7 @@ function sendMessageReplyEmail_(cfg, m, text) {
     to: m.email,
     subject: subjectPrefix_(cfg) + 'Re: ' + (m.topic && m.topic !== 'Quick message' ? m.topic : 'your message') + ' – Sweet Nothings',
     htmlBody: html,
-    body: (first ? 'Hi ' + first + ',\n\n' : '') + text + '\n\n— Sweet Nothings\n\n' +
+    body: text + '\n\n— Sweet Nothings\n\n' +
       'You wrote' + (when ? ' on ' + when : '') + ':\n' + m.message.split('\n').map((l) => '> ' + l).join('\n') + '\n\nJust reply to this email to answer.',
     name: cfg.senderName, replyTo: cfg.replyToEmail
   });

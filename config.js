@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261026f';
+const SN_BUILD = '20261026g';
 
 const SN_ENV = (function () {
   const API = {
@@ -168,6 +168,20 @@ const SN = {
   },
   // Every send carries the maintenance password if this browser has one, so testing works while the site is closed.
   post(action, data) { return SN.request({ body: Object.assign({ action }, data, SN.bypassKey() ? { bypass: SN.bypassKey() } : {}) }, 45000); },
+
+  // Send a message, retrying once if the server's answer gets lost (slow moment, flaky signal). A one-time ID
+  // makes the retry safe: the server recognizes it and answers "already got it" instead of saving it twice.
+  sendMessage(data) {
+    const body = Object.assign({ submissionId: SN.newSubmissionId() }, data);
+    const lost = (r) => !(r && r.ok === false);   // a real "no" from the server isn't retried; a missing answer is
+    return SN.post('sendMessage', body).catch((r) => {
+      if (!lost(r)) throw r;
+      return new Promise((res) => setTimeout(res, 2500)).then(() => SN.post('sendMessage', body));
+    }).catch((r) => {
+      if (!lost(r)) throw r;
+      throw { ok: false, error: 'We couldn’t confirm your message was sent. Please wait a minute before trying again; if it went through, you’ll get a reply by email. You can also message us on Instagram ' + (SN.load().instagramHandle || '') + '.' };
+    });
+  },
 
   /* ---------- Maintenance mode bypass ---------- */
   bypassKey() { try { return localStorage.getItem('sn_bypass') || ''; } catch (e) { return ''; } },
