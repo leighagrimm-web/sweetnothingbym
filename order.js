@@ -331,7 +331,9 @@ SN.ready.then(function () {
 
   function submitLabel() {
     if (sending) return 'Sending…';
-    return hasCookies() && hasClasses() ? 'Send order & book class' : hasCookies() ? 'Send order request' : 'Book class';
+    const pay = cfg.classesPayOnline !== false;
+    return hasCookies() && hasClasses() ? (pay ? 'Send order, book & pay for class' : 'Send order & book class')
+      : hasCookies() ? 'Send order request' : pay ? 'Book class & pay' : 'Book class';
   }
 
   // Checkout takes the whole screen; the send button comes after every section, so it's reached by scrolling through them.
@@ -370,7 +372,12 @@ SN.ready.then(function () {
         '</div>';
     const notes = [];
     if (hasCookies()) notes.push('No payment for cookies today. M will review your request, confirm the final price, and email you an invoice to pay.');
-    if (hasClasses()) notes.push('Classes are booked as soon as you send this. Your invoice will follow by email.');
+    if (hasClasses()) {
+      notes.push(cfg.classesPayOnline !== false
+        ? 'Next you’ll pay for your class securely through Square. Your spot is held for ' +
+          (Number(cfg.classHoldMinutes) || 30) + ' minutes while you pay, and your confirmation email comes as soon as payment goes through.'
+        : 'Classes are booked as soon as you send this. M will be in touch about payment.');
+    }
     return fullHead('Checkout', true) +
       '<div class="panel-body"><div class="checkout-col">' +
         '<div class="sec first"><h3>Your order</h3>' + bagItems(false) +

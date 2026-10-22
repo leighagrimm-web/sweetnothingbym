@@ -48,6 +48,7 @@ const SN_DEFAULTS = {
   flavorsMax: 6,              // ...and from flavorsMaxAt cookies on
   flavorsMaxAt: 24,
   classHoldMinutes: 30,       // a class spot is held this long while the customer pays in Square
+  classesPayOnline: true,     // from the server: class checkout goes on to Square
   allergyNote: 'Need allergy-friendly swaps, like gluten-free or dairy-free? Happy to help! Ingredient changes for allergies or dietary needs add an extra cost, which I’ll include in your final price.',
   flavors: [
     { id: 'cc', name: 'Chocolate Chip', on: true, special: false },

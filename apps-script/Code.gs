@@ -494,6 +494,9 @@ function buildConfig_(admin) {
   const thisWeek = mondayOf_(today);
   Object.keys(counts.weeks).forEach((w) => { if (w >= thisWeek) cfg.weekCounts[w] = counts.weeks[w]; });
 
+  // Whether class checkout goes on to Square (the site words the Book button and note to match).
+  cfg.classesPayOnline = squareReady_();
+
   return cfg;
 }
 
