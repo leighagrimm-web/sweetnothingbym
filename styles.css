@@ -443,3 +443,12 @@ html.sn-maint body > *:not(#maint) { display: none !important; }
 /* Admin: the maintenance mode box (Website pages tab), highlighted while the site is closed. */
 .maint-admin { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 4px 0 8px; background: var(--ground); }
 .maint-admin.on { border-color: var(--coral); background: var(--blush); }
+/* Admin "are you sure?" box (admin.js ask()). */
+.ask-wrap { position: fixed; inset: 0; z-index: 200; background: rgba(31, 42, 68, .45); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.ask-box { width: 100%; max-width: 460px; background: var(--white); border-radius: var(--radius); padding: 24px; box-shadow: 0 20px 60px rgba(31, 42, 68, .25); }
+.ask-box h2 { margin: 0 0 10px; font-size: 26px; }
+.ask-box p { margin: 0 0 10px; }
+.ask-box ul { margin: 0 0 12px; padding-left: 20px; }
+.ask-box li { margin: 0 0 6px; }
+.ask-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+.btn.danger { background: var(--error); border-color: var(--error); color: var(--white); }

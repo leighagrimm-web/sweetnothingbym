@@ -271,6 +271,48 @@
   /* ---------- Helpers ---------- */
   function markDirty() { dirty = true; $('#save-bar').classList.add('show'); }
   function clearDirty() { dirty = false; $('#save-bar').classList.remove('show'); }
+  // "Are you sure?" in the admin's own style (the browser's confirm() shows a scary technical address on top).
+  // ask({ title, points: [...], note, yes, no, danger }) resolves true for yes, false for no / Esc / clicking outside.
+  function ask(o) {
+    return new Promise((resolve) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'ask-wrap';
+      wrap.innerHTML =
+        '<div class="ask-box" role="alertdialog" aria-modal="true" aria-labelledby="ask-t" aria-describedby="ask-b">' +
+          '<h2 id="ask-t">' + esc(o.title) + '</h2>' +
+          '<div id="ask-b">' +
+            (o.text ? '<p>' + esc(o.text) + '</p>' : '') +
+            (o.points && o.points.length ? '<ul>' + o.points.map((p) => '<li>' + esc(p) + '</li>').join('') + '</ul>' : '') +
+            (o.note ? '<p class="hint">' + esc(o.note) + '</p>' : '') +
+          '</div>' +
+          '<div class="ask-actions"><button type="button" class="btn ghost" data-ask="no">' + esc(o.no || 'Cancel') + '</button>' +
+            '<button type="button" class="btn' + (o.danger ? ' danger' : '') + '" data-ask="yes">' + esc(o.yes || 'OK') + '</button></div>' +
+        '</div>';
+      const back = document.activeElement;
+      const done = (v) => {
+        wrap.remove();
+        document.removeEventListener('keydown', onKey, true);
+        if (back && document.body.contains(back)) back.focus();
+        resolve(v);
+      };
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); return; }
+        if (e.key === 'Tab') {   // keep focus on the two buttons
+          e.preventDefault();
+          const bs = $$('[data-ask]', wrap);
+          bs[(bs.indexOf(document.activeElement) + 1) % bs.length].focus();
+        }
+      };
+      wrap.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-ask]');
+        if (b) done(b.dataset.ask === 'yes'); else if (e.target === wrap) done(false);
+      });
+      document.addEventListener('keydown', onKey, true);
+      document.body.appendChild(wrap);
+      $('[data-ask="' + (o.danger ? 'no' : 'yes') + '"]', wrap).focus();   // the safe choice has focus for anything destructive
+    });
+  }
+
   function toast(msg, ms) {
     const t = $('#toast');
     if (!t) { alert(msg); return; }
@@ -399,7 +441,7 @@
   }
   // Newest first, by when the customer sent it.
   function sortOrders() { orders.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '') || b.number.localeCompare(a.number, undefined, { numeric: true })); }
-  function onStatusChange(e) {
+  async function onStatusChange(e) {
     const sel = e.target.closest('[data-order]');
     if (!sel) return;
     const o = orders.find((x) => x.number === sel.dataset.order);
@@ -408,22 +450,24 @@
     if (sel.value === 'Cancelled') {
       const inv = o.invoice || {};
       const gift = isClass(o) ? o.giftCredit : inv.credit;
-      const lines = ['Cancel ' + o.number + '?', ''];
+      const points = [];
       if (isClass(o)) {
-        lines.push('• Its class spots open up again on the website.');
-        if (prev === 'Awaiting payment') lines.push('• Its Square payment link is closed, so it can’t be paid for later.');
+        points.push('Its class spots open up again on the website.');
+        if (prev === 'Awaiting payment') points.push('Its Square payment link is closed, so it can’t be paid for later.');
       } else {
-        lines.push('• Its cookies stop counting toward that week’s limit.');
-        if (inv.qb && inv.qb.id) lines.push('• If QuickBooks invoice #' + inv.qb.docNumber + ' is unpaid, it’s voided so it can’t be paid.');
+        points.push('Its cookies stop counting toward that week’s limit.');
+        if (inv.qb && inv.qb.id) points.push('If QuickBooks invoice #' + inv.qb.docNumber + ' is unpaid, it’s voided so it can’t be paid.');
       }
-      if (gift > 0) lines.push('• The ' + money(gift) + ' gift card amount goes back on ' + o.promoCode + '.');
+      if (gift > 0) points.push('The ' + money(gift) + ' gift card amount goes back on ' + o.promoCode + '.');
       if (prev !== 'Awaiting payment' && prev !== 'Invoice sent' && prev !== 'Booked') {
-        lines.push(isClass(o) ? '• If they paid by card, refund it in Square (Transactions → the payment → Refund). The website can’t do that part.'
-          : '• If they paid, refund it in QuickBooks (the invoice → Refund). The website can’t do that part.');
+        points.push(isClass(o) ? 'If they paid by card, refund it in Square (Transactions → the payment → Refund). The website can’t do that part.'
+          : 'If they paid, refund it in QuickBooks (the invoice → Refund). The website can’t do that part.');
       }
-      if (!isClass(o)) lines.push('', 'This can’t be undone.');
-      lines.push('', 'Let the customer know: Review → Message the customer.');
-      if (!confirm(lines.join('\n'))) { sel.value = prev; return; }
+      const ok = await ask({
+        title: 'Cancel ' + o.number + '?', points, danger: true, yes: 'Cancel order', no: 'Keep it',
+        note: (isClass(o) ? '' : 'This can’t be undone. ') + 'Let the customer know: Review → Message the customer.'
+      });
+      if (!ok) { sel.value = prev; return; }
     }
     o.status = sel.value;
     server('adminSetStatus', o.number, sel.value).then((r) => {
@@ -930,7 +974,7 @@
     if (rv && rv.number === o.number) renderReview();
   }
 
-  function onReviewClick(b) {
+  async function onReviewClick(b) {
     const act = b.dataset.rv;
     if (act === 'open') { openReview(b.dataset.n, b); return; }
     if (!rv) return;
@@ -947,7 +991,7 @@
         const d = $('#rv-date').value;
         if (!d) { toast('Pick a date first.'); return; }
         if (d === o.dateNeeded) { rv.editingDate = false; renderReview(); return; }
-        if ((cfg.blockedRanges || []).some((r) => d >= r.start && d <= r.end) && !confirm(SN.prettyDate(d) + ' is in a blocked range. Use it anyway?')) return;
+        if ((cfg.blockedRanges || []).some((r) => d >= r.start && d <= r.end) && !(await ask({ title: 'That date is blocked', text: SN.prettyDate(d) + ' is in one of your blocked date ranges. Use it anyway?', yes: 'Use this date', no: 'Pick another' }))) return;
         if (busy) return;
         busy = true; b.textContent = 'Saving…';
         server('adminChangeDate', o.number, d, $('#rv-date-notify').checked, $('#rv-date-note').value.trim()).then((r) => {
@@ -991,7 +1035,7 @@
         const t = SN.invoiceTotals(rv.lines, rv.fee, o.taxRate);
         if (t.total <= 0) { err.hidden = false; err.textContent = 'The invoice total has to be more than $0.'; return; }
         const wk = weekInfo(o);
-        if (wk.over && !confirm('Approving puts that week over your limit (' + wk.over + '). Approve anyway?')) return;
+        if (wk.over && !(await ask({ title: 'Over that week’s limit', text: 'Approving puts that week over your limit (' + wk.over + '). Approve anyway?', yes: 'Approve anyway', no: 'Not yet' }))) return;
         if (busy) return;
         busy = true; b.textContent = 'Approving and sending…';
         server('adminApprove', o.number, { lines: rv.lines, fee: rv.fee, note: rv.note.trim() }).then((r) => {
@@ -1078,7 +1122,7 @@
       '<p>' + (p.trigger ? 'Runs every 5 minutes.' : '<span class="err">Not scheduled. Click Check now to schedule it.</span>') + ' ' + last + '</p>' +
       '<div class="row-gap" style="gap:8px;margin-top:10px"><button type="button" class="btn ghost small" data-pay="check">Check now</button><button type="button" class="btn ghost small" data-pay="refresh">Refresh</button></div>';
   }
-  function onPayClick(b) {
+  async function onPayClick(b) {
     const act = b.dataset.pay;
     if (busy) return;
     if (act === 'refresh') { loadPayments(); return; }
@@ -1089,7 +1133,7 @@
         .catch((err) => { if (w) w.close(); failed(err); });
       return;
     }
-    if (act === 'disconnect' && !confirm('Disconnect QuickBooks? Approved orders won’t get QuickBooks invoices until you connect again.')) return;
+    if (act === 'disconnect' && !(await ask({ title: 'Disconnect QuickBooks?', text: 'Approved orders won’t get QuickBooks invoices until you connect again.', yes: 'Disconnect', no: 'Stay connected', danger: true }))) return;
     const fn = { items: 'adminQbSetupItems', disconnect: 'adminQbDisconnect', check: 'adminCheckPaymentsNow' }[act];
     if (!fn) return;
     busy = true;
@@ -1153,13 +1197,16 @@
       return true;
     }).catch(failed);
   }
-  function onCodeClick(b) {
+  async function onCodeClick(b) {
     const c = codes.find((x) => x.code === b.dataset.code);
     if (!c) return;
     if (b.dataset.codeAct === 'edit') { fillCodeForm(c); $('#code-form-h').scrollIntoView({ block: 'start' }); $('#cf-amount').focus(); }
     if (b.dataset.codeAct === 'toggle') saveCode(Object.assign({}, c, { active: !c.active }), c.code).then((ok) => { if (ok) toast(c.code + (c.active ? ' turned off' : ' turned on')); });
     if (b.dataset.codeAct === 'delete') {
-      if (!confirm('Delete ' + c.code + '?' + (c.type === 'Gift card' && c.balance > 0 ? ' It still has ' + money(c.balance) + ' on it. To stop it working for now, turn it off instead.' : ''))) return;
+      if (!(await ask({
+        title: 'Delete ' + c.code + '?', danger: true, yes: 'Delete', no: 'Keep it',
+        text: c.type === 'Gift card' && c.balance > 0 ? 'It still has ' + money(c.balance) + ' on it. To stop it working for now, turn it off instead.' : 'Customers won’t be able to use it anymore.'
+      }))) return;
       server('adminDeleteCode', c.code).then((r) => { codes = r.codes; renderCodes(); if (editingCode === c.code) fillCodeForm(null); toast(c.code + ' deleted'); }).catch(failed);
     }
   }
@@ -1293,14 +1340,14 @@
 
   const RENDER_LIST = { faqs: () => renderFaqs(), events: () => renderEvents(), gallery: () => renderGallery() };
 
-  function onListClick(b) {
+  async function onListClick(b) {
     const i = Number(b.dataset.i);
     const list = b.dataset.list;
     switch (b.dataset.act) {
       case 'special': cfg.flavors[i].special = !cfg.flavors[i].special; renderFlavors(); break;
       case 'toggle-flavor': cfg.flavors[i].on = !cfg.flavors[i].on; renderFlavors(); break;
       case 'del-flavor':
-        if (!confirm('Delete ' + cfg.flavors[i].name + '? To take it off the menu for now, use Hidden instead.')) return;
+        if (!(await ask({ title: 'Delete ' + cfg.flavors[i].name + '?', text: 'To take it off the menu for now, use Hidden instead.', yes: 'Delete', no: 'Keep it', danger: true }))) return;
         cfg.flavors.splice(i, 1); renderFlavors(); break;
       case 'del-block': cfg.blockedRanges.splice(i, 1); renderBlocked(); break;
       case 'toggle-page': cfg[b.dataset.key] = cfg[b.dataset.key] === false; fillFields(); break;
@@ -1316,7 +1363,7 @@
       case 'del-item': {
         const it = cfg[list][i];
         const filled = list === 'faqs' ? (it.q || it.a) : list === 'events' ? it.title : it.photo;
-        if (filled && !confirm('Delete this ' + (list === 'faqs' ? 'question' : list === 'events' ? 'event' : 'photo') + '?')) return;
+        if (filled && !(await ask({ title: 'Delete this ' + (list === 'faqs' ? 'question' : list === 'events' ? 'event' : 'photo') + '?', text: 'It comes off the website when you save.', yes: 'Delete', no: 'Keep it', danger: true }))) return;
         cfg[list].splice(i, 1); RENDER_LIST[list](); break;
       }
       case 'up': case 'down': {
@@ -1355,7 +1402,7 @@
     }).join('') : '<p class="hint">No messages yet.</p>';
     loadPhotos($('#msg-list'));
   }
-  function onMessageClick(b) {
+  async function onMessageClick(b) {
     const m = messages.find((x) => String(x.id) === b.dataset.id);
     if (!m) return;
     if (b.dataset.msg === 'reply' || b.dataset.msg === 'toggle') {
@@ -1367,7 +1414,7 @@
       return;
     }
     if (b.dataset.msg === 'delete') {
-      if (!confirm('Delete this message? It\'s also removed from the Sheet.')) return;
+      if (!(await ask({ title: 'Delete this message?', text: 'It’s also removed from the Sheet. (The copy in your email inbox stays.)', yes: 'Delete', no: 'Keep it', danger: true }))) return;
       messages = messages.filter((x) => x !== m);
       renderMessages();
       server('adminDeleteMessage', m.id).catch(failed);
@@ -1385,7 +1432,7 @@
     delete c.images;
     return c;
   }
-  function save(force) {
+  async function save(force) {
     if (busy) return;
     const c = cleaned();
     if (cfg.maintenanceMode && !String(cfg.maintenancePassword || '').trim()) {
@@ -1395,15 +1442,19 @@
       return;
     }
     const badZip = cfg.zones.find((z) => z.zip && !/^\d{5}$/.test(z.zip));
-    if (badZip && !confirm('ZIP "' + badZip.zip + '" isn\'t 5 digits and won\'t be saved. Save anyway?')) return;
+    if (badZip && !(await ask({ title: 'Check that ZIP code', text: 'ZIP “' + badZip.zip + '” isn’t 5 digits, so it won’t be saved. Save everything else anyway?', yes: 'Save anyway', no: 'Fix it first' }))) return;
     busy = true;
     $$('[data-save]').forEach((b) => { b.textContent = 'Saving…'; });
     server('adminSaveSettings', c, stamp, !!force).then((r) => {
       busy = false;
       $$('[data-save]').forEach((b) => { b.textContent = 'Save changes'; });
       if (r.conflict) {
-        if (confirm('Someone changed the settings directly in the Google Sheet since you opened this page.\n\n' +
-            'OK: save your version anyway (replaces those Sheet changes).\nCancel: keep editing. To see the Sheet\'s version, reload this page (your unsaved edits here would be lost).')) save(true);
+        ask({
+          title: 'The Sheet changed',
+          text: 'Someone changed the settings directly in the Google Sheet since you opened this page.',
+          points: ['Save mine: your version replaces those Sheet changes.', 'Keep editing: nothing is saved. To see the Sheet’s version, reload this page (your unsaved edits here would be lost).'],
+          yes: 'Save mine', no: 'Keep editing'
+        }).then((ok) => { if (ok) save(true); });
         return;
       }
       cfg = r.config;
