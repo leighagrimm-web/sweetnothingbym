@@ -1605,6 +1605,9 @@ function qbInvoiceForOrder_(cfg, o) {
     const created = qbFetch_('post', '/invoice', {
       CustomerRef: { value: qbCustomer_(o.customer) },
       Line: lines,
+      // The site's tax (Tax & contact rate), set on the invoice. QuickBooks' automated sales tax isn't applied to
+      // invoices made through the API until someone opens them, so without this the invoice is saved untaxed.
+      TxnTaxDetail: { TotalTax: round2_(inv.tax || 0) },
       BillEmail: { Address: o.customer.email },
       CustomerMemo: { value: ('Order ' + o.number + (inv.note ? ' – ' + inv.note : '')).slice(0, 1000) },
       PrivateNote: 'Website order ' + o.number,
