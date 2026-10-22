@@ -1439,6 +1439,16 @@ function adminSetStatus(number, status) {
     confirmClass_(o, status);
     return { ok: true, weekCounts: weekCountsNow_() };
   }
+  // Cancelling a class booking: any gift card amount goes back on the card (an expired hold already gave it back).
+  // If it was still waiting on Square, its pay link is closed too, so a spot that's been given away can't be paid
+  // for later. (Card payments on a paid booking are refunded by hand in Square.)
+  if (o.type === 'Class' && status === 'Cancelled' && CLASS_HOLDS_SPOT.indexOf(o.status) !== -1) {
+    const sq = (o.invoice && o.invoice.square) || {};
+    if (o.status === 'Awaiting payment') {
+      try { if (sq.linkId && squareReady_()) squareFetch_('delete', '/v2/online-checkout/payment-links/' + sq.linkId); } catch (e) { /* already gone */ }
+    }
+    if (o.giftCredit > 0 && o.promoCode) refundGiftCard_(o.promoCode, o.giftCredit);
+  }
   const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
   const row = findOrderRow_(sh, number);
   setCell_(sh, row, 'Status', status);

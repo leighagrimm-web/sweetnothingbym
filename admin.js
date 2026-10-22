@@ -404,7 +404,14 @@
     if (!sel) return;
     const o = orders.find((x) => x.number === sel.dataset.order);
     const prev = o.status;
-    if (sel.value === 'Cancelled' && !confirm('Cancel ' + o.number + '? Its class spots open up again. Let the customer know (Review → Message the customer).')) { sel.value = prev; return; }
+    if (sel.value === 'Cancelled') {
+      const lines = ['Cancel ' + o.number + '?', '', '• Its class spots open up again on the website.'];
+      if (prev === 'Awaiting payment') lines.push('• Its Square payment link is closed, so it can’t be paid for later.');
+      if (o.giftCredit > 0) lines.push('• The ' + money(o.giftCredit) + ' gift card amount goes back on ' + o.promoCode + '.');
+      if (prev === 'Paid') lines.push('• If they paid by card, refund it in Square (Transactions → the payment → Refund). The website can’t do that part.');
+      lines.push('', 'Let the customer know: Review → Message the customer.');
+      if (!confirm(lines.join('\n'))) { sel.value = prev; return; }
+    }
     o.status = sel.value;
     server('adminSetStatus', o.number, sel.value).then((r) => {
       if (!r.ok) { o.status = prev; renderOrders(); toast(r.error); return; }
