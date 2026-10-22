@@ -595,8 +595,20 @@
       cfg.events = cfg.events.map((e) => { const fresh = (d.config.events || []).find((x) => x.id === e.id); return fresh ? Object.assign(e, { booked: fresh.booked, spotsLeft: fresh.spotsLeft }) : e; });
       dashRefreshed = new Date();
       renderOrders(); renderMessages(); renderCodes(); renderBusyDays(); renderDashboard();
+      // An open order panel shows the fresh status and QuickBooks balance too (its typed text lives in rv, so it's kept).
+      if (rv && orders.some((x) => x.number === rv.number)) renderReview();
     });
   }
+
+  // Payments are marked Paid in the Sheet every 5 minutes, so an open admin reloads orders every 2 minutes, and when
+  // Melissa comes back to the tab. Not while she's in an order panel or busy, so nothing she's typing moves.
+  const AUTO_REFRESH_MS = 2 * 60000;
+  function autoRefresh() {
+    if (!dashRefreshed || document.hidden || busy || rv || Date.now() - (dashRefreshed ? dashRefreshed.getTime() : 0) < AUTO_REFRESH_MS - 5000) return;
+    refreshOrders().catch(() => { /* try again next time */ });
+  }
+  setInterval(autoRefresh, AUTO_REFRESH_MS);
+  document.addEventListener('visibilitychange', autoRefresh);
 
   function onDashClick(b) {
     if (b.dataset.dashOpen) { openReview(b.dataset.dashOpen, b); return; }
@@ -1019,7 +1031,7 @@
       if (act === 'check') {
         if (!r.ok) toast(r.error);
         else toast('Checked: ' + (r.invoicesPaid.length + r.classesPaid.length) + ' newly paid, ' + r.expired.length + ' expired' + (r.errors.length ? '. Problems: ' + r.errors.join(' · ') : ''), r.errors.length ? 8000 : 3600);
-        refreshOrders().catch(() => {});
+        refreshOrders().catch((err) => toast('Checked, but the orders list didn’t reload (' + (err && err.message ? err.message : err) + '). Click Refresh on the Dashboard.', 8000));
       }
       if (act === 'items') toast('Invoice items are ready in QuickBooks');
       return loadPayments();
