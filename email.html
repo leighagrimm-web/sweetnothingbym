@@ -9,13 +9,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261026i">
+<link rel="stylesheet" href="styles.css?v=20261026j">
 </head>
 <body>
 <div class="proto-banner" id="banner">Email preview. <a href="index.html">Back to the site</a></div>
 <div class="email-wrap" id="email"></div>
 
-<script src="config.js?v=20261026i"></script>
+<script src="config.js?v=20261026j"></script>
 <script>
 SN.ready.then(function () {
   const cfg = SN.load();
@@ -32,16 +32,16 @@ SN.ready.then(function () {
       number: 'SN-1042', eventType: 'Baby Shower', dateNeeded: SN.isoDate(SN.minDate(cfg)), fulfillment: 'pickup', address: null,
       customer: { name: 'Sample Customer', email: 'customer@example.com', phone: '(847) 555-0100' },
       items: [{ kind: 'custom', qty: 24, designs: 3, desc: 'Soft pink and gold, "Oh Baby" plaques, onesies and baby blocks, 8 of each.', photoName: 'inspo.jpg' }],
-      taxRate: cfg.taxRate
+      taxRate: 0
     };
     o.items.forEach((it) => { it.lineTotal = SN.itemTotal(cfg, it); it.summary = SN.describeItem(cfg, it); });
     o.subtotal = o.items.reduce((a, it) => a + it.lineTotal, 0);
-    o.tax = Math.round(o.subtotal * cfg.taxRate) / 100;
+    o.tax = 0;   // QuickBooks adds sales tax to the invoice
     o.deliveryFee = 0;
     o.total = o.subtotal + o.tax;
     if (type === 'invoice') {
       const lines = [{ desc: '24 Custom Cookies (3 designs)', qty: 24, unit: 6 }];
-      const t = SN.invoiceTotals(lines, 0, cfg.taxRate);
+      const t = SN.invoiceTotals(lines, 0);
       o.invoice = Object.assign({ lines, fee: 0, note: 'These are going to be so cute! The hand-lettered plaques add $1 per cookie.', changed: true, sentAt: new Date().toISOString() }, t);
     }
     if (type === 'declined') o.declineNote = 'I\u2019m fully booked that weekend, but I\u2019d love to help with another date!';
@@ -78,8 +78,8 @@ SN.ready.then(function () {
         (cfg.pickupInstructions ? '<div class="muted" style="margin-top:6px;font-size:14px">' + esc(cfg.pickupInstructions) + '</div>' : '') + '</div>');
     middle = '<div style="border-top:1px solid var(--line);padding-top:14px"><h2 style="font-size:24px;margin-bottom:6px">Your invoice</h2>' +
       inv.lines.map((l) => '<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:15px"><span>' + esc(l.desc) + '<br><span class="hint">' + l.qty + ' \u00d7 ' + money(Number(l.unit)) + '</span></span><span>' + money(l.qty * l.unit) + '</span></div>').join('') + '</div>';
-    totals = row('Subtotal', money(inv.subtotal)) + row('Tax (' + o.taxRate + '%)', money(inv.tax)) +
-      row(isDel ? 'Drop-off' : 'Pickup', isDel ? money(inv.fee) : 'Free') + row('Amount due', money(inv.total), true) +
+    totals = row('Subtotal', money(inv.subtotal)) + row('Sales tax', 'Added by QuickBooks on your invoice') +
+      row(isDel ? 'Drop-off' : 'Pickup', isDel ? money(inv.fee) : 'Free') + row('Amount due (before tax)', money(inv.total), true) +
       (inv.changed ? '<div><span class="muted" style="font-size:13px">Your original estimate was ' + money(o.total) + '</span><span></span></div>' : '');
     totals += '</div><div style="text-align:center"><span class="btn" role="img" aria-label="Pay invoice button (links to QuickBooks in the real email)" style="pointer-events:none">Pay invoice \u00b7 ' + money(inv.total) + '</span>' +
       '<p class="hint" style="margin-top:8px">Secure payment by card or bank transfer through QuickBooks.</p>';
@@ -110,9 +110,9 @@ SN.ready.then(function () {
         '<div class="hint">' + esc(it.summary) + '</div>' +
         (it.desc ? '<div style="font-size:14px;color:var(--muted);background:#FBF7F4;border-radius:10px;padding:10px 12px;margin-top:6px"><strong style="color:var(--navy)">Your description:</strong> ' + esc(it.desc) + '</div>' : '') +
         '</div>').join('') + '</div>';
-    totals = row('Subtotal', money(o.subtotal)) + row('Tax (' + o.taxRate + '%)', money(o.tax)) +
-      row(isDel ? 'Drop-off' : 'Pickup', isDel ? money(o.deliveryFee) : 'Free') + row('Estimated total*', money(o.total), true) +
-      '<div><span class="hint">*Estimate only, not a final price. ' + (o.items.some((it) => it.kind === 'custom') ? esc(cfg.customNote || '') + ' ' : '') + 'Your final price will be in your confirmation email.</span><span></span></div>';
+    totals = row('Subtotal', money(o.subtotal)) + row('Sales tax', 'Added to your invoice') +
+      row(isDel ? 'Drop-off' : 'Pickup', isDel ? money(o.deliveryFee) : 'Free') + row('Estimated total (before tax)*', money(o.total), true) +
+      '<div><span class="hint">*Estimate only, not a final price. ' + (o.items.some((it) => it.kind === 'custom') ? esc(cfg.customNote || '') + ' ' : '') + 'Your final price, with sales tax, will be in your confirmation email.</span><span></span></div>';
   }
 
   const banners = {

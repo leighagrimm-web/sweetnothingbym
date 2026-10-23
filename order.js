@@ -402,11 +402,11 @@ SN.ready.then(function () {
         '<div class="sec totals">' +
           '<div><span class="muted">Subtotal</span><span id="t-sub"></span></div>' +
           '<div id="t-disc-row" hidden><span class="muted" id="t-disc-label"></span><span id="t-disc"></span></div>' +
-          (hasCookies() ? '<div><span class="muted">Tax (' + cfg.taxRate + '%' + (hasClasses() ? ', cookies only' : '') + ')</span><span id="t-tax"></span></div>' +
+          (hasCookies() ? '<div><span class="muted">Sales tax' + (hasClasses() ? ' (cookies)' : '') + '</span><span id="t-tax" class="muted">Added to your invoice</span></div>' +
             '<div><span class="muted" id="t-fee-label"></span><span id="t-fee"></span></div>' : '') +
           '<div id="t-gift-row" hidden><span class="muted">Gift card</span><span id="t-gift"></span></div>' +
         '</div>' +
-        '<div class="grand checkout-grand"><strong>' + (hasCookies() ? 'Estimated total' : 'Total') + '</strong><strong id="t-total"></strong></div>' +
+        '<div class="grand checkout-grand"><strong>' + (hasCookies() ? 'Estimated total (before tax)' : 'Total') + '</strong><strong id="t-total"></strong></div>' +
         '<div class="missing" id="missing" hidden></div>' +
         '<button type="button" class="btn block" data-act="submit"' + (sending ? ' aria-disabled="true"' : '') + '>' + submitLabel() + '</button>' +
         notes.map((n) => '<p class="hint" style="text-align:center;margin-top:10px">' + esc(n) + '</p>').join('') +
@@ -420,14 +420,14 @@ SN.ready.then(function () {
     return lo === hi ? money(lo) : '$' + lo + '–$' + hi;
   }
 
-  // Same math as validateOrder_ in Code.gs: a percent code comes off before tax, tax is on cookies only,
-  // and a gift card comes off last (classes first, since they're paid now).
+  // Same math as validateOrder_ in Code.gs: a percent code comes off first, and a gift card comes off last
+  // (classes first, since they're paid now). Sales tax isn't included: QuickBooks adds it to the invoice.
   function quote() {
     const cookieSub = round2(bag.filter((it) => it.kind !== 'class').reduce((a, it) => a + SN.itemTotal(cfg, it), 0));
     const classSub = round2(bag.filter((it) => it.kind === 'class').reduce((a, it) => a + SN.itemTotal(cfg, it), 0));
     const pct = appliedCode && appliedCode.type === 'percent' ? appliedCode.amount : 0;
     const cookieDisc = round2(cookieSub * pct / 100), classDisc = round2(classSub * pct / 100);
-    const tax = Math.round((cookieSub - cookieDisc) * cfg.taxRate) / 100;
+    const tax = 0;
     const isDel = hasCookies() && checkout.fulfillment === 'delivery';
     const zone = cfg.zones.find((z) => z.zip === checkout.zip);
     const fee = isDel && zone ? Number(zone.fee) : 0;
@@ -498,7 +498,6 @@ SN.ready.then(function () {
     $('#t-disc-label').textContent = appliedCode ? 'Promo code ' + appliedCode.code + ' (' + appliedCode.amount + '% off)' : '';
     $('#t-disc').textContent = '−' + money(q.discount);
     if ($('#t-tax')) {
-      $('#t-tax').textContent = money(q.tax);
       $('#t-fee-label').textContent = q.isDel ? 'Drop-off' : 'Pickup (' + cfg.pickupCity + ')';
       $('#t-fee').textContent = q.isDel ? (q.zone ? money(q.fee) : '—') : 'Free';
     }
@@ -600,7 +599,7 @@ SN.ready.then(function () {
         (cookieOrder ? '<h3' + (classOrder ? ' style="margin-top:28px"' : '') + '>Thanks, we got your cookie request!</h3>' +
           '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(cookieOrder.number) + '</strong></p>' +
           '<p class="muted" style="margin:12px 0 0"><strong>This is not a final order yet.</strong> We sent a copy of your request to ' + esc(email) + '. Sweet Nothings will review it and send a second email with your confirmation, final price and invoice. Your date is reserved once the invoice is paid.</p>' +
-          '<p style="margin:20px 0 0;font-family:var(--serif);font-size:30px;font-weight:600">Estimated total ' + money(cookieOrder.total) + '</p>' : '') +
+          '<p style="margin:20px 0 0;font-family:var(--serif);font-size:30px;font-weight:600">Estimated total ' + money(cookieOrder.total) + '</p><p class="muted" style="margin:4px 0 0">before tax; sales tax is added to your invoice</p>' : '') +
         '<div class="stack" style="margin-top:24px;align-items:center">' +
           (SN_ENV.name === 'uat' && cookieOrder ? '<a class="btn ghost" href="email.html?o=' + encodeURIComponent(cookieOrder.number) + '" target="_blank" rel="noopener">Preview the request email</a>' : '') +
           '<button type="button" class="btn" data-act="close">Back to the menu</button>' +

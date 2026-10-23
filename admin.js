@@ -75,7 +75,7 @@
   const TAB_GROUPS = [
     ['Orders &amp; messages', [['dashboard', 'Dashboard'], ['orders', 'Orders'], ['messages', 'Messages'], ['codes', 'Promo &amp; gift codes'], ['payments', 'Payments']]],
     ['Shop settings', [['custom', 'Custom pricing'], ['artisan', 'Artisan &amp; flavors'], ['rules', 'Ordering rules'], ['zones', 'Drop-off zones'],
-      ['faq', 'FAQ'], ['pages', 'Website pages'], ['events', 'Events'], ['gallery', 'Gallery'], ['settings', 'Tax &amp; contact']]]
+      ['faq', 'FAQ'], ['pages', 'Website pages'], ['events', 'Events'], ['gallery', 'Gallery'], ['settings', 'Contact &amp; pickup']]]
   ];
   const TAB_IDS = TAB_GROUPS.reduce((a, g) => a.concat(g[1].map((t) => t[0])), []);
 
@@ -252,9 +252,8 @@
       '<p class="hint" style="margin-top:8px">' + PHOTO_HINT + '</p>');
   }
   function sectionSettings() {
-    return card('settings', 'Tax &amp; contact', 'Who gets notified about new orders, and what customers see.',
+    return card('settings', 'Contact &amp; pickup', 'Who gets notified about new orders, and what customers see. Sales tax is worked out by QuickBooks on each invoice.',
       '<div class="fields">' +
-        field('taxRate', 'Tax', numInput('taxRate', 'min="0" step="0.01"', '', '%'), 'Applied to cookies, not drop-off fees or classes.') +
         field('ownerEmail', 'New-order alerts go to', '<input class="input" id="ownerEmail" type="email" data-path="ownerEmail" placeholder="Blank = your Google account">') +
         field('replyToEmail', 'Customer replies go to', '<input class="input" id="replyToEmail" type="email" data-path="replyToEmail" placeholder="Blank = same as alerts">') +
         field('pickupCity', 'Pickup area (shown on site)', '<input class="input" id="pickupCity" type="text" data-path="pickupCity">') +
@@ -825,15 +824,17 @@
           esc(new Date(m.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) + ' · ' + esc(m.emailStatus || '') + '</div></div>').join('') + '</div>' : '');
   }
 
+  const qbTax = (inv) => Math.round((inv.qb.total - inv.subtotal - (inv.fee || 0) + (inv.credit || 0)) * 100) / 100;
   function invoiceSummary(o) {
     const inv = o.invoice;
     return '<h3 class="rv-h">' + (isClass(o) ? 'Invoice' : 'Confirmed invoice') + '</h3>' +
       inv.lines.map((l) => '<div class="rv-line"><span>' + esc(l.desc) + ' <span class="muted">(' + l.qty + ' × ' + money(Number(l.unit)) + ')</span></span><span>' + money(l.qty * l.unit) + '</span></div>').join('') +
       '<div class="totals" style="margin-top:10px">' +
-        (isClass(o) ? '' : '<div><span class="muted">Tax (' + o.taxRate + '%)</span><span>' + money(inv.tax) + '</span></div>') +
+        (isClass(o) ? '' : inv.tax > 0 ? '<div><span class="muted">Tax (' + o.taxRate + '%)</span><span>' + money(inv.tax) + '</span></div>'
+          : '<div><span class="muted">Sales tax</span><span class="muted">' + (inv.qb && inv.qb.id ? money(qbTax(inv)) + ' (QuickBooks)' : 'Added by QuickBooks') + '</span></div>') +
         (o.fulfillment === 'delivery' ? '<div><span class="muted">Drop-off</span><span>' + money(inv.fee) + '</span></div>' : '') +
         (inv.credit ? '<div><span class="muted">Gift card ' + esc(o.promoCode) + '</span><span>−' + money(inv.credit) + '</span></div>' : '') +
-        '<div><strong>' + (isClass(o) ? 'Total' : 'Invoice total') + '</strong><strong>' + money(inv.total) + '</strong></div>' +
+        '<div><strong>' + (isClass(o) ? 'Total' : inv.qb && inv.qb.id ? 'Invoice total' : inv.tax > 0 ? 'Invoice total' : 'Invoice total (before tax)') + '</strong><strong>' + money(!isClass(o) && inv.qb && inv.qb.id ? inv.qb.total : inv.total) + '</strong></div>' +
       '</div>' +
       (inv.note ? '<div class="rv-quote" style="margin-top:12px">Your note: “' + esc(inv.note) + '”</div>' : '') +
       (isClass(o) ? '<p class="hint" style="margin-top:12px">Booked ' + esc(new Date(o.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) + '. Booking email: <strong>' + esc(o.emailStatus) + '</strong></p>'
@@ -860,7 +861,7 @@
         '<p class="hint">Invoice <strong>#' + esc(qb.docNumber || qb.id) + '</strong>: ' + money(qb.total) + (qb.voided ? ', voided when the order was cancelled' : qb.balance > 0 ? ', ' + money(qb.balance) + ' still due' : ', paid in full') + '.' +
           (qb.env === 'sandbox' ? ' (Sandbox: test money.)' : '') + ' <a href="' + esc(qb.url) + '" target="_blank" rel="noopener">Open in QuickBooks</a>' +
           (qb.link ? ' · <a href="' + esc(qb.link) + '" target="_blank" rel="noopener">Customer pay page</a>' : '') + '</p>' +
-        (inv.qbMismatch ? '<p class="err">QuickBooks worked out ' + money(qb.total) + ' but the site said ' + money(inv.total) + '. Check the sales tax settings in QuickBooks; the customer pays the QuickBooks amount.</p>' : '') +
+        '<p class="hint">Includes ' + money(qbTax(inv)) + ' sales tax worked out by QuickBooks.</p>' +
         (!qb.link ? '<p class="hint">No online Pay button: QuickBooks Payments may not be turned on, so QuickBooks emailed the invoice' + (/^FAILED/.test(qb.sent || '') ? ' (that failed: ' + esc(qb.sent) + ')' : '') + '.</p>' : '');
     }
     if (inv.qbError) {
@@ -910,7 +911,7 @@
         : '') +
       '<div class="totals" style="margin-top:16px">' +
         '<div><span class="muted">Subtotal</span><span id="inv-sub"></span></div>' +
-        '<div><span class="muted">Tax (' + o.taxRate + '%)</span><span id="inv-tax"></span></div>' +
+        '<div><span class="muted">Sales tax</span><span class="muted">Added by QuickBooks</span></div>' +
         (o.fulfillment === 'delivery' ? '<div><span class="muted">Drop-off</span><span id="inv-feeval"></span></div>' : '') +
         (o.giftCredit ? '<div><span class="muted">Gift card ' + esc(o.promoCode) + ' (estimate)</span><span id="inv-gift"></span></div>' : '') +
       '</div>' +
@@ -922,7 +923,7 @@
           '<div class="field"><label class="label" for="decline-note">Message to the customer</label><textarea class="input" id="decline-note" rows="3" data-inv="declineNote" placeholder="e.g. I’m fully booked that weekend, but I’d love to help with another date!">' + esc(rv.declineNote) + '</textarea></div>' +
           '<div class="row-gap"><button type="button" class="btn ghost small" data-rv="decline-cancel">Back</button><button type="button" class="btn navy small" data-rv="decline-send">Decline &amp; email customer</button></div>' +
         '</div>'
-      : '<div class="grand"><strong>Invoice total</strong><strong id="inv-total"></strong></div>' +
+      : '<div class="grand"><strong>Invoice total (before tax)</strong><strong id="inv-total"></strong></div>' +
         '<p class="hint" id="inv-diff" style="margin:-4px 0 12px"></p>' +
         '<p class="err" id="inv-err" hidden style="margin-bottom:10px"></p>' +
         '<button type="button" class="btn block" data-rv="approve" id="approve-btn"></button>' +
@@ -937,10 +938,9 @@
     const review = $('#review');
     const o = orders.find((x) => x.number === rv.number);
     if (o.status !== 'Pending review') return;
-    const t = SN.invoiceTotals(rv.lines, rv.fee, o.taxRate, o.giftCredit);
+    const t = SN.invoiceTotals(rv.lines, rv.fee, 0, o.giftCredit);
     rv.lines.forEach((l, j) => { const el = $('[data-amt="' + j + '"]', review); if (el) el.textContent = money((Number(l.qty) || 0) * (Number(l.unit) || 0)); });
     $('#inv-sub').textContent = money(t.subtotal);
-    $('#inv-tax').textContent = money(t.tax);
     if ($('#inv-feeval')) $('#inv-feeval').textContent = money(t.fee);
     if ($('#inv-gift')) $('#inv-gift').textContent = '−' + money(t.credit);
     $('#inv-total').textContent = money(t.total);
@@ -950,7 +950,7 @@
       ? 'Changed from the ' + money(o.total) + ' estimate (' + (diff >= 0 ? '+' : '−') + money(Math.abs(diff)) + '). Add a note so they know why.'
       : 'Same as the estimate the customer saw.';
     $('#note-hint').textContent = changed ? '(recommended since the price changed)' : '(optional)';
-    $('#approve-btn').textContent = (changed ? 'Approve with changes' : 'Approve') + ' & email confirmation · ' + money(t.total);
+    $('#approve-btn').textContent = (changed ? 'Approve with changes' : 'Approve') + ' & email confirmation · ' + money(t.total) + ' + tax';
   }
 
   function onReviewInput(e) {
@@ -1034,7 +1034,7 @@
         const err = $('#inv-err');
         const bad = rv.lines.find((l) => !String(l.desc).trim() || !(Number(l.qty) > 0));
         if (!rv.lines.length || bad) { err.hidden = false; err.textContent = 'Every invoice line needs a description and a quantity.'; return; }
-        const t = SN.invoiceTotals(rv.lines, rv.fee, o.taxRate);
+        const t = SN.invoiceTotals(rv.lines, rv.fee, 0);
         if (t.total <= 0) { err.hidden = false; err.textContent = 'The invoice total has to be more than $0.'; return; }
         const wk = weekInfo(o);
         if (wk.over && !(await ask({ title: 'Over that week’s limit', text: 'Approving puts that week over your limit (' + wk.over + '). Approve anyway?', yes: 'Approve anyway', no: 'Not yet' }))) return;

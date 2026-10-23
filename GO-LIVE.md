@@ -11,7 +11,7 @@ Keep the site in **maintenance mode** from step 4 until step 8, so nobody can or
 ## 0. Decisions before starting
 
 - [x] **Live Google account:** `SweetNothingsByM@gmail.com`. The live Sheet and script live here, and customer emails come from it.
-- [x] **How does Leigha get into the live admin?** By signing in with Melissa's Google account for go-live. **Admin helpers** (admin → Tax & contact) is there as an option for later, for someone helping with setup under their own Google account. See step 3.
+- [x] **How does Leigha get into the live admin?** By signing in with Melissa's Google account for go-live. **Admin helpers** (admin → Contact & pickup) is there as an option for later, for someone helping with setup under their own Google account. See step 3.
 - [x] **Hosting:** **Cloudflare Pages** (free, HTTPS included). It publishes automatically from the same GitHub repo; GitHub Pages stays the test site.
 - [x] **Domain:** sweetnothingsbym.com is registered at **Porkbun**. Its nameservers move to Cloudflare (step 4); it stays registered at Porkbun.
 - [ ] **Go-live date**, and a quiet time to do steps 4–8 (about 2–3 hours, plus waiting for the domain). (L + M)
@@ -65,7 +65,7 @@ Everything below is edited in the **test** admin first, so it can be checked on 
    - **Admin:** Execute as **User accessing the web app**, Who has access **Anyone with Google account**, so helpers can be added later without redeploying. Only the owner and any admin helpers get past the sign-in; everyone else sees "Only the shop owner can do that." Copy the URL: this is `ADMIN.prod`, and it also goes in the Settings tab's `adminUrl`.
 9. [x] Send both URLs to C to put in `config.js` (step 1).
 10. [ ] *(Optional, any time later)* **Admin helpers.** Not needed for go-live, since Leigha signs in with Melissa's account. When someone should use the admin with their **own** Google account (for example, to help set things up):
-   - Signed in as Melissa, go to the live admin → **Tax & contact** → **Admin helpers**, enter their Gmail, and save. This shares the Sheet and the photos folder with them.
+   - Signed in as Melissa, go to the live admin → **Contact & pickup** → **Admin helpers**, enter their Gmail, and save. This shares the Sheet and the photos folder with them.
    - They open the admin link with their own Google account and allow the permissions it asks for.
    - Any emails they send from the admin (approvals, messages) wait in a hidden **Outbox** tab and go out from **Melissa's** account at the next 5-minute check. The order shows "Queued" until then.
    - Only Melissa's account can start the 5-minute check, which setupSheet does in item 6.
@@ -93,7 +93,7 @@ The Cloudflare account belongs to the shop: sign up with **SweetNothingsByM@gmai
 ## 5. QuickBooks: production (L + M)
 
 1. [ ] **M's QuickBooks:**
-   - **Sales tax** set up with the accountant's rate, matching the site's tax rate.
+   - **Sales tax** set up (Taxes → Sales tax), and every cookie item given the **bakery** sales tax category, including the site's **Custom Cookies** and **Artisan Cookies** after connecting. The website no longer works out tax; QuickBooks adds it on each invoice.
    - **QuickBooks Payments** turned on (card and bank transfer), so invoices get a Pay button.
 2. [ ] **Intuit developer app:**
    - Rename it from "Test App" to "Sweet Nothings by M website".

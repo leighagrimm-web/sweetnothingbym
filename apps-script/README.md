@@ -75,7 +75,7 @@ Changes to `admin.js`, `config.js` or `styles.css` only need publishing the webs
 4. Run **setupSheet**. It schedules the 5-minute check and asks for the new permissions (external requests, triggers).
 5. Admin → **Payments** → **Connect QuickBooks**, pick the company, approve, then click **Refresh**.
 
-**Going live:** switch both `*_ENV` properties to `production` and use the production keys. Connect QuickBooks again (to Melissa's real company), and turn on QuickBooks Payments so invoices get a Pay button. Also check that QuickBooks' sales tax matches the site's tax rate: the admin flags invoices where the two totals differ.
+**Going live:** switch both `*_ENV` properties to `production` and use the production keys. Connect QuickBooks again (to Melissa's real company), and turn on QuickBooks Payments so invoices get a Pay button. The website doesn't work out sales tax: QuickBooks adds it to each invoice from Melissa's address (or the drop-off address) and each item's sales tax category. Give cookie items the **bakery** category (Food & beverages → General food for home consumption → "Items sold by a bakery without eating utensils…").
 
 ## What's in the Sheet
 

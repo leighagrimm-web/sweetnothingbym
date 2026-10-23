@@ -111,7 +111,6 @@ const SETTINGS_SPEC = [
   ['flavorsMaxAt', 24, 'number', 'Cookie count where flavorsMax kicks in (24 = 2 dozen).'],
   ['specialText', 'Pumpkin Spice is back in the artisan lineup through the end of the month.', 'text', 'Monthly special message (leave blank for none).'],
   ['specialUntil', '2026-10-31', 'date', 'Last day to show the special (YYYY-MM-DD).'],
-  ['taxRate', 2.25, 'number', 'Tax percent, on cookies only (not drop-off fees or classes).'],
   ['showAbout', true, 'bool', 'Show the About page in the menu. FALSE hides it (visits go to the home page).'],
   ['showEvents', true, 'bool', 'Show the Special Events page in the menu.'],
   ['showGallery', true, 'bool', 'Show the Gallery page in the menu.'],
@@ -268,7 +267,8 @@ function setupSheet() {
     const have = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().map((r) => String(r[0])) : [];
     const missing = SETTINGS_SPEC.filter((s) => have.indexOf(s[0]) === -1);
     if (missing.length) appendRows_(sh, missing.map((s) => [s[0], String(s[1]), s[3]]));
-    ['maxOrdersPerDay'].forEach((old) => { const i = have.indexOf(old); if (i !== -1) sh.deleteRow(i + 2); });
+    ['maxOrdersPerDay', 'taxRate'].map((old) => have.indexOf(old)).filter((i) => i !== -1)
+      .sort((a, b) => b - a).forEach((i) => sh.deleteRow(i + 2));   // bottom up, so earlier rows don't shift
   }
   if (created.Flavors) {
     const fl = ss.getSheetByName('Flavors');
@@ -863,12 +863,12 @@ function validateOrder_(cfg, b) {
     // Tax is on the cookies after any percent discount; the drop-off fee isn't taxed. A gift card comes off last.
     const subtotal = round2_(cookies.reduce((a, it) => a + it.lineTotal, 0));
     const discount = round2_(subtotal * pct / 100);
-    const tax = Math.round((subtotal - discount) * Number(cfg.taxRate)) / 100;
+    const tax = 0;   // sales tax is worked out by QuickBooks on the invoice (by address and item type)
     const beforeCredit = round2_(subtotal - discount + tax + deliveryFee);
     const giftCredit = round2_(Math.min(giftLeft, beforeCredit));
     cookie = {
       type: 'Cookies', items: cookies, eventType, dateNeeded, allergies: clean_(b.allergies, 1000), fulfillment, address, customer,
-      subtotal, discount, tax, deliveryFee, giftCredit, total: round2_(beforeCredit - giftCredit), taxRate: Number(cfg.taxRate), promoCode: code ? code.code : ''
+      subtotal, discount, tax, deliveryFee, giftCredit, total: round2_(beforeCredit - giftCredit), taxRate: 0, promoCode: code ? code.code : ''
     };
   }
 
@@ -1356,7 +1356,7 @@ function adminApprove(number, inv) {
     if (!lines.length || lines.some((l) => !l.desc || !(l.qty > 0) || !isFinite(l.unit))) return { ok: false, error: 'Every invoice line needs a description and a quantity.' };
     const fee = o.fulfillment === 'delivery' ? Math.max(0, Number(inv.fee) || 0) : 0;
     const subtotal = round2_(lines.reduce((a, l) => a + l.qty * l.unit, 0));
-    const tax = Math.round(Math.max(0, subtotal) * o.taxRate) / 100;
+    const tax = 0;   // QuickBooks adds sales tax to its invoice
     const beforeCredit = round2_(subtotal + tax + fee);
     if (beforeCredit <= 0) return { ok: false, error: 'The invoice total has to be more than $0.' };
     // A gift card comes off last, from its balance right now.
@@ -1878,12 +1878,14 @@ function qbQuery_(sql) { return (qbFetch_('get', '/query?query=' + encodeURIComp
 function qbEsc_(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 
 // The Products/Services invoices use. Created in QuickBooks the first time; their IDs are remembered per company.
+// [key, name, taxable, description, QuickBooks type]. The cookies are products (NonInventory) because QuickBooks only
+// lets products take a food sales tax category; give them the bakery one in QuickBooks (Sales tax categories).
 const QB_ITEMS = [
-  ['custom', 'Custom Cookies', true, 'Hand-decorated custom cookies'],
-  ['artisan', 'Artisan Cookies', true, 'Mini and large artisan cookies'],
-  ['dropoff', 'Drop-off Fee', false, 'Local drop-off'],
-  ['discount', 'Promo Discount', true, 'Promo code or price adjustment'],
-  ['gift', 'Gift Card Credit', false, 'Sweet Nothings gift card applied']
+  ['custom', 'Custom Cookies', true, 'Hand-decorated custom cookies', 'NonInventory'],
+  ['artisan', 'Artisan Cookies', true, 'Mini and large artisan cookies', 'NonInventory'],
+  ['dropoff', 'Drop-off Fee', false, 'Local drop-off', 'Service'],
+  ['discount', 'Promo Discount', true, 'Promo code or price adjustment', 'Service'],
+  ['gift', 'Gift Card Credit', false, 'Sweet Nothings gift card applied', 'Service']
 ];
 function qbItems_(force) {
   const key = 'QBO_ITEMS_' + SCRIPT_PROPS().getProperty('QBO_REALM_ID');
@@ -1893,9 +1895,9 @@ function qbItems_(force) {
   const income = accounts.find((a) => /sales/i.test(a.Name)) || accounts[0];
   if (!income) throw new Error('No income account found in QuickBooks.');
   const map = {};
-  QB_ITEMS.forEach(([k, name, taxable, desc]) => {
+  QB_ITEMS.forEach(([k, name, taxable, desc, type]) => {
     const found = (qbQuery_("select * from Item where Name = '" + qbEsc_(name) + "'").Item || [])[0];
-    map[k] = found ? found.Id : qbFetch_('post', '/item', { Name: name, Type: 'Service', Taxable: taxable, Description: desc, IncomeAccountRef: { value: income.Id } }).Item.Id;
+    map[k] = found ? found.Id : qbFetch_('post', '/item', { Name: name, Type: type, Taxable: taxable, Description: desc, IncomeAccountRef: { value: income.Id } }).Item.Id;
   });
   SCRIPT_PROPS().setProperty(key, JSON.stringify(map));
   return map;
@@ -1934,9 +1936,11 @@ function qbInvoiceForOrder_(cfg, o) {
     const created = qbFetch_('post', '/invoice', {
       CustomerRef: { value: qbCustomer_(o.customer) },
       Line: lines,
-      // The site's tax (Tax & contact rate), set on the invoice. QuickBooks' automated sales tax isn't applied to
-      // invoices made through the API until someone opens them, so without this the invoice is saved untaxed.
-      TxnTaxDetail: { TotalTax: round2_(inv.tax || 0) },
+      // No tax amount is sent: QuickBooks' automated sales tax works it out from the items' tax categories and the
+      // address (her business address for pickup; the drop-off address below for drop-off orders).
+      ShipAddr: o.fulfillment === 'delivery' && o.address
+        ? { Line1: o.address.street, City: o.address.city, CountrySubDivisionCode: 'IL', PostalCode: o.address.zip, Country: 'US' }
+        : undefined,
       BillEmail: { Address: o.customer.email },
       CustomerMemo: { value: ('Order ' + o.number + (inv.note ? ' – ' + inv.note : '')).slice(0, 1000) },
       PrivateNote: 'Website order ' + o.number,
@@ -1959,8 +1963,7 @@ function qbInvoiceForOrder_(cfg, o) {
       try { qbFetch_('post', '/invoice/' + created.Id + '/send?sendTo=' + encodeURIComponent(o.customer.email), '', 'application/octet-stream'); sent = new Date().toISOString(); } catch (e) { sent = 'FAILED: ' + e.message; }
     }
     inv.qb = { id: created.Id, docNumber: saved.DocNumber || created.DocNumber, total: Number(saved.TotalAmt), tax: Number((saved.TxnTaxDetail || {}).TotalTax || 0), balance: Number(saved.Balance), link, sent, env: qbEnv_(), url: qbAppUrl_(created.Id) };
-    // QuickBooks' total wins if its tax settings work it out differently; admin shows both.
-    inv.qbMismatch = Math.abs(inv.qb.total - inv.total) > 0.009;
+    // QuickBooks' total includes the sales tax it worked out; the site's own total is before tax.
     delete inv.qbError;
   } catch (err) {
     console.error('QuickBooks invoice failed', o.number, err && err.stack || err);
@@ -2053,7 +2056,7 @@ function checkPayments() {
             // Total and tax too: QuickBooks may add its sales tax after the invoice is made, or Melissa may edit it there.
             x.inv.qb.total = Number(q.TotalAmt);
             if (q.TxnTaxDetail) x.inv.qb.tax = Number(q.TxnTaxDetail.TotalTax || 0);
-            x.inv.qbMismatch = Math.abs(x.inv.qb.total - x.inv.total) > 0.009;
+            delete x.inv.qbMismatch;   // (older invoices compared against the site's own tax, which it no longer works out)
             x.inv.qb.balance = Number(q.Balance);
             x.inv.qb.checkedAt = new Date().toISOString();
             if (x.inv.qb.balance <= 0) {
@@ -2216,7 +2219,7 @@ function sendOrderRequestEmail_(cfg, o) {
   const html = shell_(cfg, 'We got your order request' + (first ? ', ' + esc_(first) : '') + '!', o.number,
     notFinalBox_() + nextSteps_() + facts_(o, false) + itemsBlock_(o, 'What you requested') +
     totalsBlock_(o, 'Estimated total*') +
-    p_('*Estimate only, not a final price. ' + (o.items.some((it) => it.kind === 'custom') ? esc_(cfg.customNote || '') + ' ' : '') + 'Your final price will be in your confirmation email.', 13) +
+    p_('*Estimate only, not a final price. ' + (o.items.some((it) => it.kind === 'custom') ? esc_(cfg.customNote || '') + ' ' : '') + 'Your final price, with sales tax, will be in your confirmation email.', 13) +
     p_('Questions or changes? Just reply to this email and mention your order number.', 14));
   const text = [
     'We got your order request' + (first ? ', ' + first : '') + '!', 'Order number ' + o.number, '',
@@ -2305,15 +2308,12 @@ function sendConfirmationEmail_(cfg, o) {
     inv.lines.map((l) => '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:15px;padding:6px 0"><tr>' +
       '<td>' + esc_(l.desc) + '<br><span style="color:' + C.muted + ';font-size:13px">' + l.qty + ' × ' + money_(l.unit) + '</span></td>' +
       '<td align="right" style="vertical-align:top">' + money_(l.qty * l.unit) + '</td></tr></table>').join('') + '</div>';
-  // With a QuickBooks invoice, the email shows its amounts: that's what the customer pays. QuickBooks works out
-  // sales tax itself, so its tax is the gap between its total and the untaxed parts (lines, drop-off, gift card).
+  // With a QuickBooks invoice, the email shows its amounts (sales tax included): that's what the customer pays.
   const qb = inv.qb || {};
-  const fromQb = !!(qb.id && isFinite(qb.total));
-  const tax = fromQb ? round2_(qb.total - inv.subtotal - (inv.fee || 0) + (inv.credit || 0)) : inv.tax;
-  const due = fromQb ? qb.total : inv.total;
-  const taxLabel = Math.abs(tax - inv.tax) > 0.009 ? 'Sales tax' : 'Tax (' + o.taxRate + '%)';
-  const totals = totalsBlock_({ fulfillment: o.fulfillment, subtotal: inv.subtotal, tax, taxLabel, deliveryFee: inv.fee, giftCredit: inv.credit || 0, promoCode: o.promoCode, total: due }, 'Amount due') +
-    (inv.changed ? p_('Your original estimate was ' + money_(o.total) + '.', 13) : '');
+  const t = invoiceTotals_(o);
+  const due = t.total;
+  const totals = totalsBlock_(t, 'Amount due') +
+    (inv.changed ? p_('Your original estimate was ' + money_(o.total) + (o.tax ? '' : ' before tax') + '.', 13) : '');
   // The QuickBooks invoice's own Pay page. Without one (QuickBooks not connected, or online payments off), say how it'll come.
   const payNote = qb.link ? '' : qb.id ? 'Your invoice' + (qb.docNumber ? ' #' + qb.docNumber : '') + ' from QuickBooks is in a separate email.' : 'I’ll send your invoice to pay in a separate email.';
   const pay = qb.link
@@ -2331,8 +2331,7 @@ function sendConfirmationEmail_(cfg, o) {
     isDel ? 'Drop-off to: ' + o.address.street + ', ' + o.address.city + ' ' + o.address.zip : 'Pickup address: ' + cfg.pickupAddress + (cfg.pickupInstructions ? '\n' + cfg.pickupInstructions : ''),
     'Needed by: ' + prettyDate_(o.dateNeeded), '',
     inv.lines.map((l) => l.desc + ' – ' + l.qty + ' × ' + money_(l.unit) + ' = ' + money_(l.qty * l.unit)).join('\n'), '',
-    'Subtotal: ' + money_(inv.subtotal), taxLabel + ': ' + money_(tax), isDel ? 'Drop-off: ' + money_(inv.fee) : 'Pickup: Free', inv.credit ? 'Gift card: -' + money_(inv.credit) : '',
-    'Amount due: ' + money_(due), '', qb.link ? 'Pay securely here: ' + qb.link : payNote, '', 'Questions or changes? Just reply to this email and mention your order number.'
+    totalsText_(t, 'Amount due'), '', qb.link ? 'Pay securely here: ' + qb.link : payNote, '', 'Questions or changes? Just reply to this email and mention your order number.'
   ].join('\n');
   sendMail_({
     to: o.customer.email,
@@ -2423,7 +2422,7 @@ function classText_(o) {
 function sendOrderMessageEmail_(cfg, o, text) {
   const inv = o.invoice;
   const totals = inv
-    ? totalsBlock_({ fulfillment: o.fulfillment, subtotal: inv.subtotal, tax: inv.tax, taxRate: o.taxRate, deliveryFee: inv.fee, giftCredit: inv.credit || 0, promoCode: o.promoCode, total: inv.total }, o.type === 'Class' ? 'Total' : 'Amount due')
+    ? totalsBlock_(invoiceTotals_(o), o.type === 'Class' ? 'Total' : 'Amount due')
     : totalsBlock_(o, 'Estimated total');
   const html = shell_(cfg, 'A message about your order', o.number,
     '<div style="font-size:15px;white-space:pre-wrap;margin-bottom:18px;color:' + C.navy + '">' + esc_(text) + '</div>' +
@@ -2533,19 +2532,44 @@ function itemsBlock_(o, heading, forOwner) {
   '</div>';
 }
 
+// The sales tax line. QuickBooks works out the tax on its invoice, so until there is one the line says it's added
+// there (and the total is before tax). taxFromQb: the amount came from the QuickBooks invoice. Orders from before
+// this change kept the site's own tax, and still show it.
+function taxLine_(o) {
+  if (o.fulfillment === 'class') return null;   // classes: no sales tax
+  if (o.taxFromQb) return { label: 'Sales tax', amount: o.tax };
+  if (o.tax > 0) return { label: 'Tax (' + o.taxRate + '%)', amount: o.tax };
+  return { label: 'Sales tax', amount: null };
+}
+const beforeTax_ = (o, label) => { const t = taxLine_(o); return t && t.amount === null ? label.replace(/\*?$/, ' (before tax)$&') : label; };
+
 function totalsBlock_(o, totalLabel) {
   const row = (k, v) => '<tr><td style="padding:3px 0;color:' + C.muted + ';font-size:15px">' + k + '</td><td align="right" style="padding:3px 0;font-size:15px">' + v + '</td></tr>';
   const isDel = o.fulfillment === 'delivery';
   const cookies = o.fulfillment !== 'class';   // classes have no tax or pickup/drop-off
+  const tax = taxLine_(o);
   return '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-top:1px solid ' + C.line + ';padding-top:14px;margin-bottom:10px">' +
     row('Subtotal', money_(o.subtotal)) +
     (o.discount ? row('Promo code ' + esc_(o.promoCode), '−' + money_(o.discount)) : '') +
-    (cookies ? row(o.taxLabel || 'Tax (' + o.taxRate + '%)', money_(o.tax)) : '') +
+    (tax ? row(tax.label, tax.amount === null ? '<span style="color:' + C.muted + ';font-size:14px">Added to your invoice</span>' : money_(tax.amount)) : '') +
     (cookies ? row(isDel ? 'Drop-off' : 'Pickup', isDel ? money_(o.deliveryFee) : 'Free') : '') +
     (o.giftCredit ? row('Gift card' + (o.promoCode ? ' ' + esc_(o.promoCode) : ''), '−' + money_(o.giftCredit)) : '') +
-    '<tr><td style="border-top:1px solid ' + C.line + ';padding-top:10px"><strong>' + totalLabel + '</strong></td>' +
+    '<tr><td style="border-top:1px solid ' + C.line + ';padding-top:10px"><strong>' + beforeTax_(o, totalLabel) + '</strong></td>' +
       '<td align="right" style="border-top:1px solid ' + C.line + ';padding-top:10px;font-family:' + SERIF + ';font-size:30px;font-weight:700">' + money_(o.total) + '</td></tr>' +
   '</table>';
+}
+
+// An approved order's totals for emails: QuickBooks' tax and amount due when it has made the invoice.
+function invoiceTotals_(o) {
+  const inv = o.invoice, qb = inv.qb || {};
+  const fromQb = !!(qb.id && isFinite(qb.total));
+  return {
+    fulfillment: o.fulfillment, subtotal: inv.subtotal, deliveryFee: inv.fee, giftCredit: inv.credit || 0, promoCode: o.promoCode,
+    taxRate: o.taxRate, taxFromQb: fromQb,
+    // QuickBooks' tax is the gap between its total and the untaxed parts (lines, drop-off, gift card).
+    tax: fromQb ? round2_(qb.total - inv.subtotal - (inv.fee || 0) + (inv.credit || 0)) : inv.tax,
+    total: fromQb ? qb.total : inv.total
+  };
 }
 
 function button_(href, label) {
@@ -2567,12 +2591,13 @@ function photoLinks_(photos, what) {
 
 function totalsText_(o, totalLabel) {
   const cookies = o.fulfillment !== 'class';
+  const tax = taxLine_(o);
   return ['Subtotal: ' + money_(o.subtotal),
     o.discount ? 'Promo code ' + o.promoCode + ': -' + money_(o.discount) : '',
-    cookies ? 'Tax (' + o.taxRate + '%): ' + money_(o.tax) : '',
+    tax ? tax.label + ': ' + (tax.amount === null ? 'added to your invoice' : money_(tax.amount)) : '',
     cookies ? (o.fulfillment === 'delivery' ? 'Drop-off: ' + money_(o.deliveryFee) : 'Pickup: Free') : '',
     o.giftCredit ? 'Gift card: -' + money_(o.giftCredit) : '',
-    totalLabel + ': ' + money_(o.total)].filter(Boolean).join('\n');
+    beforeTax_(o, totalLabel) + ': ' + money_(o.total)].filter(Boolean).join('\n');
 }
 
 

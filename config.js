@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261026i';
+const SN_BUILD = '20261026j';
 
 const SN_ENV = (function () {
   const API = {
@@ -70,7 +70,6 @@ const SN_DEFAULTS = {
   ],
   specialText: 'Pumpkin Spice is back in the artisan lineup through the end of the month.',
   specialUntil: '2026-10-31',
-  taxRate: 2.25,              // tax percent, applied to cookies (not drop-off fees or classes)
   showAbout: true, showEvents: true, showGallery: true, showFaq: true,   // pages in the menu
   zones: [                    // drop-off ZIP codes and fees
     { zip: '60018', area: 'Rosemont / Des Plaines', fee: 5 },
@@ -492,9 +491,10 @@ const SN = {
     return lines;
   },
   // Totals for a set of invoice lines. Tax applies to the lines, not the drop-off fee; a gift card credit comes off last.
+  // An invoice's totals before sales tax (QuickBooks adds the tax). taxRate is ignored; kept so older calls still work.
   invoiceTotals(lines, fee, taxRate, credit) {
     const subtotal = lines.reduce((a, l) => a + (Number(l.qty) || 0) * (Number(l.unit) || 0), 0);
-    const tax = Math.round(Math.max(0, subtotal) * Number(taxRate)) / 100;
+    const tax = 0;
     const f = Number(fee) || 0;
     const c = Math.min(Number(credit) || 0, Math.max(0, subtotal + tax + f));
     return { subtotal, tax, fee: f, credit: c, total: subtotal + tax + f - c };
