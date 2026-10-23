@@ -840,6 +840,12 @@ SN.ready.then(function () {
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   });
 
+  // Opened from a home page card (order.html?add=custom|mini|large): straight to that item's options.
+  const addKind = new URLSearchParams(location.search).get('add');
+  if (['custom', 'mini', 'large'].indexOf(addKind) !== -1) {
+    history.replaceState(null, '', location.pathname);
+    if (cfg.acceptingOrders && !paused) openItem(addKind, $('[data-open="' + addKind + '"]'));
+  }
   // Opened from another page's Bag link (order.html?bag=1)
   if (new URLSearchParams(location.search).get('bag')) {
     history.replaceState(null, '', location.pathname);
