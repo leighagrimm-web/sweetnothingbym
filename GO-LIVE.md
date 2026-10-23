@@ -17,7 +17,7 @@ Keep the site in **maintenance mode** from step 4 until step 8, so nobody can or
 
 ## 1. Build items still to do (C)
 
-- [ ] **Privacy policy and terms pages.** Intuit requires both links before it gives production QuickBooks keys. C drafts them and M reviews the wording.
+- [x] **Privacy policy and terms pages:** `privacy.html` and `terms.html`, linked in the footer and readable even during maintenance. **M reviews the wording**, especially changes/refunds, allergies and pickup.
 - [ ] **Point the site at the live script:** fill in `PROD_HOSTS`, `API.prod` and `ADMIN.prod` in `config.js` (after step 3, once the live script's URLs exist).
 - [ ] *(After go-live)* **Portfolio demo:** the admin running on fake data, with no connection to the test or live Sheet, plus a "how it's connected" page.
 
@@ -39,10 +39,13 @@ Everything below is edited in the **test** admin first, so it can be checked on 
 ## 3. Melissa's Google account: the live Sheet and script (L, with M signed in)
 
 1. [ ] Leigha shares the **test** Sheet with the live Google account (Share → that email → Editor). Then, signed in as the live account, open it and use **File → Make a copy**. The copy brings the script with it. Name it "Sweet Nothings – LIVE".
+   - **Comes over (keep):** everything set up through the admin. That's **Settings** (prices, minimums, caps, lead days, tax, notes, maintenance text), **Flavors**, **Zones** (drop-off ZIPs and fees), **BlockedDates**, **FAQ**, **Pages** (all website wording and photo links), **Events** (classes, prices, max attendees) and **Gallery**.
+   - **Test data (cleared in step 2):** Orders, OrderItems, Messages, Outbox, Draft, test promo codes.
 2. [ ] In the copy, clear the test data:
-   - **Orders, OrderItems, Messages:** delete every row except the headers.
-   - **Codes:** delete the test codes.
+   - **Orders, OrderItems, Messages, Outbox, Draft:** delete every row except the headers. Class spots reset by themselves, since they're counted from orders.
+   - **Codes:** delete the test codes, and keep any real gift cards or promo codes Melissa has already given out.
    - **Counters:** keep `nextOrder` (e.g. 1001) and set `nextMessage` to 1.
+   - Customer photos from test orders stay in Leigha's Drive; the live site starts its own uploads folder in step 6.
 3. [ ] **Settings tab:**
    - `environment` = `PROD` (removes "[TEST]" from email subjects)
    - `siteUrl` = `https://www.sweetnothingsbym.com/`
@@ -52,15 +55,18 @@ Everything below is edited in the **test** admin first, so it can be checked on 
 4. [ ] **Extensions → Apps Script.** Under **Libraries**, check that **OAuth2** is listed; if not, add `1B7FSrk5Zi6L1rSxxTDgDEUsPzlukDsi4KGuTMorsTQHhGBzBkMun4iDF`.
 5. [ ] **Project Settings → Script Properties.** These are **not** copied with the Sheet, so add them fresh in step 5 and step 6.
 6. [ ] Run **setupSheet** and allow everything Google asks for: Sheets, Gmail sending, Drive, outside services and triggers. It creates the uploads folder and the 5-minute payment check.
-7. [ ] **Deploy → New deployment → Web app**, twice:
+7. [ ] **Move the website photos into Melissa's Drive.** In the Apps Script editor, pick **copyWebsitePhotos** in the function list and click **Run**. It copies every photo the site shows (Home, About, menu, Events, Gallery) from Leigha's Drive into a **"Sweet Nothings website photos"** folder in Melissa's Drive, shares each copy so the site can show it, and points the Sheet at the copies. The live site then doesn't depend on Leigha's account at all.
+   - Check the message at the bottom of the editor (Execution log): "Copied N photos…". If it lists any it couldn't copy, make sure those photos are shared "anyone with the link" in Leigha's Drive, then run it again (it skips ones already done).
+   - Then open the live admin's **Website pages**, **Events** and **Gallery** tabs and check the previews show.
+8. [ ] **Deploy → New deployment → Web app**, twice:
    - **Public:** Execute as **Me**, Who has access **Anyone**. Copy the URL: this is `API.prod`.
    - **Admin:** Execute as **User accessing the web app**, Who has access **Anyone with Google account**, so helpers can be added later without redeploying. Only the owner and any admin helpers get past the sign-in; everyone else sees "Only the shop owner can do that." Copy the URL: this is `ADMIN.prod`, and it also goes in the Settings tab's `adminUrl`.
-8. [ ] Send both URLs to C to put in `config.js` (step 1).
-9. [ ] *(Optional, any time later)* **Admin helpers.** Not needed for go-live, since Leigha signs in with Melissa's account. When someone should use the admin with their **own** Google account (for example, to help set things up):
+9. [ ] Send both URLs to C to put in `config.js` (step 1).
+10. [ ] *(Optional, any time later)* **Admin helpers.** Not needed for go-live, since Leigha signs in with Melissa's account. When someone should use the admin with their **own** Google account (for example, to help set things up):
    - Signed in as Melissa, go to the live admin → **Tax & contact** → **Admin helpers**, enter their Gmail, and save. This shares the Sheet and the photos folder with them.
    - They open the admin link with their own Google account and allow the permissions it asks for.
    - Any emails they send from the admin (approvals, messages) wait in a hidden **Outbox** tab and go out from **Melissa's** account at the next 5-minute check. The order shows "Queued" until then.
-   - Only Melissa's account can start the 5-minute check, which setupSheet does in step 6.
+   - Only Melissa's account can start the 5-minute check, which setupSheet does in item 6.
 
 ## 4. Hosting and the domain (L)
 

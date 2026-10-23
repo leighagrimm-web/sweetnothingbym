@@ -1742,6 +1742,66 @@ function adminPhoto(id) {
   return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
 }
 
+/* ----- Go-live: website photos into the shop's own Drive ----- */
+
+// Run once in the LIVE Sheet, from the Apps Script editor, signed in as the shop's account (GO-LIVE.md step 3).
+// The test Sheet's photo links (Pages, Events and Gallery tabs) point at files in the test account's Drive. This
+// copies each one into a "Sweet Nothings website photos" folder in this account, shares the copy so the website can
+// show it ("anyone with the link can view"), and points the Sheet at the copy. Safe to run again: photos this
+// account already owns are left alone.
+function copyWebsitePhotos() {
+  const ss = SpreadsheetApp.getActive();
+  const me = ownerEmail_();
+  const folder = (() => {
+    const id = SCRIPT_PROPS().getProperty('SITE_PHOTOS_FOLDER_ID');
+    if (id) { try { return DriveApp.getFolderById(id); } catch (e) { /* deleted: make a new one */ } }
+    const f = DriveApp.createFolder('Sweet Nothings website photos');
+    f.setDescription('Photos shown on the website (Home, About, Events, Gallery). Each is shared "anyone with the link" so the site can show it.');
+    SCRIPT_PROPS().setProperty('SITE_PHOTOS_FOLDER_ID', f.getId());
+    return f;
+  })();
+  const copies = {};   // old file ID -> new link ('' = already ours)
+  let copied = 0;
+  const problems = [];
+  ['Pages', 'Events', 'Gallery'].forEach((name) => {
+    const sh = ss.getSheetByName(name);
+    if (!sh || sh.getLastRow() < 2) return;
+    const range = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn());
+    const vals = range.getValues();
+    let changed = false;
+    vals.forEach((row, r) => row.forEach((v, c) => {
+      const id = driveFileId_(v);
+      if (!id) return;
+      try {
+        if (copies[id] === undefined) {
+          const src = DriveApp.getFileById(id);
+          const owner = src.getOwner();
+          if (owner && owner.getEmail().toLowerCase() === me) { copies[id] = ''; return; }
+          const copy = src.makeCopy(src.getName(), folder);
+          copy.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+          copies[id] = 'https://drive.google.com/file/d/' + copy.getId() + '/view';
+          copied++;
+        }
+        if (copies[id]) { vals[r][c] = copies[id]; changed = true; }
+      } catch (err) {
+        problems.push(name + ' tab, row ' + (r + 2) + ': ' + err.message);
+      }
+    }));
+    if (changed) range.setValues(vals);
+  });
+  clearConfigCache_();
+  const msg = 'Copied ' + copied + ' photo' + (copied === 1 ? '' : 's') + ' into "Sweet Nothings website photos" and updated the Sheet.' +
+    (problems.length ? ' Couldn’t copy: ' + problems.join(' | ') + '. Make sure the test Sheet’s owner shared those photos ("anyone with the link") and run this again.' : '');
+  console.log(msg);
+  return msg;
+}
+
+// The file ID in a Google Drive link (share, open, uc or thumbnail form), or ''.
+function driveFileId_(v) {
+  const m = String(v || '').match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=|thumbnail\?id=)([\w-]{10,})/);
+  return m ? m[1] : '';
+}
+
 /* ============================== Payments ============================== */
 
 /*

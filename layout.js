@@ -59,6 +59,8 @@
             '<a href="' + SN.esc(cfg.instagram) + '" target="_blank" rel="noopener">Instagram ' + SN.esc(cfg.instagramHandle) + '</a>' +
             (shown(cfg, 'faq') ? '<a href="faq.html">FAQ</a>' : '') +
             '<a href="contact.html">Contact</a>' +
+            '<a href="privacy.html">Privacy</a>' +
+            '<a href="terms.html">Terms</a>' +
             '<a href="admin.html">Owner admin</a>' +
           '</nav>' +
         '</div></footer>';
@@ -67,8 +69,9 @@
   // Maintenance mode: visitors get the "back soon" page instead of the site (preview mode and people with the
   // password still see everything). This browser remembers it was on, so a returning visitor doesn't glimpse the
   // site while settings load. It's a curtain, not a lock: the server is what turns away orders and messages.
-  const closed = (cfg) => cfg.maintenanceMode === true && !SN.isPreview() && !SN.bypassKey();
-  try { if (localStorage.getItem('sn_maint') === '1' && !SN.bypassKey()) document.documentElement.classList.add('sn-maint-wait'); } catch (e) { /* ignore */ }
+  // The Privacy and Terms pages stay readable during maintenance (QuickBooks' and Square's app reviews need them).
+  const closed = (cfg) => cfg.maintenanceMode === true && !SN.isPreview() && !SN.bypassKey() && ['privacy', 'terms'].indexOf(page) === -1;
+  try { if (localStorage.getItem('sn_maint') === '1' && !SN.bypassKey() && ['privacy', 'terms'].indexOf(page) === -1) document.documentElement.classList.add('sn-maint-wait'); } catch (e) { /* ignore */ }
   function showMaintenance(cfg) {
     const box = document.createElement('div');
     box.id = 'maint';
