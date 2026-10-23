@@ -39,6 +39,7 @@ Everything below is edited in the **test** admin first, so it can be checked on 
 
 ## 3. Melissa's Google account: the live Sheet and script (L, with M signed in)
 
+0. [ ] **Use a separate browser window for the live account** (its own Chrome profile, or a private window). Apps Script gets confused when two Google accounts are signed in at once.
 1. [ ] Leigha shares the **test** Sheet with the live Google account (Share → that email → Editor). Then, signed in as the live account, open it and use **File → Make a copy**. The copy brings the script with it. Name it "Sweet Nothings – LIVE".
    - **Comes over (keep):** everything set up through the admin. That's **Settings** (prices, minimums, caps, lead days, tax, notes, maintenance text), **Flavors**, **Zones** (drop-off ZIPs and fees), **BlockedDates**, **FAQ**, **Pages** (all website wording and photo links), **Events** (classes, prices, max attendees) and **Gallery**.
    - **Test data (cleared in step 2):** Orders, OrderItems, Messages, Outbox, Draft, test promo codes.
@@ -53,7 +54,7 @@ Everything below is edited in the **test** admin first, so it can be checked on 
    - `ownerEmail` and `replyToEmail` = Melissa's business email
    - `senderName` = `Sweet Nothings by M`
    - `maintenanceMode` = `TRUE`, and set a `maintenancePassword`
-4. [ ] **Extensions → Apps Script.** Under **Libraries**, check that **OAuth2** is listed; if not, add `1B7FSrk5Zi6L1rSxxTDgDEUsPzlukDsi4KGuTMorsTQHhGBzBkMun4iDF`.
+4. [ ] **Extensions → Apps Script.** Paste the latest `apps-script/Code.gs` over everything and **Save**, so the live site starts on today's code. Under **Libraries**, check that **OAuth2** is listed; if not, add `1B7FSrk5Zi6L1rSxxTDgDEUsPzlukDsi4KGuTMorsTQHhGBzBkMun4iDF`.
 5. [ ] **Project Settings → Script Properties.** These are **not** copied with the Sheet, so add them fresh in step 5 and step 6.
 6. [ ] Run **setupSheet** and allow everything Google asks for: Sheets, Gmail sending, Drive, outside services and triggers. It creates the uploads folder and the 5-minute payment check.
 7. [ ] **Move the website photos into Melissa's Drive.** In the Apps Script editor, pick **copyWebsitePhotos** in the function list and click **Run**. It copies every photo the site shows (Home, About, menu, Events, Gallery) from Leigha's Drive into a **"Sweet Nothings website photos"** folder in Melissa's Drive, shares each copy so the site can show it, and points the Sheet at the copies. The live site then doesn't depend on Leigha's account at all.
