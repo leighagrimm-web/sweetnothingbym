@@ -1895,9 +1895,20 @@ function qbItems_(force) {
   const income = accounts.find((a) => /sales/i.test(a.Name)) || accounts[0];
   if (!income) throw new Error('No income account found in QuickBooks.');
   const map = {};
+  // QuickBooks keeps product categories (folders like "artisan cookies") in the same list as products, and name
+  // matching ignores case, so categories are skipped: an invoice line can't use a category. If a category already
+  // has the name, the site's item gets " (website)" added (QuickBooks names must be unique across both).
+  const findItem = (n) => (qbQuery_("select * from Item where Name = '" + qbEsc_(n) + "'").Item || []).find((i) => i.Type !== 'Category');
   QB_ITEMS.forEach(([k, name, taxable, desc, type]) => {
-    const found = (qbQuery_("select * from Item where Name = '" + qbEsc_(name) + "'").Item || [])[0];
-    map[k] = found ? found.Id : qbFetch_('post', '/item', { Name: name, Type: type, Taxable: taxable, Description: desc, IncomeAccountRef: { value: income.Id } }).Item.Id;
+    const create = (n) => qbFetch_('post', '/item', { Name: n, Type: type, Taxable: taxable, Description: desc, IncomeAccountRef: { value: income.Id } }).Item.Id;
+    const found = findItem(name) || findItem(name + ' (website)');
+    if (found) { map[k] = found.Id; return; }
+    try {
+      map[k] = create(name);
+    } catch (e) {
+      if (String(e.code) !== '6240') throw e;   // 6240: name already used (here, by a category)
+      map[k] = create(name + ' (website)');
+    }
   });
   SCRIPT_PROPS().setProperty(key, JSON.stringify(map));
   return map;
