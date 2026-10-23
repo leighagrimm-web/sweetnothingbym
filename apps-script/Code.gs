@@ -1898,7 +1898,12 @@ function qbItems_(force) {
   // QuickBooks keeps product categories (folders like "artisan cookies") in the same list as products, and name
   // matching ignores case, so categories are skipped: an invoice line can't use a category. If a category already
   // has the name, the site's item gets " (website)" added (QuickBooks names must be unique across both).
-  const findItem = (n) => (qbQuery_("select * from Item where Name = '" + qbEsc_(n) + "'").Item || []).find((i) => i.Type !== 'Category');
+  // Inactive items count too (QuickBooks' search hides them otherwise): an existing one is reused and switched back on.
+  const findItem = (n) => {
+    const it = (qbQuery_("select * from Item where Name = '" + qbEsc_(n) + "' and Active in (true, false)").Item || []).find((i) => i.Type !== 'Category');
+    if (it && it.Active === false) qbFetch_('post', '/item', { Id: it.Id, SyncToken: it.SyncToken, sparse: true, Active: true });
+    return it;
+  };
   QB_ITEMS.forEach(([k, name, taxable, desc, type]) => {
     const create = (n) => qbFetch_('post', '/item', { Name: n, Type: type, Taxable: taxable, Description: desc, IncomeAccountRef: { value: income.Id } }).Item.Id;
     const found = findItem(name) || findItem(name + ' (website)');
@@ -1906,7 +1911,9 @@ function qbItems_(force) {
     try {
       map[k] = create(name);
     } catch (e) {
-      if (String(e.code) !== '6240') throw e;   // 6240: name already used (here, by a category)
+      // The name is already used, here by a category. QuickBooks reports that as code 6240 ("Duplicate Name") or,
+      // for categories, as a business validation error saying it "already exists".
+      if (String(e.code) !== '6240' && !/already exists|duplicate name/i.test(e.message)) throw e;
       map[k] = create(name + ' (website)');
     }
   });

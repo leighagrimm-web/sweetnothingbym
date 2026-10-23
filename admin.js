@@ -32,7 +32,8 @@
   }
   function failed(err) {
     busy = false;
-    toast('Something went wrong: ' + (err && err.message ? err.message : err) + '. Nothing was lost; please try again.', 6000);
+    // Errors stay up long enough to read (or screenshot); clicking the message closes it.
+    toast('Something went wrong: ' + (err && err.message ? err.message : err) + '. Nothing was lost; please try again.', 20000);
   }
 
   /* ---------- Page shell (same layout as the prototype admin) ---------- */
@@ -317,6 +318,7 @@
     if (!t) { alert(msg); return; }
     $('#toast-text').textContent = msg;
     t.classList.add('show');
+    t.onclick = () => { clearTimeout(toastTimer); t.classList.remove('show'); };
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.classList.remove('show'), ms || 3200);
   }
