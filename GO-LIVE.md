@@ -10,9 +10,10 @@ Keep the site in **maintenance mode** from step 4 until step 8, so nobody can or
 
 ## 0. Decisions before starting
 
-- [ ] **Which Google account runs the live site?** The live Sheet and script live in this account, and emails are sent from it. The plan so far is `SweetNothingsByM@gmail.com`. (L + M)
+- [x] **Live Google account:** `SweetNothingsByM@gmail.com`. The live Sheet and script live here, and customer emails come from it.
 - [x] **How does Leigha get into the live admin?** By signing in with Melissa's Google account for go-live. **Admin helpers** (admin → Tax & contact) is there as an option for later, for someone helping with setup under their own Google account. See step 3.
-- [ ] **Where to host the live site:** Cloudflare Pages or Netlify, both free. Both publish automatically from the same GitHub repo, and the test site stays on GitHub Pages. Recommendation: **Cloudflare Pages** (fast, free HTTPS, easy domain setup). (L)
+- [x] **Hosting:** **Cloudflare Pages** (free, HTTPS included). It publishes automatically from the same GitHub repo; GitHub Pages stays the test site.
+- [x] **Domain:** sweetnothingsbym.com is registered at **Porkbun**. Its nameservers move to Cloudflare (step 4); it stays registered at Porkbun.
 - [ ] **Go-live date**, and a quiet time to do steps 4–8 (about 2–3 hours, plus waiting for the domain). (L + M)
 
 ## 1. Build items still to do (C)
@@ -70,12 +71,23 @@ Everything below is edited in the **test** admin first, so it can be checked on 
 
 ## 4. Hosting and the domain (L)
 
-1. [ ] Create the Cloudflare Pages (or Netlify) project from the GitHub repo, branch `main`, with no build command and the output folder set to the root.
-2. [ ] Add the custom domains **www.sweetnothingsbym.com** and **sweetnothingsbym.com**, set to redirect to www.
-3. [ ] Update the DNS at the registrar as the host instructs (or move DNS to Cloudflare). This can take a few hours to spread.
-4. [ ] Check that HTTPS works on both addresses.
-5. [ ] C publishes the `config.js` update. Then **www.sweetnothingsbym.com** should show the "back soon" page, and the test site should be unchanged.
-6. [ ] Enter the maintenance password on the live site. It should show Melissa's content, with no "Test site" banner.
+The Cloudflare account belongs to the shop: sign up with **SweetNothingsByM@gmail.com** (free plan). Leigha connects her GitHub to it once, in item 5.
+
+1. [ ] **Before changing anything at Porkbun:** Porkbun → **Domain Management** → sweetnothingsbym.com → **Details**. Write down anything already set up:
+   - **Email forwarding** or email hosting on the domain. Its records have to be added again in Cloudflare.
+   - **DNSSEC**. If it's on, turn it off first; it can be turned back on through Cloudflare later.
+2. [ ] **Cloudflare → Add a domain** → `sweetnothingsbym.com` → **Free** plan. Cloudflare copies the existing DNS records; check that any email records from item 1 are there. It then shows **two nameservers** (like `ada.ns.cloudflare.com`).
+3. [ ] **Porkbun** → sweetnothingsbym.com → **Authoritative Nameservers** → **Edit** → delete Porkbun's and paste Cloudflare's two → **Submit**.
+4. [ ] Wait for Cloudflare to say the domain is **Active** (usually within an hour, sometimes up to a day; Cloudflare emails when it is). The domain stays registered and renewed at Porkbun.
+5. [ ] **Cloudflare → Workers & Pages → Create → Pages → Connect to Git.** Sign in to GitHub as Leigha and allow access to just the `sweetnothingbym` repo. Then:
+   - Production branch: `main`
+   - Framework preset: **None**, build command: *empty*, output directory: *empty*
+   - **Save and Deploy.** The site appears at `sweetnothingbym.pages.dev` (the name may differ slightly) and updates on every publish, just like the test site.
+6. [ ] In the Pages project → **Custom domains** → add **www.sweetnothingsbym.com**, then **sweetnothingsbym.com**. Cloudflare adds the DNS records and HTTPS certificates itself.
+7. [ ] Send everyone to **www**: Cloudflare → sweetnothingsbym.com → **Rules → Redirect Rules → Create rule** → template **"Redirect from root to WWW"** (301, keep the path and query) → **Deploy**.
+8. [ ] Check that **https://sweetnothingsbym.com** lands on **https://www.sweetnothingsbym.com** with the lock icon.
+9. [ ] C publishes the `config.js` update (live web address and the live script's URLs). Then **www.sweetnothingsbym.com** should show the "back soon" page, and the test site should be unchanged.
+10. [ ] Enter the maintenance password on the live site. It should show Melissa's content, with no "Test site" banner. **Privacy** and **Terms** (footer) should open without the password.
 
 ## 5. QuickBooks: production (L + M)
 
