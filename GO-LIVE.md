@@ -19,7 +19,7 @@ Keep the site in **maintenance mode** from step 4 until step 8, so nobody can or
 ## 1. Build items still to do (C)
 
 - [x] **Privacy policy and terms pages:** `privacy.html` and `terms.html`, linked in the footer and readable even during maintenance. **M reviews the wording**, especially changes/refunds, allergies and pickup.
-- [ ] **Point the site at the live script:** fill in `PROD_HOSTS`, `API.prod` and `ADMIN.prod` in `config.js` (after step 3, once the live script's URLs exist).
+- [x] **Point the site at the live script:** fill in `PROD_HOSTS`, `API.prod` and `ADMIN.prod` in `config.js` (after step 3, once the live script's URLs exist).
 - [ ] *(After go-live)* **Portfolio demo:** the admin running on fake data, with no connection to the test or live Sheet, plus a "how it's connected" page.
 
 ## 2. Content (M, with L)
@@ -39,31 +39,31 @@ Everything below is edited in the **test** admin first, so it can be checked on 
 
 ## 3. Melissa's Google account: the live Sheet and script (L, with M signed in)
 
-0. [ ] **Use a separate browser window for the live account** (its own Chrome profile, or a private window). Apps Script gets confused when two Google accounts are signed in at once.
-1. [ ] Leigha shares the **test** Sheet with the live Google account (Share → that email → Editor). Then, signed in as the live account, open it and use **File → Make a copy**. The copy brings the script with it. Name it "Sweet Nothings – LIVE".
+0. [x] **Use a separate browser window for the live account** (its own Chrome profile, or a private window). Apps Script gets confused when two Google accounts are signed in at once.
+1. [x] Leigha shares the **test** Sheet with the live Google account (Share → that email → Editor). Then, signed in as the live account, open it and use **File → Make a copy**. The copy brings the script with it. Name it "Sweet Nothings – LIVE".
    - **Comes over (keep):** everything set up through the admin. That's **Settings** (prices, minimums, caps, lead days, tax, notes, maintenance text), **Flavors**, **Zones** (drop-off ZIPs and fees), **BlockedDates**, **FAQ**, **Pages** (all website wording and photo links), **Events** (classes, prices, max attendees) and **Gallery**.
    - **Test data (cleared in step 2):** Orders, OrderItems, Messages, Outbox, Draft, test promo codes.
-2. [ ] In the copy, clear the test data:
+2. [x] In the copy, clear the test data:
    - **Orders, OrderItems, Messages, Outbox, Draft:** delete every row except the headers. Class spots reset by themselves, since they're counted from orders.
    - **Codes:** delete the test codes, and keep any real gift cards or promo codes Melissa has already given out.
    - **Counters:** keep `nextOrder` (e.g. 1001) and set `nextMessage` to 1.
    - Customer photos from test orders stay in Leigha's Drive; the live site starts its own uploads folder in step 6.
-3. [ ] **Settings tab:**
+3. [x] **Settings tab:**
    - `environment` = `PROD` (removes "[TEST]" from email subjects)
    - `siteUrl` = `https://www.sweetnothingsbym.com/`
    - `ownerEmail` and `replyToEmail` = Melissa's business email
    - `senderName` = `Sweet Nothings by M`
    - `maintenanceMode` = `TRUE`, and set a `maintenancePassword`
-4. [ ] **Extensions → Apps Script.** Paste the latest `apps-script/Code.gs` over everything and **Save**, so the live site starts on today's code. Under **Libraries**, check that **OAuth2** is listed; if not, add `1B7FSrk5Zi6L1rSxxTDgDEUsPzlukDsi4KGuTMorsTQHhGBzBkMun4iDF`.
-5. [ ] **Project Settings → Script Properties.** These are **not** copied with the Sheet, so add them fresh in step 5 and step 6.
-6. [ ] Run **setupSheet** and allow everything Google asks for: Sheets, Gmail sending, Drive, outside services and triggers. It creates the uploads folder and the 5-minute payment check.
-7. [ ] **Move the website photos into Melissa's Drive.** In the Apps Script editor, pick **copyWebsitePhotos** in the function list and click **Run**. It copies every photo the site shows (Home, About, menu, Events, Gallery) from Leigha's Drive into a **"Sweet Nothings website photos"** folder in Melissa's Drive, shares each copy so the site can show it, and points the Sheet at the copies. The live site then doesn't depend on Leigha's account at all.
+4. [x] **Extensions → Apps Script.** Paste the latest `apps-script/Code.gs` over everything and **Save**, so the live site starts on today's code. Under **Libraries**, check that **OAuth2** is listed; if not, add `1B7FSrk5Zi6L1rSxxTDgDEUsPzlukDsi4KGuTMorsTQHhGBzBkMun4iDF`.
+5. [x] **Project Settings → Script Properties.** These are **not** copied with the Sheet, so add them fresh in step 5 and step 6.
+6. [x] Run **setupSheet** and allow everything Google asks for: Sheets, Gmail sending, Drive, outside services and triggers. It creates the uploads folder and the 5-minute payment check.
+7. [x] **Move the website photos into Melissa's Drive.** In the Apps Script editor, pick **copyWebsitePhotos** in the function list and click **Run**. It copies every photo the site shows (Home, About, menu, Events, Gallery) from Leigha's Drive into a **"Sweet Nothings website photos"** folder in Melissa's Drive, shares each copy so the site can show it, and points the Sheet at the copies. The live site then doesn't depend on Leigha's account at all.
    - Check the message at the bottom of the editor (Execution log): "Copied N photos…". If it lists any it couldn't copy, make sure those photos are shared "anyone with the link" in Leigha's Drive, then run it again (it skips ones already done).
    - Then open the live admin's **Website pages**, **Events** and **Gallery** tabs and check the previews show.
-8. [ ] **Deploy → New deployment → Web app**, twice:
+8. [x] **Deploy → New deployment → Web app**, twice:
    - **Public:** Execute as **Me**, Who has access **Anyone**. Copy the URL: this is `API.prod`.
    - **Admin:** Execute as **User accessing the web app**, Who has access **Anyone with Google account**, so helpers can be added later without redeploying. Only the owner and any admin helpers get past the sign-in; everyone else sees "Only the shop owner can do that." Copy the URL: this is `ADMIN.prod`, and it also goes in the Settings tab's `adminUrl`.
-9. [ ] Send both URLs to C to put in `config.js` (step 1).
+9. [x] Send both URLs to C to put in `config.js` (step 1).
 10. [ ] *(Optional, any time later)* **Admin helpers.** Not needed for go-live, since Leigha signs in with Melissa's account. When someone should use the admin with their **own** Google account (for example, to help set things up):
    - Signed in as Melissa, go to the live admin → **Tax & contact** → **Admin helpers**, enter their Gmail, and save. This shares the Sheet and the photos folder with them.
    - They open the admin link with their own Google account and allow the permissions it asks for.
@@ -74,21 +74,21 @@ Everything below is edited in the **test** admin first, so it can be checked on 
 
 The Cloudflare account belongs to the shop: sign up with **SweetNothingsByM@gmail.com** (free plan). Leigha connects her GitHub to it once, in item 5.
 
-1. [ ] **Before changing anything at Porkbun:** Porkbun → **Domain Management** → sweetnothingsbym.com → **Details**. Write down anything already set up:
+1. [x] **Before changing anything at Porkbun:** Porkbun → **Domain Management** → sweetnothingsbym.com → **Details**. Write down anything already set up:
    - **Email forwarding** or email hosting on the domain. Its records have to be added again in Cloudflare.
    - **DNSSEC**. If it's on, turn it off first; it can be turned back on through Cloudflare later.
-2. [ ] **Cloudflare → Add a domain** → `sweetnothingsbym.com` → **Free** plan. Cloudflare copies the existing DNS records; check that any email records from item 1 are there. It then shows **two nameservers** (like `ada.ns.cloudflare.com`).
-3. [ ] **Porkbun** → sweetnothingsbym.com → **Authoritative Nameservers** → **Edit** → delete Porkbun's and paste Cloudflare's two → **Submit**.
-4. [ ] Wait for Cloudflare to say the domain is **Active** (usually within an hour, sometimes up to a day; Cloudflare emails when it is). The domain stays registered and renewed at Porkbun.
-5. [ ] **Cloudflare → Workers & Pages → Create → Pages → Connect to Git.** Sign in to GitHub as Leigha and allow access to just the `sweetnothingbym` repo. Then:
+2. [x] **Cloudflare → Add a domain** → `sweetnothingsbym.com` → **Free** plan. Cloudflare copies the existing DNS records; check that any email records from item 1 are there. It then shows **two nameservers** (like `ada.ns.cloudflare.com`).
+3. [x] **Porkbun** → sweetnothingsbym.com → **Authoritative Nameservers** → **Edit** → delete Porkbun's and paste Cloudflare's two → **Submit**.
+4. [x] Wait for Cloudflare to say the domain is **Active** (usually within an hour, sometimes up to a day; Cloudflare emails when it is). The domain stays registered and renewed at Porkbun.
+5. [x] **Cloudflare → Workers & Pages → Create → Pages → Connect to Git.** Sign in to GitHub as Leigha and allow access to just the `sweetnothingbym` repo. Then:
    - Production branch: `main`
    - Framework preset: **None**, build command: *empty*, output directory: *empty*
    - **Save and Deploy.** The site appears at `sweetnothingbym.pages.dev` (the name may differ slightly) and updates on every publish, just like the test site.
-6. [ ] In the Pages project → **Custom domains** → add **www.sweetnothingsbym.com**, then **sweetnothingsbym.com**. Cloudflare adds the DNS records and HTTPS certificates itself.
-7. [ ] Send everyone to **www**: Cloudflare → sweetnothingsbym.com → **Rules → Redirect Rules → Create rule** → template **"Redirect from root to WWW"** (301, keep the path and query) → **Deploy**.
-8. [ ] Check that **https://sweetnothingsbym.com** lands on **https://www.sweetnothingsbym.com** with the lock icon.
-9. [ ] C publishes the `config.js` update (live web address and the live script's URLs). Then **www.sweetnothingsbym.com** should show the "back soon" page, and the test site should be unchanged.
-10. [ ] Enter the maintenance password on the live site. It should show Melissa's content, with no "Test site" banner. **Privacy** and **Terms** (footer) should open without the password.
+6. [x] In the Pages project → **Custom domains** → add **www.sweetnothingsbym.com**, then **sweetnothingsbym.com**. Cloudflare adds the DNS records and HTTPS certificates itself.
+7. [x] Send everyone to **www**: Cloudflare → sweetnothingsbym.com → **Rules → Redirect Rules → Create rule** → template **"Redirect from root to WWW"** (301, keep the path and query) → **Deploy**.
+8. [x] Check that **https://sweetnothingsbym.com** lands on **https://www.sweetnothingsbym.com** with the lock icon.
+9. [x] C publishes the `config.js` update (live web address and the live script's URLs). Then **www.sweetnothingsbym.com** should show the "back soon" page, and the test site should be unchanged.
+10. [x] Enter the maintenance password on the live site. It should show Melissa's content, with no "Test site" banner. **Privacy** and **Terms** (footer) should open without the password.
 
 ## 5. QuickBooks: production (L + M)
 
