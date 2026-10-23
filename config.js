@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261026k';
+const SN_BUILD = '20261026l';
 
 const SN_ENV = (function () {
   const API = {
@@ -194,27 +194,38 @@ const SN = {
     return 'Sorry, that didn’t go through. Please check your connection and try again in a minute. If it keeps happening, message me on Instagram ' + (SN.load().instagramHandle || '') + '.';
   },
 
-  // Loads live settings once per page. Cached for 30 seconds per tab so clicking between pages is instant,
-  // while Sheet edits still show up within half a minute in a tab that's already open.
+  // Loads live settings once per page. The Sheet's server takes a second or more to answer, so this browser
+  // remembers the last copy:
+  //   - under 30 seconds old: used as is
+  //   - under 30 minutes old: used right away, and a fresh copy is fetched in the background for the next page
+  //     (prices, spots and codes are re-checked by the server when an order is placed; layout.js reacts to the
+  //     fresh copy's maintenance mode through the 'sn:config' event)
+  //   - older, or none yet: the page waits for the server.
   fetchConfig() {
     const preview = SN.isPreview();
-    const KEY = 'sn_live_cfg';
-    if (!preview) {
-      try {
-        const c = JSON.parse(sessionStorage.getItem(KEY) || 'null');
-        if (c && Date.now() - c.t < 30 * 1000) { SN._live = c.cfg; return Promise.resolve(); }
-      } catch (e) { /* ignore */ }
+    let cached = null;
+    if (!preview) { try { cached = JSON.parse(localStorage.getItem(SN.CONFIG_KEY) || 'null'); } catch (e) { /* ignore */ } }
+    const age = cached ? Date.now() - cached.t : Infinity;
+    const fetchFresh = () => SN.request({ query: 'action=config' + (preview ? '&preview=1' : '') }, 10000).then((r) => {
+      if (!r || !r.ok || !r.config) return false;
+      SN._live = r.config;
+      SN._serverDraft = !!r.hasDraft;
+      if (!preview) { try { localStorage.setItem(SN.CONFIG_KEY, JSON.stringify({ t: Date.now(), cfg: r.config })); } catch (e) { /* ignore */ } }
+      return true;
+    });
+    if (cached && age < 30 * 1000) { SN._live = cached.cfg; return Promise.resolve(); }
+    if (cached && age < 30 * 60 * 1000) {
+      SN._live = cached.cfg;
+      fetchFresh().then((ok) => { if (ok) document.dispatchEvent(new CustomEvent('sn:config')); }).catch(() => { /* keep the remembered copy */ });
+      return Promise.resolve();
     }
-    return SN.request({ query: 'action=config' + (preview ? '&preview=1' : '') }, 10000)
-      .then((r) => {
-        if (!r || !r.ok || !r.config) return;
-        SN._live = r.config;
-        SN._serverDraft = !!r.hasDraft;
-        if (!preview) { try { sessionStorage.setItem(KEY, JSON.stringify({ t: Date.now(), cfg: r.config })); } catch (e) { /* ignore */ } }
-      })
+    return fetchFresh()
       .catch(() => { /* Sheet unreachable: pages fall back to SN_DEFAULTS */ })
       .then(() => { SN.configFailed = !SN._live; });
   },
+  CONFIG_KEY: 'sn_live_cfg_v2',
+  // Forget the remembered settings, so the next page asks the server (after booking spots, leaving preview).
+  dropCachedConfig() { try { localStorage.removeItem(SN.CONFIG_KEY); sessionStorage.removeItem('sn_live_cfg'); } catch (e) { /* ignore */ } },
   // True when the Sheet couldn't be reached: pages show the built-in wording, and the order page pauses ordering
   // (the built-in prices and flavors may be out of date).
   configFailed: false,
@@ -234,7 +245,7 @@ const SN = {
       return sessionStorage.getItem('sn_preview') === '1' && (SN._serverDraft || !!localStorage.getItem('sn_config_draft') || !SN._live);
     } catch (e) { return false; }
   },
-  exitPreview() { try { sessionStorage.removeItem('sn_preview'); sessionStorage.removeItem('sn_live_cfg'); } catch (e) { /* ignore */ } },
+  exitPreview() { try { sessionStorage.removeItem('sn_preview'); } catch (e) { /* ignore */ } SN.dropCachedConfig(); },
   saveDraft(cfg) { try { localStorage.setItem('sn_config_draft', JSON.stringify(cfg)); return true; } catch (e) { return false; } },
   clearDraft() { try { localStorage.removeItem('sn_config_draft'); } catch (e) { /* ignore */ } },
   save(cfg) {

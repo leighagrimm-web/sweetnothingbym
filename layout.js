@@ -130,16 +130,19 @@
     if (document.hidden || (!force && Date.now() - lastCheck < 60000)) return;
     lastCheck = Date.now();
     checkVersion();
-    try { sessionStorage.removeItem('sn_live_cfg'); } catch (e) { /* ignore */ }
-    SN.fetchConfig().then(() => {
-      if (SN.configFailed) return;
-      const cfg = SN.load();
-      try { localStorage.setItem('sn_maint', cfg.maintenanceMode === true ? '1' : '0'); } catch (e) { /* ignore */ }
-      const curtain = document.getElementById('maint');
-      if (closed(cfg) && !curtain) showMaintenance(cfg);
-      else if (!closed(cfg) && curtain) location.reload();
-    });
+    SN.dropCachedConfig();
+    SN.fetchConfig().then(() => { if (!SN.configFailed) applyMaintenance(); });
   }
+  // Fresh settings in hand: drop the curtain if maintenance came on, or reload if it went off.
+  function applyMaintenance() {
+    const cfg = SN.load();
+    try { localStorage.setItem('sn_maint', cfg.maintenanceMode === true ? '1' : '0'); } catch (e) { /* ignore */ }
+    const curtain = document.getElementById('maint');
+    if (closed(cfg) && !curtain) showMaintenance(cfg);
+    else if (!closed(cfg) && curtain) location.reload();
+  }
+  // The page opened with remembered settings and the fresh copy just arrived (see SN.fetchConfig).
+  document.addEventListener('sn:config', applyMaintenance);
   document.addEventListener('visibilitychange', () => recheck(false));
   window.addEventListener('pageshow', (e) => { if (e.persisted) recheck(true); });
 

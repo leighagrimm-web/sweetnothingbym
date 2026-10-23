@@ -768,7 +768,7 @@ SN.ready.then(function () {
     lastOrders = orders;
     appliedCode = null;
     checkout.code = '';
-    try { sessionStorage.removeItem('sn_live_cfg'); } catch (e) { /* ignore */ }   // class spots changed
+    SN.dropCachedConfig();   // class spots changed
     bag = [];
     saveBag();
     tried = false;
