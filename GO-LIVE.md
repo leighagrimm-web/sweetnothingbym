@@ -92,42 +92,42 @@ The Cloudflare account belongs to the shop: sign up with **SweetNothingsByM@gmai
 
 ## 5. QuickBooks: production (L + M)
 
-1. [ ] **M's QuickBooks:**
+1. [x] **M's QuickBooks:**
    - **Sales tax** set up (Taxes → Sales tax), and every cookie item given the **bakery** sales tax category, including the site's **Custom Cookies** and **Artisan Cookies** after connecting. The website no longer works out tax; QuickBooks adds it on each invoice.
    - **QuickBooks Payments** turned on (card and bank transfer), so invoices get a Pay button.
-2. [ ] **Intuit developer app:**
+2. [x] **Intuit developer app:**
    - Rename it from "Test App" to "Sweet Nothings by M website".
    - Fill in the production questionnaire. Its links: privacy policy, terms, the host domain `sweetnothingsbym.com`, and launch/disconnect URL = the live site.
-3. [ ] **Production Keys & credentials:** add the redirect URI. The live script's ID is different, so copy the one shown on the live admin's **Payments** tab.
-4. [ ] **Live Script Properties:**
+3. [x] **Production Keys & credentials:** add the redirect URI. The live script's ID is different, so copy the one shown on the live admin's **Payments** tab.
+4. [x] **Live Script Properties:**
    - `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET` (the **Production** ones)
    - `QBO_ENV` = `production`
-5. [ ] Live admin → **Payments** → **Connect QuickBooks**. **M signs in** and picks her real company. It should say "Connected" and "Invoice items are ready".
+5. [x] Live admin → **Payments** → **Connect QuickBooks**. **M signs in** and picks her real company. It should say "Connected" and "Invoice items are ready".
 
 ## 6. Square: production (M, with L)
 
-1. [ ] **M signs in** to developer.squareup.com with **her** Square login and creates an application. If the token came from Leigha's developer account, class payments would go into Leigha's Square account.
-2. [ ] **Live Script Properties:**
+1. [x] **M signs in** to developer.squareup.com with **her** Square login and creates an application. If the token came from Leigha's developer account, class payments would go into Leigha's Square account.
+2. [x] **Live Script Properties:**
    - `SQUARE_ACCESS_TOKEN` (production access token)
    - `SQUARE_LOCATION_ID` (her location)
    - `SQUARE_ENV` = `production`
-3. [ ] Live admin → **Payments**: Square should say "Connected to (her location)".
+3. [x] Live admin → **Payments**: Square should say "Connected to (her location)".
 
 ## 7. Real-money tests, small amounts (L + M)
 
 With the maintenance password entered, in a normal browser:
 
-1. [ ] Admin → **Promo & gift codes**: make `TEST95`, **95% off, max 3 uses**.
-2. [ ] **Cookie order:**
+1. [x] Admin → **Promo & gift codes**: make `TEST95`, **95% off, max 3 uses**.
+2. [x] **Cookie order:**
    - Order 12 cookies with `TEST95`, a drop-off ZIP and an inspiration photo.
    - Check the request email and the owner alert, which should have a photo link.
    - Approve it in admin. The confirmation email's **tax and Amount due should match the QuickBooks invoice**, with no red note in admin. **If the tax is $0, stop here.** See the QuickBooks tax note at the end.
    - Pay it with a real card. It should change to **Paid** in admin within about 7 minutes.
-3. [ ] **Class:**
+3. [x] **Class:**
    - Book a class with `TEST95` and pay in Square.
    - You should get "You're booked!", the confirmation and the owner alert, and admin should show **Paid**.
-4. [ ] **Contact form:** send a message with a photo. It should show in admin → Messages and in the Drive "Sweet Nothings uploads" folder.
-5. [ ] **Clean up:**
+4. [x] **Contact form:** send a message with a photo. It should show in admin → Messages and in the Drive "Sweet Nothings uploads" folder.
+5. [x] **Clean up:**
    - Refund both test payments (QuickBooks invoice → Refund; Square → Transactions → Refund).
    - Set the test orders to **Cancelled**.
    - Delete `TEST95`.
@@ -147,7 +147,7 @@ With the maintenance password entered, in a normal browser:
 
 ---
 
-### Note: QuickBooks sales tax
+### Note: QuickBooks sales tax (resolved)
 
 In the sandbox, invoices the script created came out with **$0 sales tax**, even though the site sent the amount. The sandbox only allows a California address, so this couldn't be tested properly for Illinois. It's checked in step 7. If the live invoices also show $0 tax, the options are:
 - a QuickBooks setting so its automatic sales tax applies to invoices made by apps, or
