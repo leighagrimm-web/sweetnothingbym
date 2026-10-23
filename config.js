@@ -20,20 +20,22 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261026h';
+const SN_BUILD = '20261026i';
 
 const SN_ENV = (function () {
   const API = {
     uat: 'https://script.google.com/macros/s/AKfycbxevgGnDBQn2XUOqY3J9Ou873czPs7xWOH3sj7nPriq3K_vPAxeNw1acPVDgPCJhalw/exec',
-    prod: ''
+    prod: 'https://script.google.com/macros/s/AKfycbzqgowHt3FceXrzwWhDqSrAdAcazOru_uqEVz14YPvw5hX2krA2PPR0Z-7TL8Nut0kVVA/exec'
   };
   // The owner's admin page: the admin deployment's web app URL (only the Sheet's owner can open it).
   const ADMIN = {
     uat: 'https://script.google.com/macros/s/AKfycbxIlsPvvCXdZEUW72DQ_Qh7UkpTSrBSYm--QMPMPvolX2ofes9MoHmu9Zt0B-s1JxPo/exec',
-    prod: ''
+    prod: 'https://script.google.com/macros/s/AKfycbzDsNc1WNYo2J1CCd3CpvtG5NmIhxxwuiZ75r8MkzKEN-aHipAXDf-Mv6jkNd7DPc2ldA/exec'
   };
-  const PROD_HOSTS = [];   // e.g. ['sweetnothingsbym.com', 'www.sweetnothingsbym.com']
-  const name = PROD_HOSTS.indexOf(location.hostname) !== -1 ? 'prod' : 'uat';
+  // The live site: the real domain, and Cloudflare Pages' own address for it (*.pages.dev). Everything else
+  // (GitHub Pages, localhost) is the test site, talking to the test Sheet.
+  const PROD_HOSTS = ['www.sweetnothingsbym.com', 'sweetnothingsbym.com'];
+  const name = PROD_HOSTS.indexOf(location.hostname) !== -1 || /\.pages\.dev$/.test(location.hostname) ? 'prod' : 'uat';
   return { name, api: API[name], admin: ADMIN[name] };
 })();
 
