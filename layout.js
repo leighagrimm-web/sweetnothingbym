@@ -230,12 +230,16 @@
     else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
   });
 
-  // Clear an error as soon as the field is fixed.
+  // Like the Contact page: a field is checked when you leave it, and its error clears as soon as it's fixed.
+  const qmChecks = { 'qm-name': (v) => !!v.trim(), 'qm-email': (v) => SN.validEmail(v), 'qm-msg': (v) => !!v.trim() };
+  const qmShow = (t, bad) => { document.getElementById(t.id + '-err').hidden = !bad; t.setAttribute('aria-invalid', String(bad)); };
   body.addEventListener('input', (e) => {
     const t = e.target;
-    if (t.id === 'qm-name' && t.value.trim()) { document.getElementById('qm-name-err').hidden = true; t.setAttribute('aria-invalid', 'false'); }
-    if (t.id === 'qm-email' && SN.validEmail(t.value)) { document.getElementById('qm-email-err').hidden = true; t.setAttribute('aria-invalid', 'false'); }
-    if (t.id === 'qm-msg' && t.value.trim()) { document.getElementById('qm-msg-err').hidden = true; t.setAttribute('aria-invalid', 'false'); }
+    if (qmChecks[t.id] && qmChecks[t.id](t.value)) qmShow(t, false);
+  });
+  body.addEventListener('focusout', (e) => {
+    const t = e.target;
+    if (qmChecks[t.id] && t.value.trim()) qmShow(t, !qmChecks[t.id](t.value));   // empty boxes wait for Send
   });
 
   body.addEventListener('submit', (e) => {
