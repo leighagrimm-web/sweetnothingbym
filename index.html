@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261026o">
+<link rel="stylesheet" href="styles.css?v=20261026p">
 </head>
 <body data-page="home">
 <div id="site-header"></div>
@@ -42,35 +42,18 @@
 
   <section class="section wrap" aria-labelledby="make-h">
     <h2 id="make-h">What I make</h2>
-    <div class="menu-grid">
-      <article class="card">
-        <div class="card-media" data-photo="custom" style="background:#F7E3DD"><span class="tag">Photo coming soon</span><svg width="110" height="110" viewBox="0 0 120 120" fill="none" aria-hidden="true"><circle cx="60" cy="60" r="46" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="60" cy="60" r="36" stroke="#E8B4A8" stroke-width="2" stroke-dasharray="4 5"/><path d="M60 76s-16-9.5-16-20a8.5 8.5 0 0116-4 8.5 8.5 0 0116 4c0 10.5-16 20-16 20z" fill="#C65A4B"/></svg></div>
-        <div class="card-body">
-          <h3>Custom Cookies</h3>
-          <p class="desc">Hand-decorated to match your theme, colors and celebration. Share your idea and an inspiration photo.</p>
-          <p class="price">Starting at <span id="p-custom" style="font-weight:600;color:var(--navy)">$5.00</span> / cookie</p>
-          <a class="btn" href="order.html?add=custom">Customize &amp; add</a>
+    <p class="make-intro" id="make-intro"></p>
+    <div class="make-grid">
+      <a class="make-feature" href="order.html?add=custom">
+        <div class="make-feature-photo" id="make-custom-photo"></div>
+        <div class="make-feature-text">
+          <div><h3>Custom cookies</h3><p>Decorated to your theme · from <span id="p-custom">$5.00</span> each</p></div>
+          <span class="make-go">Start a custom order →</span>
         </div>
-      </article>
-      <article class="card">
-        <div class="card-media" data-photo="mini" style="background:#EDE3DA"><span class="tag">Photo coming soon</span><svg width="130" height="104" viewBox="0 0 140 110" fill="none" aria-hidden="true"><circle cx="42" cy="58" r="26" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="96" cy="44" r="26" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="80" cy="82" r="20" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="36" cy="52" r="3" fill="#1F2A44"/><circle cx="49" cy="63" r="3" fill="#1F2A44"/><circle cx="90" cy="40" r="3" fill="#C65A4B"/><circle cx="102" cy="50" r="3" fill="#E8B4A8"/><circle cx="78" cy="80" r="3" fill="#1F2A44"/></svg></div>
-        <div class="card-body">
-          <h3>Mini Artisan</h3>
-          <p class="desc">Bite-size classics like chocolate chip and funfetti. Mix up to <span class="fpd">4</span> flavors, or up to <span class="fmax">6</span> with 2 dozen or more.</p>
-          <p class="price"><span id="p-mini" style="font-weight:600;color:var(--navy)">$24.00</span> / dozen</p>
-          <a class="btn" href="order.html?add=mini">Choose flavors</a>
-        </div>
-      </article>
-      <article class="card">
-        <div class="card-media" data-photo="large" style="background:#E4E7EE"><span class="tag">Photo coming soon</span><svg width="110" height="110" viewBox="0 0 120 120" fill="none" aria-hidden="true"><circle cx="60" cy="60" r="44" fill="#FFFFFF" stroke="#1F2A44" stroke-width="2.5"/><circle cx="46" cy="48" r="5" fill="#1F2A44"/><circle cx="70" cy="44" r="4" fill="#1F2A44"/><circle cx="74" cy="70" r="5" fill="#1F2A44"/><circle cx="50" cy="74" r="4" fill="#1F2A44"/><circle cx="60" cy="60" r="3" fill="#C65A4B"/></svg></div>
-        <div class="card-body">
-          <h3>Large Artisan</h3>
-          <p class="desc">Big, bakery-style cookies in your favorite flavors. Mix up to <span class="fpd">4</span> flavors, or up to <span class="fmax">6</span> with 2 dozen or more.</p>
-          <p class="price"><span id="p-large" style="font-weight:600;color:var(--navy)">$36.00</span> / dozen</p>
-          <a class="btn" href="order.html?add=large">Choose flavors</a>
-        </div>
-      </article>
+      </a>
+      <ul class="make-list" id="make-list"></ul>
     </div>
+    <a class="make-events" href="events.html" data-page-link><span id="make-events-line"></span><span class="make-go">See special events →</span></a>
   </section>
 
   <section class="band" aria-labelledby="how-h">
@@ -110,9 +93,9 @@
 </main>
 
 <div id="site-footer"></div>
-<script src="config.js?v=20261026o"></script>
-<script src="layout.js?v=20261026o"></script>
-<script src="order.js?v=20261026o"></script>
+<script src="config.js?v=20261026p"></script>
+<script src="layout.js?v=20261026p"></script>
+<script src="order.js?v=20261026p"></script>
 <script>
 SN.ready.then(function () {
   const cfg = SN.load();
@@ -125,20 +108,36 @@ SN.ready.then(function () {
   document.getElementById('hero-photo').innerHTML = heroUrl
     ? '<img src="' + SN.esc(heroUrl) + '" alt="' + SN.esc(p.homeTitle) + '" class="hero-img">'
     : (SN.photoPlaceholder(p.homeHeroPhoto) ? '<span class="tag">' + SN.esc(SN.photoPlaceholder(p.homeHeroPhoto)) + '</span>' : '') + '<img src="logo.png" alt="" class="hero-logo">';
-  document.querySelectorAll('.card-media[data-photo]').forEach((el) => {
-    const url = SN.photoUrl(cfg.images && cfg.images[el.dataset.photo]);
-    if (url) el.innerHTML = '<img src="' + SN.esc(url) + '" alt="' + SN.esc(el.parentNode.querySelector('h3').textContent) + '">';
-  });
+  // "What I make": Custom cookies as the feature, then the short list Melissa edits (admin → Website pages).
+  const pageText = (k) => (p[k] != null ? p[k] : SN_DEFAULTS.pages[k]) || '';
+  document.getElementById('make-intro').textContent = pageText('homeMakeIntro');
+  document.getElementById('make-events-line').textContent = pageText('homeEventsLine') || 'Classes and pop-up events';
+  const photoBox = (photo, alt) => {
+    const url = SN.photoUrl(photo);
+    return url ? '<img src="' + SN.esc(url) + '" alt="' + SN.esc(alt) + '">' : '<img src="logo.png" alt="" class="make-logo">';
+  };
+  document.getElementById('make-custom-photo').innerHTML = photoBox(cfg.images && cfg.images.custom, 'Custom cookies');
+  const LINK = {
+    custom: ['order.html?add=custom', 'Order'], mini: ['order.html?add=mini', 'Order'], large: ['order.html?add=large', 'Order'],
+    order: ['order.html', 'Order'], events: ['events.html', 'See events'], contact: ['contact.html', 'Ask about it'], message: ['', 'Message me']
+  };
+  // A blank line shows the live price (mini, large, custom); a blank photo uses that item's menu photo.
+  const autoLine = (k) => (k === 'mini' ? m(cfg.miniPerDozen) + ' / dozen' : k === 'large' ? m(cfg.largePerDozen) + ' / dozen' : k === 'custom' ? 'from ' + m(SN.customPrice(cfg)) + ' each' : '');
+  document.getElementById('make-list').innerHTML = (cfg.homeItems || []).filter((it) => it && (it.name || '').trim()).map((it) => {
+    const link = LINK[it.link] || LINK.order;
+    const inner = '<span class="make-thumb">' + photoBox(it.photo || (cfg.images && cfg.images[it.link]), it.name) + '</span>' +
+      '<span class="make-row-text"><strong>' + SN.esc(it.name) + '</strong><span>' + SN.esc((it.line || '').trim() || autoLine(it.link)) + '</span></span>' +
+      '<span class="make-go">' + link[1] + ' →</span>';
+    return '<li>' + (it.link === 'message'
+      ? '<button type="button" class="make-row" data-quick-message="' + SN.esc(it.name) + '">' + inner + '</button>'
+      : '<a class="make-row" href="' + link[0] + '">' + inner + '</a>') + '</li>';
+  }).join('');
   document.getElementById('recent').innerHTML = (cfg.gallery || []).slice(0, 4).map((g) => SN.photoHtml(g.photo, g.caption, 'aspect-ratio:1/1;border-radius:14px')).join('');
   document.getElementById('recent').closest('section').hidden = !(cfg.gallery || []).length;
   document.getElementById('lead-days').textContent = cfg.leadDays;
   document.getElementById('pickup-city').textContent = cfg.pickupCity;
   document.querySelectorAll('.pickup-city').forEach((el) => { el.textContent = cfg.pickupCity.split(',')[0]; });
   document.getElementById('p-custom').textContent = m(SN.customPrice(cfg));
-  document.getElementById('p-mini').textContent = m(cfg.miniPerDozen);
-  document.getElementById('p-large').textContent = m(cfg.largePerDozen);
-  document.querySelectorAll('.fpd').forEach((el) => { el.textContent = cfg.flavorsPerDozen; });
-  document.querySelectorAll('.fmax').forEach((el) => { el.textContent = cfg.flavorsMax; });
   if (SN.specialActive(cfg)) {
     document.getElementById('special-wrap').hidden = false;
     document.getElementById('special-icon').innerHTML = SN_ICONS.star;

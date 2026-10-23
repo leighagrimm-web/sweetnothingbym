@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261026o';
+const SN_BUILD = '20261026p';
 
 const SN_ENV = (function () {
   const API = {
@@ -53,6 +53,10 @@ const SN_DEFAULTS = {
   flavorsPerDozen: 4,         // most artisan flavors below flavorsMaxAt cookies...
   flavorsMax: 6,              // ...and from flavorsMaxAt cookies on
   flavorsMaxAt: 24,
+  // Home page "What I make" short list, beside the Custom cookies feature (edited on the admin's Website pages tab).
+  // link: custom | mini | large (opens that item on the Order page), order, events, contact, or message ("Message me").
+  // A blank line shows the live price for mini/large; a blank photo uses that item's menu photo.
+  homeItems: [{"name":"Mini artisan","line":"","photo":"","link":"mini"},{"name":"Large artisan","line":"","photo":"","link":"large"},{"name":"Cookie kits","line":"At pop-ups and events","photo":"","link":"events"}],
   classHoldMinutes: 30,       // a class spot is held this long while the customer pays in Square
   classesPayOnline: true,     // from the server: class checkout goes on to Square
   // Maintenance mode (admin → Website pages): visitors see a "back soon" page; the password lets you in to test.
@@ -108,6 +112,8 @@ const SN_DEFAULTS = {
     homeTitle: 'Handmade cookies for life’s sweetest moments',
     homeIntro: 'Hand-decorated custom sets for birthdays, showers and celebrations, plus small-batch artisan favorites by the dozen.',
     homeHeroPhoto: '[Hero photo of her cookies]',
+    homeMakeIntro: 'Hand-decorated custom sets, small-batch artisan favorites, and kits to decorate at home.',
+    homeEventsLine: 'Decorating classes and pop-ups around the northwest suburbs',
     aboutTitle: 'Hi, I\'m Melissa',
     aboutIntro: 'Sweet Nothings by M bakes custom decorated and artisan cookies for the moments worth celebrating.',
     aboutPhoto: '[Photo of M in the kitchen]',

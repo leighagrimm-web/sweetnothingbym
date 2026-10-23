@@ -197,7 +197,8 @@
 
   // Website wording (Pages tab), grouped by page.
   const PAGE_FIELDS = [
-    ['Home page', [['homeTitle', 'Big heading'], ['homeIntro', 'Text under the heading', 'area'], ['homeHeroPhoto', 'Main photo', 'photo']]],
+    ['Home page', [['homeTitle', 'Big heading'], ['homeIntro', 'Text under the heading', 'area'], ['homeHeroPhoto', 'Main photo', 'photo'],
+      ['homeMakeIntro', 'Line under "What I make"', 'area'], ['homeEventsLine', 'Classes and pop-ups line (links to Special Events)', 'area']]],
     ['Menu photos (Home and Order pages)', [['photoCustom', 'Custom Cookies photo', 'photo'], ['photoMini', 'Mini Artisan photo', 'photo'], ['photoLarge', 'Large Artisan photo', 'photo']]],
     ['About page', [['aboutTitle', 'Big heading'], ['aboutIntro', 'Text under the heading', 'area'], ['aboutPhoto', 'Photo', 'photo'],
       ['aboutStoryHeading', 'First section heading'], ['aboutStory', 'First section text', 'long'], ['aboutGoodToKnowHeading', 'Second section heading'], ['aboutGoodToKnow', 'Second section text', 'long']]],
@@ -232,7 +233,12 @@
           if (kind === 'photo') return photoField(id, label, 'data-page="' + key + '"');
           if (kind === 'area' || kind === 'long') return field(id, label, '<textarea class="input" id="' + id + '" rows="' + (kind === 'long' ? 6 : 2) + '" data-page="' + key + '"></textarea>');
           return field(id, label, '<input class="input" id="' + id + '" type="text" data-page="' + key + '">');
-        }).join('') + '</div>').join(''));
+        }).join('') + '</div>' + (group === 'Home page' ? homeItemsEditor() : '')).join(''));
+  }
+  function homeItemsEditor() {
+    return '<h3 style="font-size:19px;margin:20px 0 6px">"What I make": the short list</h3>' +
+      '<p class="hint" style="margin:0 0 10px">Shown next to the big Custom Cookies photo, in this order. Leave the line blank on Mini or Large Artisan to show the price; leave the photo blank to use that item’s menu photo.</p>' +
+      '<div id="home-items-editor" style="border-top:1px solid var(--line)"></div><button type="button" class="btn dashed" data-act="add-home-item" style="margin-top:14px">+ Add to the list</button>';
   }
   function photoField(id, label, dataAttrs) {
     return '<div class="field"><label class="label" for="' + id + '">' + label + '</label>' +
@@ -382,6 +388,7 @@
       list[Number(el.dataset.i)][el.dataset.key] = v;
       if (el.dataset.key === 'photo') thumb(el);
       if (el.dataset.list === 'events' && el.dataset.key === 'button') renderEvents();
+      if (el.dataset.list === 'homeItems' && el.dataset.key === 'link') { const l = $('#hl-' + el.dataset.i); if (l) l.placeholder = /^(mini|large|custom)$/.test(v) ? 'Blank = shows the price' : 'Short line'; }
       markDirty();
     }
   }
@@ -1342,7 +1349,25 @@
     $$('#gallery-editor [data-key="photo"]').forEach(thumb);
   }
 
-  const RENDER_LIST = { faqs: () => renderFaqs(), events: () => renderEvents(), gallery: () => renderGallery() };
+  const HOME_LINKS = [['mini', 'Mini Artisan (Order)'], ['large', 'Large Artisan (Order)'], ['custom', 'Custom Cookies (Order)'], ['order', 'Order page'],
+    ['events', 'Special Events'], ['contact', 'Contact page'], ['message', '"Message me" pop-up']];
+  function renderHomeItems() {
+    if (!Array.isArray(cfg.homeItems)) cfg.homeItems = [];
+    const n = cfg.homeItems.length;
+    $('#home-items-editor').innerHTML = n ? cfg.homeItems.map((h, i) =>
+      '<div class="flavor-row" style="flex-wrap:wrap;gap:10px">' +
+        '<span class="photo-thumb" data-thumb-for="hp-' + i + '"></span>' +
+        '<div style="flex:1 1 170px;min-width:0"><label class="sr-only" for="hn-' + i + '">Item ' + (i + 1) + ' name</label><input class="input" id="hn-' + i + '" type="text" placeholder="Name" data-list="homeItems" data-i="' + i + '" data-key="name" value="' + esc(h.name) + '" style="font-weight:600"></div>' +
+        '<div style="flex:2 1 260px;min-width:0"><label class="sr-only" for="hl-' + i + '">Item ' + (i + 1) + ' line</label><input class="input" id="hl-' + i + '" type="text" placeholder="' + (h.link === 'mini' || h.link === 'large' || h.link === 'custom' ? 'Blank = shows the price' : 'Short line') + '" data-list="homeItems" data-i="' + i + '" data-key="line" value="' + esc(h.line) + '"></div>' +
+        '<div style="flex:2 1 260px;min-width:0"><label class="sr-only" for="hp-' + i + '">Item ' + (i + 1) + ' photo link</label><input class="input" id="hp-' + i + '" type="text" placeholder="Photo link (optional)" data-list="homeItems" data-i="' + i + '" data-key="photo" value="' + esc(h.photo) + '"></div>' +
+        '<div style="flex:1 1 230px;min-width:0"><label class="sr-only" for="hg-' + i + '">Item ' + (i + 1) + ' goes to</label><select class="input" id="hg-' + i + '" data-list="homeItems" data-i="' + i + '" data-key="link">' +
+          HOME_LINKS.map(([v, t]) => '<option value="' + v + '"' + ((h.link || 'order') === v ? ' selected' : '') + '>Goes to: ' + t + '</option>').join('') + '</select></div>' +
+        moveButtons('homeItems', i, n, (h.name || 'item ' + (i + 1))) +
+      '</div>').join('') : '<p class="hint" style="padding:14px 0">Nothing in the list. Add one below.</p>';
+    $$('#home-items-editor [data-key="photo"]').forEach(thumb);
+  }
+
+  const RENDER_LIST = { faqs: () => renderFaqs(), events: () => renderEvents(), gallery: () => renderGallery(), homeItems: () => renderHomeItems() };
 
   async function onListClick(b) {
     const i = Number(b.dataset.i);
@@ -1363,11 +1388,12 @@
         cfg.events.push({ id: 'e' + Date.now().toString(36), show: true, photo: '', when: '', title: '', date: '', start: '', end: '', address: '', price: '', max: '', desc: '', button: 'Add to bag' });
         renderEvents(); $('#ev-title-' + (cfg.events.length - 1)).focus(); break;
       case 'add-photo': cfg.gallery.push({ show: true, photo: '', caption: '' }); renderGallery(); $('#gp-' + (cfg.gallery.length - 1)).focus(); break;
+      case 'add-home-item': cfg.homeItems.push({ name: '', line: '', photo: '', link: 'events' }); renderHomeItems(); $('#hn-' + (cfg.homeItems.length - 1)).focus(); break;
       case 'toggle-show': cfg[list][i].show = cfg[list][i].show === false; RENDER_LIST[list](); break;
       case 'del-item': {
         const it = cfg[list][i];
-        const filled = list === 'faqs' ? (it.q || it.a) : list === 'events' ? it.title : it.photo;
-        if (filled && !(await ask({ title: 'Delete this ' + (list === 'faqs' ? 'question' : list === 'events' ? 'event' : 'photo') + '?', text: 'It comes off the website when you save.', yes: 'Delete', no: 'Keep it', danger: true }))) return;
+        const filled = list === 'faqs' ? (it.q || it.a) : list === 'events' ? it.title : list === 'homeItems' ? it.name : it.photo;
+        if (filled && !(await ask({ title: 'Delete this ' + ({ faqs: 'question', events: 'event', homeItems: 'list item' }[list] || 'photo') + '?', text: 'It comes off the website when you save.', yes: 'Delete', no: 'Keep it', danger: true }))) return;
         cfg[list].splice(i, 1); RENDER_LIST[list](); break;
       }
       case 'up': case 'down': {
@@ -1473,6 +1499,7 @@
     c.faqs = c.faqs.filter((f) => (f.q || '').trim() || (f.a || '').trim());
     c.events = c.events.filter((e) => (e.title || '').trim()).map((e) => { delete e.booked; delete e.spotsLeft; return e; });
     c.gallery = c.gallery.filter((g) => (g.photo || '').trim());
+    c.homeItems = (c.homeItems || []).filter((h) => (h.name || '').trim());
     delete c.weekCounts;   // booking counts come from orders, not settings
     delete c.images;
     return c;
@@ -1531,6 +1558,7 @@
     renderFaqs();
     renderEvents();
     renderGallery();
+    renderHomeItems();
     renderBusyDays();
   }
 
