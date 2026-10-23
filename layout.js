@@ -9,7 +9,6 @@
     ['faq', 'faq.html', 'FAQ'],
     ['contact', 'contact.html', 'Contact']
   ];
-  const onOrder = page === 'order';
   // Pages Melissa can hide from the menu (Settings: showAbout, showEvents, showGallery, showFaq).
   const SHOW_KEY = { about: 'showAbout', events: 'showEvents', gallery: 'showGallery', faq: 'showFaq' };
   const shown = (cfg, key) => !SHOW_KEY[key] || cfg[SHOW_KEY[key]] !== false;
@@ -38,9 +37,8 @@
               links.filter(([key]) => shown(cfg, key)).map(([key, href, label]) => '<a href="' + href + '"' + (key === page ? ' aria-current="page"' : '') + '>' + label + '</a>').join('') +
             '</nav>' +
             '<a class="icon-btn" href="' + SN.esc(cfg.instagram) + '" target="_blank" rel="noopener" aria-label="Instagram ' + SN.esc(cfg.instagramHandle) + '">' + SN_ICONS.insta + '</a>' +
-            (onOrder
-              ? '<button type="button" class="bag-btn" id="bag-btn" aria-label="Open bag">' + SN_ICONS.bag + ' Bag <span class="bag-count" id="bag-count">' + count + '</span></button>'
-              : '<a class="bag-btn" href="order.html?bag=1" aria-label="Open bag">' + SN_ICONS.bag + ' Bag <span class="bag-count">' + count + '</span></a>') +
+            // Opens the bag right on this page (order.js, which every page loads).
+            '<button type="button" class="bag-btn" id="bag-btn" aria-label="Open bag">' + SN_ICONS.bag + ' Bag <span class="bag-count" id="bag-count">' + count + '</span></button>' +
           '</div>' +
         '</div></header>';
     }

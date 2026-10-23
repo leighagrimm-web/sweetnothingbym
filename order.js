@@ -1,4 +1,5 @@
-/* Order page: menu, item slide-over, bag + checkout. Waits for the Sheet's settings so prices are current. */
+/* The bag + checkout, on every page (opens on top of whatever page you're on), and on the Order page also the menu
+   and item slide-overs. Waits for the Sheet's settings so prices are current. */
 SN.ready.then(function () {
   const cfg = SN.load();
   let bag = SN.getBag();
@@ -23,14 +24,22 @@ SN.ready.then(function () {
 
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+  const onOrderPage = !!$('#menu');
+  // Pages other than Order get the bag panel and the "added to bag" toast here (order.html has them in its HTML).
+  if (!$('#panel')) {
+    document.body.insertAdjacentHTML('beforeend', '<div class="scrim" id="scrim"></div>' +
+      '<aside class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" tabindex="-1"></aside>' +
+      '<div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-icon"></span><span id="toast-text"></span>' +
+      '<button type="button" id="toast-view">View bag</button></div>');
+  }
   const panel = $('#panel');
   const scrim = $('#scrim');
   const money = SN.money;
   const esc = SN.esc;
 
   /* ---------------- Page setup ---------------- */
-  $('#lead-days').textContent = cfg.leadDays;
-  if (SN.specialActive(cfg)) {
+  if (onOrderPage) $('#lead-days').textContent = cfg.leadDays;
+  if (onOrderPage && SN.specialActive(cfg)) {
     $('#special-wrap').hidden = false;
     $('#special-icon').innerHTML = SN_ICONS.star;
     $('#special-text').textContent = cfg.specialText;
@@ -54,7 +63,7 @@ SN.ready.then(function () {
     const at = Number(cfg.flavorsMaxAt) || 24;
     return 'Mix up to ' + cfg.flavorsPerDozen + ' flavors, or up to ' + cfg.flavorsMax + ' with ' + (at % 12 === 0 ? at / 12 + ' dozen' : at + ' cookies') + ' or more.';
   }
-  $('#menu').innerHTML = menuItems.map((m) => {
+  if (onOrderPage) $('#menu').innerHTML = menuItems.map((m) => {
     const img = SN.photoUrl(cfg.images && cfg.images[m.kind]);   // photo links from the Sheet's Pages tab
     return '<article class="card">' +
       '<div class="card-media" style="background:' + bg[m.kind] + '">' +
@@ -67,19 +76,26 @@ SN.ready.then(function () {
         '<button type="button" class="btn" data-open="' + m.kind + '"' + (cfg.acceptingOrders && !paused ? '' : ' aria-disabled="true"') + '>' + esc(m.cta) + '</button>' +
       '</div></article>';
   }).join('');
-  if (paused) {
+  if (onOrderPage && paused) {
     $('#closed-note').textContent = 'We’re having trouble loading the menu right now. Please try again in a few minutes.';
     $('#closed-note').hidden = false;
-  } else if (!cfg.acceptingOrders) $('#closed-note').hidden = false;
+  } else if (onOrderPage && !cfg.acceptingOrders) $('#closed-note').hidden = false;
 
-  $('#menu').addEventListener('click', (e) => {
+  if (onOrderPage) $('#menu').addEventListener('click', (e) => {
     const b = e.target.closest('[data-open]');
     if (!b || !cfg.acceptingOrders || paused) return;
     openItem(b.dataset.open, b);
   });
-  const bagBtn = $('#bag-btn');
-  if (bagBtn) bagBtn.addEventListener('click', (e) => openBag(e.currentTarget));
-  $('#toast-view').addEventListener('click', () => openBag(bagBtn));
+  // The header's Bag button, and any "View bag" link marked data-open-bag, open the bag right here. Delegated, because
+  // layout.js redraws the header once settings arrive.
+  const bagBtn = () => $('#bag-btn');
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('#bag-btn, [data-open-bag]');
+    if (b) { e.preventDefault(); openBag(b); }
+  });
+  $('#toast-view').addEventListener('click', () => openBag(bagBtn()));
+  // Another part of this page changed the bag (e.g. the Events page's "Add to bag").
+  document.addEventListener('sn:bag', () => { bag = SN.getBag(); saveBag(); if (mode === 'bag') renderPanel(); });
   scrim.addEventListener('click', closePanel);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && mode) closePanel(); });
 
@@ -292,18 +308,20 @@ SN.ready.then(function () {
     if (!bag.length) {
       return head('Your bag') +
         '<div class="panel-body"><div class="done"><p style="font-size:17px;margin:0">Your bag is empty.</p>' +
-        '<button type="button" class="btn" data-act="close" style="margin-top:18px">Browse the menu</button></div></div>';
+        (onOrderPage ? '<button type="button" class="btn" data-act="close" style="margin-top:18px">Browse the menu</button>'
+          : '<a class="btn" href="order.html" style="margin-top:18px">Browse the menu</a>') + '</div></div>';
     }
     const subtotal = bag.reduce((a, it) => a + SN.itemTotal(cfg, it), 0);
     return head('Your bag') +
       '<div class="panel-body">' +
         bagItems(true) +
-        '<button type="button" class="btn dashed" data-act="close" style="margin-top:14px">+ Add more cookies</button>' +
+        (onOrderPage ? '<button type="button" class="btn dashed" data-act="close" style="margin-top:14px">+ Add more cookies</button>'
+          : '<a class="btn dashed" href="order.html" style="margin-top:14px">+ Add cookies</a>') +
       '</div>' +
       '<div class="panel-foot">' +
         '<div class="grand"><strong>Subtotal</strong><strong>' + (bag.some((it) => it.kind === 'custom') ? 'from ' : '') + money(subtotal) + '</strong></div>' +
         '<p class="hint" style="margin:-4px 0 12px">' + (hasCookies()
-          ? 'Next: your date, pickup or drop-off, and contact details. Tax and any drop-off fee are added at checkout.'
+          ? 'Next: your date, pickup or drop-off, and contact details. Any drop-off fee is added at checkout; sales tax is added to your invoice.'
           : 'Next: your contact details.') + '</p>' +
         (paused
           ? '<div class="missing">We’re having trouble reaching our order system right now. Please try again in a few minutes.</div>'
@@ -602,7 +620,7 @@ SN.ready.then(function () {
           '<p style="margin:20px 0 0;font-family:var(--serif);font-size:30px;font-weight:600">Estimated total ' + money(cookieOrder.total) + '</p><p class="muted" style="margin:4px 0 0">before tax; sales tax is added to your invoice</p>' : '') +
         '<div class="stack" style="margin-top:24px;align-items:center">' +
           (SN_ENV.name === 'uat' && cookieOrder ? '<a class="btn ghost" href="email.html?o=' + encodeURIComponent(cookieOrder.number) + '" target="_blank" rel="noopener">Preview the request email</a>' : '') +
-          '<button type="button" class="btn" data-act="close">Back to the menu</button>' +
+          '<button type="button" class="btn" data-act="close">' + (onOrderPage ? 'Back to the menu' : 'Done') + '</button>' +
         '</div>' +
       '</div></div>';
   }
@@ -679,7 +697,8 @@ SN.ready.then(function () {
     const n = bag.reduce((a, it) => a + it.qty, 0);
     const c = $('#bag-count');
     if (c) c.textContent = n;
-    if (bagBtn) bagBtn.setAttribute('aria-label', 'Open bag, ' + n + ' items');
+    if (bagBtn()) bagBtn().setAttribute('aria-label', 'Open bag, ' + n + ' items');
+    document.dispatchEvent(new CustomEvent('sn:bag-changed'));   // e.g. the Events page's "1 in your bag" notes
   }
 
   function addToBag() {
@@ -776,7 +795,7 @@ SN.ready.then(function () {
     const wasOpen = panel.classList.contains('open');
     mode = 'done';
     renderPanel();
-    if (!wasOpen) showPanel(bagBtn);   // they closed the bag while it was sending
+    if (!wasOpen) showPanel(bagBtn());   // they closed the bag while it was sending
     const c = $('[data-act="close"]', panel);
     if (c) c.focus();
     // Class only: straight on to Square's checkout. Square sends them back to order.html?paid=SN-x.
@@ -849,14 +868,14 @@ SN.ready.then(function () {
   // Opened from another page's Bag link (order.html?bag=1)
   if (new URLSearchParams(location.search).get('bag')) {
     history.replaceState(null, '', location.pathname);
-    openBag(bagBtn);
+    openBag(bagBtn());
   }
   const paidNumber = new URLSearchParams(location.search).get('paid');
   if (paidNumber) {
     history.replaceState(null, '', location.pathname);
     mode = 'paid';
     renderPanel();
-    showPanel(bagBtn);
+    showPanel(bagBtn());
     checkPaid(paidNumber);
   }
 });

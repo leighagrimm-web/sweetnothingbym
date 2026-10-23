@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261026n">
+<link rel="stylesheet" href="styles.css?v=20261026o">
 </head>
 <body data-page="events">
 <div id="site-header"></div>
@@ -23,8 +23,9 @@
   </section>
 </main>
 <div id="site-footer"></div>
-<script src="config.js?v=20261026n"></script>
-<script src="layout.js?v=20261026n"></script>
+<script src="config.js?v=20261026o"></script>
+<script src="layout.js?v=20261026o"></script>
+<script src="order.js?v=20261026o"></script>
 <script>
 // Heading from the Sheet's Pages tab; one card per row on the Events tab. Anything left blank doesn't show.
 // Classes ("Add to bag") show spots left and go in the bag, booked and paid at checkout with no approval needed.
@@ -53,7 +54,7 @@ SN.ready.then(function () {
           '<select class="input" id="spots-' + esc(ev.id) + '" style="width:auto;min-height:44px">' + opts + '</select>' +
           '<button type="button" class="btn" data-add-class="' + esc(ev.id) + '">Add to bag</button></div>'
       : '') +
-      (have ? '<p class="hint" style="margin-top:8px">' + have + ' in your bag · <a href="order.html?bag=1">View bag</a></p>' : '');
+      (have ? '<p class="hint" style="margin-top:8px">' + have + ' in your bag · <a href="order.html?bag=1" data-open-bag>View bag</a></p>' : '');
   }
 
   function card(ev) {
@@ -80,6 +81,10 @@ SN.ready.then(function () {
   const list = document.getElementById('events');
   list.innerHTML = (cfg.events || []).map(card).join('') || '<p class="muted">No events right now. Follow along on Instagram for the next one.</p>';
 
+  // The bag changed (removed an item, or booked from the bag on this page): refresh each class's "in your bag" note.
+  document.addEventListener('sn:bag-changed', () => {
+    list.querySelectorAll('[data-book]').forEach((area) => { const ev = cfg.events.find((x) => x.id === area.dataset.book); if (ev) area.innerHTML = bookArea(ev); });
+  });
   list.addEventListener('click', (e) => {
     if (e.target.closest('a[aria-disabled="true"]')) { e.preventDefault(); return; }
     const b = e.target.closest('[data-add-class]');
@@ -91,6 +96,7 @@ SN.ready.then(function () {
     if (existing) existing.qty += qty;
     else bag.push({ id: Date.now(), kind: 'class', eventId: ev.id, qty, title: ev.title, price: Number(ev.price), summary: SN.classWhen(ev) });
     SN.setBag(bag);
+    document.dispatchEvent(new CustomEvent('sn:bag'));   // the bag (order.js) picks up the change
     document.querySelectorAll('.bag-count').forEach((c) => { c.textContent = bag.reduce((a, it) => a + it.qty, 0); });
     const area = list.querySelector('[data-book="' + ev.id + '"]');
     area.innerHTML = bookArea(ev);
