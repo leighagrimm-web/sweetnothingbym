@@ -2662,7 +2662,63 @@ function prettyDate_(iso) {
 }
 
 function round2_(n) { return Math.round(n * 100) / 100; }
-function money_(n) { return '$' + round2_(Number(n) || 0).toFixed(2); }
+// "$4.80", and "−$58.20" (not "$-58.20") for discounts.
+function money_(n) { const v = round2_(Number(n) || 0); return (v < 0 ? '−' : '') + '
+
+function esc_(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Trimmed text with a length cap.
+function clean_(v, max) { return String(v == null ? '' : v).trim().slice(0, max || 500); }
+
+// Stop customer text from being treated as a Sheets formula.
+function cell_(v) { return typeof v === 'string' && /^[=+\-@]/.test(v) ? "'" + v : v; }
+
+// Same checks as SN.validEmail / SN.phoneDigits in the site's config.js.
+function validEmail_(s) { return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[A-Za-z]{2,}$/.test(s); }
+
+// "847-555-0100" for a 10-digit US number (a leading country code 1 is dropped), or '' if it isn't one.
+function formatPhone_(s) {
+  let d = String(s || '').replace(/\D/g, '');
+  if (d.length === 11 && d[0] === '1') d = d.slice(1);
+  return d.length === 10 ? d.slice(0, 3) + '-' + d.slice(3, 6) + '-' + d.slice(6) : '';
+}
+
+// Append one row using the tab's header names as keys.
+function appendObject_(sh, obj) {
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  sh.appendRow(headers.map((h) => (h in obj ? cell_(obj[h]) : '')));
+  return sh.getLastRow();
+}
+
+function setCell_(sh, row, header, value) {
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  const c = headers.indexOf(header);
+  if (c !== -1) sh.getRange(row, c + 1).setValue(cell_(value));
+}
+
+// Next number from the Counters tab. Call inside a script lock.
+function nextCounter_(name) {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Counters');
+  const vals = sh.getRange(2, 1, Math.max(1, sh.getLastRow() - 1), 2).getValues();
+  const i = vals.findIndex((r) => r[0] === name);
+  if (i === -1) throw new Error('Counter missing: ' + name);
+  const n = Number(vals[i][1]);
+  sh.getRange(i + 2, 2).setValue(n + 1);
+  return n;
+}
+
+// Basic flood protection: at most `max` submissions per email address per hour.
+function rateLimited_(kind, email, max) {
+  const cache = CacheService.getScriptCache();
+  const key = 'rl_' + kind + '_' + email.toLowerCase();
+  const n = Number(cache.get(key) || 0);
+  if (n >= max) return true;
+  cache.put(key, String(n + 1), 3600);
+  return false;
+}
+ + Math.abs(v).toFixed(2); }
 
 function esc_(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

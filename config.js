@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261026j';
+const SN_BUILD = '20261026k';
 
 const SN_ENV = (function () {
   const API = {
@@ -389,7 +389,136 @@ const SN = {
     el.addEventListener('input', () => { const v = SN.formatPhone(el.value); if (el.value !== v) el.value = v; });
   },
 
-  money(n) { return '$' + (Math.round(n * 100) / 100).toFixed(2); },
+  money(n) { const v = Math.round(n * 100) / 100; return (v < 0 ? '−' : '') + '
+  esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  },
+
+  customPrice(cfg) { return Number(cfg.customBasePrice) || 0; },
+  perCookie(cfg, kind) { return (kind === 'mini' ? cfg.miniPerDozen : cfg.largePerDozen) / 12; },
+
+  // Artisan flavor limit: flavorsPerDozen (4) below flavorsMaxAt cookies (24), then flavorsMax (6). Same rule in Code.gs.
+  flavorLimit(cfg, qty) { return qty >= (Number(cfg.flavorsMaxAt) || 24) ? (Number(cfg.flavorsMax) || 6) : (Number(cfg.flavorsPerDozen) || 4); },
+  artisanCheck(cfg, fq) {
+    const qty = Object.values(fq || {}).reduce((a, b) => a + b, 0);
+    const used = Object.values(fq || {}).filter((v) => v > 0).length;
+    const max = SN.flavorLimit(cfg, qty);
+    const atMost = qty >= (Number(cfg.flavorsMaxAt) || 24);
+    let err = '';
+    if (qty < cfg.minQty) err = qty === 0 ? 'Add at least ' + cfg.minQty + ' cookies.' : (cfg.minQty - qty) + ' more to reach the 1 dozen minimum.';
+    else if (used > max) err = 'Up to ' + max + ' flavors for ' + qty + ' cookies. Remove a flavor' + (atMost ? '.' : ' or reach ' + cfg.flavorsMaxAt + ' cookies for up to ' + cfg.flavorsMax + '.');
+    return { qty, used, max, err };
+  },
+
+  // A class in the bag: today's price from the Events settings (or the price when it was added).
+  classEvent(cfg, it) { return (cfg.events || []).find((e) => e.id === it.eventId) || null; },
+  itemTotal(cfg, it) {
+    if (it.kind === 'class') { const ev = SN.classEvent(cfg, it); return it.qty * (ev ? Number(ev.price) || 0 : Number(it.price) || 0); }
+    if (it.kind === 'custom') return it.qty * SN.customPrice(cfg);
+    return SN.artisanCheck(cfg, it.fq).qty * SN.perCookie(cfg, it.kind);
+  },
+
+  /* ---------- Weekly cookie caps (Mon-Sun) ---------- */
+  mondayOf(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+    return SN.isoDate(dt);
+  },
+  // Cookies still available that week: { custom, artisan } (null = no limit).
+  weekRoom(cfg, iso) {
+    const load = (cfg.weekLoads || {})[SN.mondayOf(iso)] || { custom: 0, artisan: 0 };
+    const room = (cap, used) => (Number(cap) > 0 ? Math.max(0, Number(cap) - used) : null);
+    return { custom: room(cfg.capCustomPerWeek, load.custom), artisan: room(cfg.capArtisanPerWeek, load.artisan) };
+  },
+  // "Sat, Dec 6 · 2:00 PM–4:00 PM"
+  classWhen(ev) {
+    const day = ev.date ? SN.prettyDate(ev.date, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+    const time = ev.start ? ev.start + (ev.end ? '–' + ev.end : '') : '';
+    return [day, time].filter(Boolean).join(' · ');
+  },
+  // A one-time ID per checkout, so a retry after a dropped connection doesn't place the order twice.
+  newSubmissionId() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); },
+
+  isoDate(d) {
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  },
+  minDate(cfg) { const d = new Date(); d.setDate(d.getDate() + Number(cfg.leadDays || 0)); return d; },
+  prettyDate(iso, opts) {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', opts || { weekday: 'long', month: 'long', day: 'numeric' });
+  },
+
+  specialActive(cfg) {
+    if (!cfg.specialText) return false;
+    if (!cfg.specialUntil) return true;
+    return SN.isoDate(new Date()) <= cfg.specialUntil;
+  },
+
+  itemLabel(kind) { return kind === 'custom' ? 'Custom Cookies' : kind === 'mini' ? 'Mini Artisan' : kind === 'class' ? 'Class' : 'Large Artisan'; },
+  // "24 Custom Cookies", or for a class "2 spots · Holiday decorating"
+  itemHeading(it) { return it.kind === 'class' ? it.qty + ' spot' + (it.qty > 1 ? 's' : '') + ' · ' + it.title : it.qty + ' ' + SN.itemLabel(it.kind); },
+
+  describeItem(cfg, it) {
+    if (it.kind === 'class') { const ev = SN.classEvent(cfg, it) || it; return [it.summary || SN.classWhen(ev), ev.address].filter(Boolean).join(' · '); }
+    if (it.kind === 'custom') {
+      return it.designs + ' design' + (it.designs > 1 ? 's' : '') + ' · estimated at ' + SN.money(SN.customPrice(cfg)) + ' each' + (it.photoName ? ' · photo attached' : '');
+    }
+    const names = {};
+    cfg.flavors.forEach((f) => { names[f.id] = f.name; });
+    Object.assign(names, it.flavorNames || {});
+    return Object.keys(it.fq).filter((k) => it.fq[k] > 0).map((k) => it.fq[k] + ' ' + (names[k] || k)).join(', ');
+  },
+
+  /* ---------- Approval + invoice helpers ---------- */
+  STATUSES: ['Pending review', 'Invoice sent', 'Paid', 'Baking', 'Ready', 'Completed', 'Declined'],
+  normStatus(s) { return s === 'New' || !s ? 'Pending review' : s; },
+
+  // Starting invoice lines built from the customer's request (same wording as startingLines_ in Code.gs).
+  // A percent promo code becomes its own discount line.
+  linesFromOrder(cfg, o) {
+    const lines = o.items.map((it) => {
+      // Orders from the Sheet carry the unit price they were quoted at; otherwise use today's prices.
+      const unit = it.unit != null ? it.unit : it.kind === 'custom' ? SN.customPrice(cfg) : SN.perCookie(cfg, it.kind);
+      const desc = it.kind === 'class'
+        ? 'Class: ' + it.title + (it.summary ? ' (' + it.summary + ')' : '')
+        : it.qty + ' ' + SN.itemLabel(it.kind) + (it.summary ? ' (' + it.summary.replace(/ · estimated at .*?each/, '') + ')' : '');
+      return { desc, qty: it.qty, unit: Math.round(unit * 100) / 100 };
+    });
+    if (o.discount) lines.push({ desc: 'Promo code ' + o.promoCode, qty: 1, unit: -Math.round(o.discount * 100) / 100 });
+    return lines;
+  },
+  // Totals for a set of invoice lines. Tax applies to the lines, not the drop-off fee; a gift card credit comes off last.
+  // An invoice's totals before sales tax (QuickBooks adds the tax). taxRate is ignored; kept so older calls still work.
+  invoiceTotals(lines, fee, taxRate, credit) {
+    const subtotal = lines.reduce((a, l) => a + (Number(l.qty) || 0) * (Number(l.unit) || 0), 0);
+    const tax = 0;
+    const f = Number(fee) || 0;
+    const c = Math.min(Number(credit) || 0, Math.max(0, subtotal + tax + f));
+    return { subtotal, tax, fee: f, credit: c, total: subtotal + tax + f - c };
+  }
+};
+
+// Pages wait on this before reading settings: SN.ready.then(() => { const cfg = SN.load(); ... })
+// The admin page (window.SN_ADMIN) gets its data from Apps Script directly, so it skips this.
+SN.ready = window.SN_ADMIN ? Promise.resolve() : SN.fetchConfig();
+
+// Shared inline icons (stroke SVG, decorative).
+const SN_ICONS = {
+  minus: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>',
+  plus: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  close: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  check: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#C65A4B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  checkSmall: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F7E3DD" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  bag: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 12H6.2z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg>',
+  insta: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1F2A44" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.6" fill="#1F2A44"/></svg>',
+  star: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#C65A4B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg>',
+  upload: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#C65A4B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3"/></svg>',
+  trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg>'
+};
+ + Math.abs(v).toFixed(2); },   // −$5.00, not $-5.00
   esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   },
