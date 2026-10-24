@@ -378,7 +378,7 @@ SN.ready.then(function () {
             '</details></div></div>' +
           '<div class="field"><label class="label" for="c-allergies">Allergies or dietary needs <span class="muted" style="font-weight:400">(optional)</span></label>' +
             '<textarea class="input" id="c-allergies" rows="2" data-co="allergies" placeholder="e.g. one guest has a nut allergy, need 6 gluten-free">' + esc(checkout.allergies) + '</textarea>' +
-            (cfg.allergyNote ? '<p class="hint">* ' + esc(cfg.allergyNote) + '</p>' : '') + '</div>' +
+            (cfg.allergyNote ? '<div class="note-box fold-box" style="margin-top:10px"><details><summary>Allergy-friendly swaps</summary><p>' + esc(cfg.allergyNote) + '</p></details></div>' : '') + '</div>' +
         '</div></div>' +
         '<div class="sec"><h3>Pickup or drop-off</h3>' +
           '<div class="grid-2" role="group" aria-label="Pickup or drop-off">' +
