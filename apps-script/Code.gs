@@ -2167,6 +2167,8 @@ function checkPayments() {
               setCell_(sh, r._row, 'Status', 'Expired');
               setCell_(sh, r._row, 'Updated', new Date());
               if (Number(r['Gift card credit']) > 0) refundGiftCard_(r['Promo code'], Number(r['Gift card credit']));
+              const ex = loadOrder_(String(r.Order));
+              setCell_(sh, r._row, 'Customer email', sendSafely_(() => sendClassExpiredEmail_(cfg, ex)));
               summary.expired.push(r.Order);
             }
           } catch (e) { summary.errors.push('Square ' + r.Order + ': ' + e.message); }
@@ -2447,6 +2449,29 @@ function sendClassBookingEmail_(cfg, o) {
     htmlBody: html,
     body: ['You’re booked' + (first ? ', ' + first : '') + '!', 'Order number ' + o.number, '', classPayLine_(o), '',
       classText_(o), '', totalsText_(o, paid ? 'Paid' : 'Total'), '', 'Questions? Just reply to this email.'].join('\n'),
+    name: cfg.senderName, replyTo: cfg.replyToEmail
+  });
+}
+
+// The hold ran out before Square got a payment: the spot was released and nothing was charged.
+function sendClassExpiredEmail_(cfg, o) {
+  const first = (o.customer.name || '').split(' ')[0];
+  const mins = Number(cfg.classHoldMinutes) || 30;
+  const line = 'Your payment didn’t come through within ' + mins + ' minutes, so your spot wasn’t held and you haven’t been charged anything.';
+  const again = cfg.siteUrl ? cfg.siteUrl + 'events.html' : '';
+  const html = shell_(cfg, 'Your class spot wasn’t held' + (first ? ', ' + esc_(first) : ''), o.number,
+    '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">' + esc_(line) + '</div>' +
+    classDetails_(o) +
+    p_('Still want to come? Spots may still be open, so you can book again.', 15) +
+    (again ? button_(again, 'Book again') : '') +
+    p_('If you did pay, or think something went wrong, just reply to this email and mention your order number.', 14));
+  sendMail_({
+    to: o.customer.email,
+    subject: subjectPrefix_(cfg) + 'Your class spot wasn’t held – Sweet Nothings ' + o.number,
+    htmlBody: html,
+    body: [(first ? 'Hi ' + first + ',' : 'Hi,'), '', line, '', classText_(o), '',
+      'Still want to come? Spots may still be open' + (again ? ': ' + again : '.'), '',
+      'If you did pay, or think something went wrong, just reply to this email and mention your order number ' + o.number + '.'].join('\n'),
     name: cfg.senderName, replyTo: cfg.replyToEmail
   });
 }
