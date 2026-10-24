@@ -123,7 +123,7 @@ SN.ready.then(function () {
   const customBox = document.getElementById('make-custom-photo');
   if (slides.length < 2) customBox.innerHTML = '<a href="order.html?add=custom" class="make-photo-link" tabindex="-1">' + photoBox(slides[0] || (cfg.images && cfg.images.custom), 'Custom cookies') + '</a>';
   else {
-    // Visitors can click the photo or the arrows to move on; it also advances by itself every 3 seconds.
+    // Visitors can click the photo or the arrows to move on; it also advances by itself every 4.5 seconds.
     const ARROW = (d) => '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="' + (d < 0 ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7') + '" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     customBox.innerHTML = slides.map((u, i) => '<img src="' + SN.esc(u) + '" alt="Custom cookies, photo ' + (i + 1) + ' of ' + slides.length + '" class="slide' + (i ? '' : ' on') + '">').join('') +
       '<button type="button" class="make-arrow prev" data-step="-1" aria-label="Previous photo">' + ARROW(-1) + '</button>' +
@@ -137,7 +137,7 @@ SN.ready.then(function () {
       imgs[at].classList.add('on'); dots[at].classList.add('on');
     };
     const autoplay = !matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const restart = () => { if (!autoplay) return; clearInterval(timer); timer = setInterval(() => { if (!paused && !document.hidden) show(at + 1); }, 3000); };
+    const restart = () => { if (!autoplay) return; clearInterval(timer); timer = setInterval(() => { if (!paused && !document.hidden) show(at + 1); }, 4500); };
     customBox.addEventListener('click', (e) => {
       const b = e.target.closest('[data-step], [data-go]');
       show(b ? (b.dataset.go != null ? Number(b.dataset.go) : at + Number(b.dataset.step)) : at + 1);
