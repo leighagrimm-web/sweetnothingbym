@@ -54,6 +54,26 @@ button { font: inherit; color: inherit; }
 .bag-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; margin-left: 6px; border: 0; border-radius: 999px; background: var(--navy); color: var(--white); font-weight: 600; cursor: pointer; text-decoration: none; }
 .bag-btn:hover { color: var(--white); background: var(--navy-2); }
 .bag-count { min-width: 22px; height: 22px; border-radius: 999px; background: var(--coral); color: var(--white); font-size: 12px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; }
+.menu-btn, .nav-insta { display: none; }
+@media (max-width: 760px) {
+  /* Phones: logo, bag and a Menu button on one row; the page links drop down under the header. */
+  .site-header { position: relative; }
+  .site-header .wrap { flex-wrap: nowrap; gap: 8px; }
+  .brand { gap: 8px; min-width: 0; }
+  .brand img { width: 48px; height: 48px; }
+  .brand span { font-size: 18px; line-height: 1.1; }
+  .brand em { white-space: nowrap; }
+  .header-right { flex-wrap: nowrap; flex: none; gap: 6px; }
+  .header-right > .icon-btn { display: none; }
+  .bag-btn { padding: 0 12px; margin-left: 0; gap: 6px; }
+  .bag-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .menu-btn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 1px solid #EADFD8; border-radius: 999px; background: var(--white); color: var(--navy); font: inherit; font-weight: 600; cursor: pointer; }
+  .main-nav { display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 30; flex-direction: column; gap: 0; padding: 6px 16px 12px; background: var(--white); border-bottom: 1px solid #EADFD8; box-shadow: 0 12px 24px rgba(31, 42, 68, .10); }
+  .main-nav.open { display: flex; }
+  .main-nav a, .main-nav a.nav-insta { display: block; padding: 12px 4px; font-size: 17px; border-bottom: 1px solid var(--line); }
+  .main-nav a:last-child { border-bottom: 0; }
+  .main-nav a[aria-current="page"] { border-bottom-color: var(--line); color: var(--coral-dark); }
+}
 
 /* ---------- Hero / sections ---------- */
 .hero { padding-top: 48px; padding-bottom: 24px; }
@@ -356,9 +376,6 @@ td .input { padding: 8px 10px; }
 .email-foot a { color: var(--white); }
 
 @media (max-width: 640px) {
-  .brand img { width: 56px; height: 56px; }
-  .brand span { font-size: 19px; }
-  .main-nav a { padding: 10px 8px; font-size: 15px; }
   .grid-2, .facts { grid-template-columns: minmax(0, 1fr); }
   .content-card { padding: 22px; }
   .panel-body, .panel-head, .panel-foot { padding-left: 18px; padding-right: 18px; }

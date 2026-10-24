@@ -13,6 +13,18 @@
   const SHOW_KEY = { about: 'showAbout', events: 'showEvents', gallery: 'showGallery', faq: 'showFaq' };
   const shown = (cfg, key) => !SHOW_KEY[key] || cfg[SHOW_KEY[key]] !== false;
 
+  // Phone menu: open/close the page links under the header; tapping outside or Escape closes it.
+  function setMenu(open) {
+    const btn = document.getElementById('menu-btn'), nav = document.getElementById('main-nav');
+    if (!btn || !nav) return;
+    btn.setAttribute('aria-expanded', String(open));
+    nav.classList.toggle('open', open);
+  }
+  document.addEventListener('click', (e) => { if (!e.target.closest('#menu-btn, #main-nav')) setMenu(false); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('main-nav')?.classList.contains('open')) { setMenu(false); document.getElementById('menu-btn').focus(); }
+  });
+
   // Drawn right away from saved/default settings so the page doesn't flash, then redrawn once if the Sheet's settings differ.
   let drawn = '';
   function render() {
@@ -33,15 +45,23 @@
         '<header class="site-header"><div class="wrap">' +
           '<a class="brand" href="index.html"><img src="logo.png" alt="Sweet Nothings by M"><span>Sweet Nothings <em>by M</em></span></a>' +
           '<div class="header-right">' +
-            '<nav class="main-nav" aria-label="Main">' +
+            '<nav class="main-nav" id="main-nav" aria-label="Main">' +
               links.filter(([key]) => shown(cfg, key)).map(([key, href, label]) => '<a href="' + href + '"' + (key === page ? ' aria-current="page"' : '') + '>' + label + '</a>').join('') +
+              // On phones the Instagram button moves into the menu.
+              '<a class="nav-insta" href="' + SN.esc(cfg.instagram) + '" target="_blank" rel="noopener">Instagram ' + SN.esc(cfg.instagramHandle) + '</a>' +
             '</nav>' +
             '<a class="icon-btn" href="' + SN.esc(cfg.instagram) + '" target="_blank" rel="noopener" aria-label="Instagram ' + SN.esc(cfg.instagramHandle) + '">' + SN_ICONS.insta + '</a>' +
             // Opens the bag right on this page (order.js, which every page loads).
-            '<button type="button" class="bag-btn" id="bag-btn" aria-label="Open bag">' + SN_ICONS.bag + ' Bag <span class="bag-count" id="bag-count">' + count + '</span></button>' +
+            '<button type="button" class="bag-btn" id="bag-btn" aria-label="Open bag">' + SN_ICONS.bag + '<span class="bag-word"> Bag</span> <span class="bag-count" id="bag-count">' + count + '</span></button>' +
+            // Phones only: the page links fold into this menu.
+            '<button type="button" class="menu-btn" id="menu-btn" aria-expanded="false" aria-controls="main-nav" aria-label="Menu">' +
+              '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>' +
           '</div>' +
         '</div></header>';
     }
+
+    const menuBtn = document.getElementById('menu-btn');
+    if (menuBtn) menuBtn.addEventListener('click', () => setMenu(menuBtn.getAttribute('aria-expanded') !== 'true'));
 
     const exitBtn = document.getElementById('exit-preview');
     if (exitBtn) exitBtn.addEventListener('click', () => { SN.exitPreview(); location.href = location.pathname; });
