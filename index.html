@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261026p">
+<link rel="stylesheet" href="styles.css?v=20261026q">
 </head>
 <body data-page="home">
 <div id="site-header"></div>
@@ -93,9 +93,9 @@
 </main>
 
 <div id="site-footer"></div>
-<script src="config.js?v=20261026p"></script>
-<script src="layout.js?v=20261026p"></script>
-<script src="order.js?v=20261026p"></script>
+<script src="config.js?v=20261026q"></script>
+<script src="layout.js?v=20261026q"></script>
+<script src="order.js?v=20261026q"></script>
 <script>
 SN.ready.then(function () {
   const cfg = SN.load();
@@ -123,7 +123,11 @@ SN.ready.then(function () {
   };
   // A blank line shows the live price (mini, large, custom); a blank photo uses that item's menu photo.
   const autoLine = (k) => (k === 'mini' ? m(cfg.miniPerDozen) + ' / dozen' : k === 'large' ? m(cfg.largePerDozen) + ' / dozen' : k === 'custom' ? 'from ' + m(SN.customPrice(cfg)) + ' each' : '');
-  document.getElementById('make-list').innerHTML = (cfg.homeItems || []).filter((it) => it && (it.name || '').trim()).map((it) => {
+  // An older Apps Script version sends the list as text; read it either way, else use the starting list.
+  let homeItems = cfg.homeItems;
+  if (typeof homeItems === 'string') { try { homeItems = JSON.parse(homeItems); } catch (e) { homeItems = null; } }
+  if (!Array.isArray(homeItems)) homeItems = SN_DEFAULTS.homeItems;
+  document.getElementById('make-list').innerHTML = homeItems.filter((it) => it && (it.name || '').trim()).map((it) => {
     const link = LINK[it.link] || LINK.order;
     const inner = '<span class="make-thumb">' + photoBox(it.photo || (cfg.images && cfg.images[it.link]), it.name) + '</span>' +
       '<span class="make-row-text"><strong>' + SN.esc(it.name) + '</strong><span>' + SN.esc((it.line || '').trim() || autoLine(it.link)) + '</span></span>' +
