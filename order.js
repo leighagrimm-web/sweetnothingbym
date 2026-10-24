@@ -203,11 +203,14 @@ SN.ready.then(function () {
             '<button type="button" class="step" data-act="qty-inc" aria-label="One more cookie">' + SN_ICONS.plus + '</button>' +
             '<span class="muted" style="font-size:14px">× <span id="d-each"></span> each (starting price)</span>' +
           '</div><p class="hint">Minimum ' + cfg.minQty + '. Pick a number or use the + and − buttons.</p></div>' +
-        '<div class="note-box">' + esc(cfg.customNote || '') + ' Sweet Nothings will confirm your final price before you pay.' +
-          (cfg.allergyNote ? '<br><span style="display:block;margin-top:8px">* ' + esc(cfg.allergyNote) + '</span>' : '') + '</div>' +
         '<div class="field"><label class="label" for="d-desc">Describe your cookies</label>' +
           '<textarea class="input" id="d-desc" rows="5" data-draft="desc" placeholder="Theme, colors, names or wording, and how many of each design…"></textarea></div>' +
         '<div class="field"><span class="label">Inspiration photos (optional)</span><div id="d-photos"></div></div>' +
+        // Fine print, folded so it doesn't crowd the form.
+        '<div class="note-box fold-box">' +
+          '<details><summary>How pricing works</summary><p>' + esc(cfg.customNote || '') + ' Sweet Nothings will confirm your final price before you pay.</p></details>' +
+          (cfg.allergyNote ? '<details><summary>Allergy-friendly swaps</summary><p>' + esc(cfg.allergyNote) + '</p></details>' : '') +
+        '</div>' +
       '</div></div>' +
       '<div class="panel-foot"><p class="err" id="draft-err" hidden style="margin-bottom:10px"></p>' +
         '<button type="button" class="btn block" data-act="add" id="add-btn"></button></div>';
@@ -368,7 +371,10 @@ SN.ready.then(function () {
             '<input class="input" id="c-other" type="text" data-co="eventOther" placeholder="e.g. Graduation, corporate gift" value="' + esc(checkout.eventOther) + '"></div>' +
           '<div class="field"><label class="label" for="c-date">Date you need them</label>' +
             '<div class="date-wrap' + (checkout.date ? ' has-value' : '') + '"><input class="input" id="c-date" type="date" data-co="date" min="' + minISO + '" value="' + esc(checkout.date) + '"><span class="date-ph" aria-hidden="true">Tap to choose a date</span></div>' +
-            '<p class="hint" id="date-msg">Earliest available: ' + esc(SN.prettyDate(minISO)) + '</p></div>' +
+            '<p class="hint" id="date-msg">Earliest available: ' + esc(SN.prettyDate(minISO)) + '</p>' +
+            '<div class="note-box fold-box" style="margin-top:10px"><details><summary>Need them sooner? Rush orders</summary>' +
+              '<p>If you need your cookies sooner than ' + cfg.leadDays + ' days, <a href="contact.html?topic=rush">send me a message</a> before ordering to see if I can fit you in. Rush orders have an extra rush fee, added to your final price.</p>' +
+            '</details></div></div>' +
           '<div class="field"><label class="label" for="c-allergies">Allergies or dietary needs <span class="muted" style="font-weight:400">(optional)</span></label>' +
             '<textarea class="input" id="c-allergies" rows="2" data-co="allergies" placeholder="e.g. one guest has a nut allergy, need 6 gluten-free">' + esc(checkout.allergies) + '</textarea>' +
             (cfg.allergyNote ? '<p class="hint">* ' + esc(cfg.allergyNote) + '</p>' : '') + '</div>' +

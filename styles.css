@@ -387,6 +387,15 @@ td .input { padding: 8px 10px; }
 
 /* ---------- Pricing note ---------- */
 .note-box { background: var(--blush); border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.45; }
+/* Fine print folded into pink boxes that open on tap */
+.fold-box { padding: 0 14px; }
+.fold-box details + details { border-top: 1px solid rgba(142, 58, 46, .15); }
+.fold-box summary { list-style: none; cursor: pointer; position: relative; padding: 12px 28px 12px 0; font-weight: 600; font-size: 14px; color: var(--navy); min-height: 44px; display: flex; align-items: center; }
+.fold-box summary::-webkit-details-marker { display: none; }
+.fold-box summary::after { content: ""; position: absolute; right: 4px; top: 50%; width: 8px; height: 8px; border-right: 2px solid var(--coral); border-bottom: 2px solid var(--coral); transform: translateY(-70%) rotate(45deg); transition: transform .2s ease; }
+.fold-box details[open] summary::after { transform: translateY(-30%) rotate(-135deg); }
+.fold-box summary:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; border-radius: 8px; }
+.fold-box details p { margin: 0 0 12px; }
 
 /* ---------- Admin: order review ---------- */
 .status-badge { display: inline-block; padding: 5px 10px; border-radius: 999px; font-weight: 600; font-size: 12px; white-space: nowrap; }

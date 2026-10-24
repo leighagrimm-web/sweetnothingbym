@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261026v">
+<link rel="stylesheet" href="styles.css?v=20261026w">
 </head>
 <body data-page="contact">
 <div id="site-header"></div>
@@ -36,6 +36,7 @@
                   <option>General question</option>
                   <option>Custom design idea</option>
                   <option>Allergies or dietary needs</option>
+                  <option>Rush order</option>
                   <option>An existing order</option>
                   <option>Special events or classes</option>
                   <option>Other</option>
@@ -85,9 +86,9 @@
   </section>
 </main>
 <div id="site-footer"></div>
-<script src="config.js?v=20261026v"></script>
-<script src="layout.js?v=20261026v"></script>
-<script src="order.js?v=20261026v"></script>
+<script src="config.js?v=20261026w"></script>
+<script src="layout.js?v=20261026w"></script>
+<script src="order.js?v=20261026w"></script>
 <script>
 (function () {
   const $ = (s) => document.querySelector(s);
@@ -99,6 +100,7 @@
   const topicParam = new URLSearchParams(location.search).get('topic');
   if (topicParam === 'design') $('#m-topic').value = 'Custom design idea';
   if (topicParam === 'allergy') $('#m-topic').value = 'Allergies or dietary needs';
+  if (topicParam === 'rush') $('#m-topic').value = 'Rush order';
   const syncOrderField = () => { $('#order-num-wrap').hidden = $('#m-topic').value !== 'An existing order'; };
   $('#m-topic').addEventListener('change', syncOrderField);
   syncOrderField();
