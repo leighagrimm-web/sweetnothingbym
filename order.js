@@ -208,6 +208,7 @@ SN.ready.then(function () {
         '<div class="field"><span class="label">Inspiration photos (optional)</span><div id="d-photos"></div></div>' +
         // Fine print, folded so it doesn't crowd the form.
         '<div class="note-box fold-box">' +
+          '<details><summary>Using AI images for inspiration?</summary><p>AI images are welcome as inspiration! Just know they often show details that can’t be made with real icing and cookies, so your set will be my hand-decorated take on the idea, not an exact match to the picture.</p></details>' +
           '<details><summary>How pricing works</summary><p>' + esc(cfg.customNote || '') + ' Sweet Nothings will confirm your final price before you pay.</p></details>' +
           (cfg.allergyNote ? '<details><summary>Allergy-friendly swaps</summary><p>' + esc(cfg.allergyNote) + '</p></details>' : '') +
         '</div>' +
