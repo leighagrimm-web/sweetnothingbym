@@ -422,22 +422,22 @@ const SN = {
   validEmail(s) { return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[A-Za-z]{2,}$/.test(String(s || '').trim()) && !SN.emailFix(s); },
   // A likely typo in an email's ending or a big provider's name ("pat@gmial.cm" -> "pat@gmail.com"), else ''.
   // Endings like .cm and .con are real or near-real, but for a local bakery they're almost always a slip.
+  // Email endings customers really use; anything else gets the 'Are you sure?' fix. Mirrored in Code.gs (EMAIL_ENDINGS).
+  EMAIL_ENDINGS: ['com', 'net', 'org', 'edu', 'gov', 'mil', 'us', 'co', 'io', 'me', 'info', 'biz', 'ai', 'app', 'dev', 'ca', 'uk', 'au', 'nz', 'ie', 'de', 'fr', 'mx', 'in'],
   emailFix(s) {
     const m = String(s || '').trim().match(/^([^\s@]+)@([^\s@]+\.[A-Za-z]+)$/);
     if (!m) return '';
     const domain = m[2].toLowerCase();
     const OK = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'aol.com', 'live.com', 'msn.com', 'me.com', 'mac.com',
       'comcast.net', 'att.net', 'sbcglobal.net', 'verizon.net', 'ymail.com', 'mail.com', 'email.com', 'gmx.com', 'proton.me', 'protonmail.com',
-      'fastmail.com', 'hey.com', 'duck.com', 'rocketmail.com'];
+      'fastmail.com', 'hey.com', 'duck.com', 'rocketmail.com', 'verizon.com', 'att.com', 'proton.me'];
     if (OK.indexOf(domain) !== -1) return '';
     const TLD = { cm: 'com', con: 'com', cmo: 'com', comm: 'com', om: 'com', vom: 'com', xom: 'com', cpm: 'com', ocm: 'com', coom: 'com',
       nte: 'net', ner: 'net', nett: 'net', ogr: 'org', orh: 'org', rog: 'org' };
     const parts = domain.split('.');
     let tld = parts.pop();
     let name = parts.join('.');
-    if (TLD[tld]) tld = TLD[tld];
-    // Big providers, misspelled by a letter or two (or a swapped pair), or with a short ending like gmail.co.
-    const BIG = { gmail: 'com', yahoo: 'com', hotmail: 'com', outlook: 'com', icloud: 'com', comcast: 'net', sbcglobal: 'net' };
+    // Letters apart, counting a swapped pair as one ("gmial" is 1 from "gmail").
     const dist = (a, b) => {
       const d = Array.from({ length: a.length + 1 }, (_, i) => [i].concat(Array(b.length).fill(0)));
       for (let j = 1; j <= b.length; j++) d[0][j] = j;
@@ -447,10 +447,15 @@ const SN = {
       }
       return d[a.length][b.length];
     };
+    if (TLD[tld]) tld = TLD[tld];
+    // Any other ending not on the list (.clm, .comx…) is treated as a typo of .com, .net or .org, whichever is closest.
+    if (SN.EMAIL_ENDINGS.indexOf(tld) === -1) tld = ['com', 'net', 'org'].sort((x, y) => dist(tld, x) - dist(tld, y))[0];
+    // Big providers, misspelled by a letter or two (or a swapped pair), or with a short ending like gmail.co.
+    const BIG = { gmail: 'com', yahoo: 'com', hotmail: 'com', outlook: 'com', icloud: 'com', aol: 'com', live: 'com', comcast: 'net', sbcglobal: 'net', verizon: 'net', protonmail: 'com' };
     if (!/\./.test(name)) {
       const hit = Object.keys(BIG).find((p) => p === name ||
-        (name.length >= 3 && name[0] === p[0] && dist(name, p) <= 2) ||   // gml, gmal, yhoo, hotmal
-        (name.length >= 4 && dist(name, p) <= (p.length >= 7 ? 2 : 1)));
+        (p.length >= 5 && name.length >= 3 && name[0] === p[0] && dist(name, p) <= 2) ||   // gml, gmal, yhoo, hotmal
+        (p.length >= 5 && name.length >= 4 && dist(name, p) <= (p.length >= 7 ? 2 : 1)));
       if (hit) { name = hit; tld = BIG[hit]; }
     }
     const fixed = name + '.' + tld;

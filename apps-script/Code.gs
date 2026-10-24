@@ -2804,10 +2804,10 @@ function clean_(v, max) { return String(v == null ? '' : v).trim().slice(0, max 
 function cell_(v) { return typeof v === 'string' && /^[=+\-@]/.test(v) ? "'" + v : v; }
 
 // Same checks as SN.validEmail / SN.phoneDigits in the site's config.js.
-// Also refuses endings that are almost always typos (.cm, .con, .nte…), like SN.emailFix on the site.
+// Email endings customers really use (same list as SN.EMAIL_ENDINGS in config.js); anything else is treated as a typo.
+const EMAIL_ENDINGS = ['com', 'net', 'org', 'edu', 'gov', 'mil', 'us', 'co', 'io', 'me', 'info', 'biz', 'ai', 'app', 'dev', 'ca', 'uk', 'au', 'nz', 'ie', 'de', 'fr', 'mx', 'in'];
 function validEmail_(s) {
-  return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[A-Za-z]{2,}$/.test(s) &&
-    ['cm', 'con', 'cmo', 'comm', 'om', 'vom', 'xom', 'cpm', 'ocm', 'coom', 'nte', 'ner', 'nett', 'ogr', 'orh', 'rog'].indexOf(String(s).split('.').pop().toLowerCase()) === -1;
+  return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[A-Za-z]{2,}$/.test(s) && EMAIL_ENDINGS.indexOf(String(s).split('.').pop().toLowerCase()) !== -1;
 }
 
 // "847-555-0100" for a 10-digit US number (a leading country code 1 is dropped), or '' if it isn't one.
