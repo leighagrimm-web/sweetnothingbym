@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261026r">
+<link rel="stylesheet" href="styles.css?v=20261026s">
 </head>
 <body data-page="home">
 <div id="site-header"></div>
@@ -44,13 +44,13 @@
     <h2 id="make-h">What I make</h2>
     <p class="make-intro" id="make-intro"></p>
     <div class="make-grid">
-      <a class="make-feature" href="order.html?add=custom">
+      <div class="make-feature">
         <div class="make-feature-photo" id="make-custom-photo"></div>
-        <div class="make-feature-text">
+        <a class="make-feature-text" href="order.html?add=custom">
           <div><h3>Custom cookies</h3><p>Decorated to your theme · from <span id="p-custom">$5.00</span> each</p></div>
           <span class="make-go">Start a custom order →</span>
-        </div>
-      </a>
+        </a>
+      </div>
       <ul class="make-list" id="make-list"></ul>
     </div>
     <a class="make-events" href="events.html" data-page-link><span id="make-events-line"></span><span class="make-go">See special events →</span></a>
@@ -93,9 +93,9 @@
 </main>
 
 <div id="site-footer"></div>
-<script src="config.js?v=20261026r"></script>
-<script src="layout.js?v=20261026r"></script>
-<script src="order.js?v=20261026r"></script>
+<script src="config.js?v=20261026s"></script>
+<script src="layout.js?v=20261026s"></script>
+<script src="order.js?v=20261026s"></script>
 <script>
 SN.ready.then(function () {
   const cfg = SN.load();
@@ -121,20 +121,32 @@ SN.ready.then(function () {
   if (typeof slides === 'string') { try { slides = JSON.parse(slides); } catch (e) { slides = null; } }
   slides = (Array.isArray(slides) ? slides : []).map((x) => SN.photoUrl(x && x.photo)).filter(Boolean);
   const customBox = document.getElementById('make-custom-photo');
-  if (slides.length < 2) customBox.innerHTML = photoBox(slides[0] || (cfg.images && cfg.images.custom), 'Custom cookies');
+  if (slides.length < 2) customBox.innerHTML = '<a href="order.html?add=custom" class="make-photo-link" tabindex="-1">' + photoBox(slides[0] || (cfg.images && cfg.images.custom), 'Custom cookies') + '</a>';
   else {
-    customBox.innerHTML = slides.map((u, i) => '<img src="' + SN.esc(u) + '" alt="' + (i ? '' : 'Custom cookies') + '" class="slide' + (i ? '' : ' on') + '">').join('') +
-      '<span class="make-dots" aria-hidden="true">' + slides.map((u, i) => '<i' + (i ? '' : ' class="on"') + '></i>').join('') + '</span>';
-    const imgs = customBox.querySelectorAll('img'), dots = customBox.querySelectorAll('.make-dots i');
-    let at = 0, paused = false;
-    customBox.closest('.make-feature').addEventListener('mouseenter', () => { paused = true; });
-    customBox.closest('.make-feature').addEventListener('mouseleave', () => { paused = false; });
-    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) setInterval(() => {
-      if (paused || document.hidden) return;
+    // Visitors can click the photo or the arrows to move on; it also advances by itself every 3 seconds.
+    const ARROW = (d) => '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="' + (d < 0 ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7') + '" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    customBox.innerHTML = slides.map((u, i) => '<img src="' + SN.esc(u) + '" alt="Custom cookies, photo ' + (i + 1) + ' of ' + slides.length + '" class="slide' + (i ? '' : ' on') + '">').join('') +
+      '<button type="button" class="make-arrow prev" data-step="-1" aria-label="Previous photo">' + ARROW(-1) + '</button>' +
+      '<button type="button" class="make-arrow next" data-step="1" aria-label="Next photo">' + ARROW(1) + '</button>' +
+      '<span class="make-dots">' + slides.map((u, i) => '<button type="button" data-go="' + i + '" aria-label="Photo ' + (i + 1) + '"' + (i ? '' : ' class="on"') + '></button>').join('') + '</span>';
+    const imgs = customBox.querySelectorAll('img'), dots = customBox.querySelectorAll('.make-dots button');
+    let at = 0, paused = false, timer = null;
+    const show = (n) => {
       imgs[at].classList.remove('on'); dots[at].classList.remove('on');
-      at = (at + 1) % imgs.length;
+      at = (n + imgs.length) % imgs.length;
       imgs[at].classList.add('on'); dots[at].classList.add('on');
-    }, 4500);
+    };
+    const autoplay = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const restart = () => { if (!autoplay) return; clearInterval(timer); timer = setInterval(() => { if (!paused && !document.hidden) show(at + 1); }, 3000); };
+    customBox.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-step], [data-go]');
+      show(b ? (b.dataset.go != null ? Number(b.dataset.go) : at + Number(b.dataset.step)) : at + 1);
+      restart();
+    });
+    customBox.addEventListener('mouseenter', () => { paused = true; });
+    customBox.addEventListener('mouseleave', () => { paused = false; });
+    customBox.classList.add('is-slideshow');
+    restart();
   }
   const LINK = {
     custom: ['order.html?add=custom', 'Order'], mini: ['order.html?add=mini', 'Order'], large: ['order.html?add=large', 'Order'],
