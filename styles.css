@@ -243,8 +243,14 @@ textarea.input { resize: vertical; }
 .done h3 { font-size: 34px; }
 
 /* ---------- Toast ---------- */
-.toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 16px); opacity: 0; pointer-events: none; background: var(--navy); color: var(--white); padding: 12px 14px 12px 20px; border-radius: 999px; display: flex; align-items: center; gap: 10px; box-shadow: 0 10px 24px rgba(31, 42, 68, .25); z-index: 30; transition: opacity .25s ease, transform .25s ease; max-width: calc(100% - 32px); }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 16px); opacity: 0; pointer-events: none; background: var(--navy); color: var(--white); padding: 12px 14px 12px 20px; border-radius: 18px; width: max-content; display: flex; align-items: center; gap: 10px; box-shadow: 0 10px 24px rgba(31, 42, 68, .25); z-index: 30; transition: opacity .25s ease, transform .25s ease; max-width: calc(100% - 32px); }
 .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+@media (max-width: 760px) {
+  /* Phones: span the screen so the message wraps into a couple of lines, not one word per line */
+  .toast { left: 16px; right: 16px; width: auto; max-width: none; transform: translateY(16px); font-size: 15px; line-height: 1.35; padding: 12px 12px 12px 16px; }
+  .toast.show { transform: translateY(0); }
+  #toast-text { flex: 1; min-width: 0; }
+}
 .toast button { background: transparent; border: 0; color: var(--blush); font-weight: 700; text-decoration: underline; cursor: pointer; min-height: 32px; white-space: nowrap; }
 
 /* ---------- Content pages ---------- */
