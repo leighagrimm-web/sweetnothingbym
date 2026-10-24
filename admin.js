@@ -269,6 +269,7 @@
         field('pickupCity', 'Pickup area', '<input class="input" id="pickupCity" type="text" data-path="pickupCity">', 'Shown on the site') +
         field('pickupAddress', 'Pickup address', '<input class="input" id="pickupAddress" type="text" data-path="pickupAddress">', 'Only in the confirmation email') +
         field('pickupInstructions', 'Pickup instructions', '<input class="input" id="pickupInstructions" type="text" data-path="pickupInstructions">', 'Only in the confirmation email') +
+        field('ownerPhone', 'Your cell', '<input class="input" id="ownerPhone" type="tel" data-path="ownerPhone" placeholder="(847) 555-0100">', 'Only in pickup / drop-off time emails') +
         field('instagram', 'Instagram link', '<input class="input" id="instagram" type="url" data-path="instagram">') +
         field('instagramHandle', 'Instagram handle', '<input class="input" id="instagramHandle" type="text" data-path="instagramHandle">') +
         '<div class="field" style="grid-column:1 / -1"><label class="label" for="adminHelpers">Admin helpers (optional)</label>' +
@@ -719,7 +720,7 @@
   }
 
   /* ---------- Review panel ---------- */
-  let rv = null;        // { number, lines, fee, note, original, declining, declineNote, editingDate }
+  let rv = null;        // { number, lines, fee, note, original, declining, declineNote, editingDate, editingHandoff }
   let rvOpener = null;
 
   function openReview(number, el) {
@@ -816,7 +817,8 @@
         (wk.text ? '<div style="grid-column:1 / -1"><div class="k">That week so far</div><div class="v" style="font-weight:500' + (wk.over ? ';color:var(--error)' : '') + '">' +
           esc(wk.text) + (wk.over ? '. Approving puts it over your limit (' + esc(wk.over) + ').' : '') + '</div></div>' : '') +
         '<div style="grid-column:1 / -1"><div class="k">Pickup / drop-off</div><div class="v">' + where + '</div>' +
-          (o.pickupWindow ? '<div class="hint">' + (o.fulfillment === 'delivery' ? 'Best drop-off window' : 'Best pickup window') + ': ' + esc(o.pickupWindow) + '</div>' : '') + '</div>' +
+          (o.pickupWindow ? '<div class="hint">' + (o.fulfillment === 'delivery' ? 'Best drop-off window' : 'Best pickup window') + ': ' + esc(o.pickupWindow) + '</div>' : '') +
+          handoffBlock(o) + '</div>' +
         (o.allergies ? '<div style="grid-column:1 / -1"><div class="k" style="color:var(--error)">Allergies / dietary needs</div><div class="v">' + esc(o.allergies) + '</div></div>' : '') +
         (o.promoCode ? '<div style="grid-column:1 / -1"><div class="k">Code used</div><div class="v">' + esc(o.promoCode) +
           (o.giftCredit && !o.invoice ? ' <span class="hint">(gift card: about ' + money(o.giftCredit) + ' comes off when you approve, from its balance at that time)</span>' : '') + '</div></div>' : '') +
@@ -884,6 +886,32 @@
     return '';
   }
 
+  // "5:00 PM" from the time box's "17:00"
+  const fmtTime = (t) => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})$/); return m ? ((Number(m[1]) % 12) || 12) + ':' + m[2] + ' ' + (Number(m[1]) < 12 ? 'AM' : 'PM') : String(t || ''); };
+  // The time Melissa agreed with the customer for pickup or drop-off. Saving can email it; a reminder goes the morning before.
+  function handoffBlock(o) {
+    if (isClass(o) || ['Declined', 'Cancelled'].indexOf(o.status) !== -1) return '';
+    const what = o.fulfillment === 'delivery' ? 'drop-off' : 'pickup';
+    if (rv.editingHandoff) {
+      const h = o.handoff || {};
+      return '<div class="stack" style="gap:8px;margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:12px">' +
+        '<div class="grid-2" style="gap:8px">' +
+          '<div class="field"><label class="label" for="rv-ho-date">' + (what === 'pickup' ? 'Pickup' : 'Drop-off') + ' date</label><input class="input" id="rv-ho-date" type="date" value="' + esc(h.date || o.dateNeeded) + '"></div>' +
+          '<div class="field"><label class="label" for="rv-ho-time">Time</label><input class="input" id="rv-ho-time" type="time" value="' + esc(h.time || '') + '"></div>' +
+        '</div>' +
+        '<label class="row-gap" style="gap:8px;font-weight:400;font-size:14px"><input type="checkbox" id="rv-ho-notify" checked> Email the customer this time (with your cell and the address)</label>' +
+        '<textarea class="input" id="rv-ho-note" rows="2" placeholder="Optional note, e.g. Text me when you’re outside!"></textarea>' +
+        '<div class="row-gap" style="gap:8px"><button type="button" class="btn small" data-rv="ho-save">Save time</button><button type="button" class="btn ghost small" data-rv="ho-cancel">Cancel</button></div></div>';
+    }
+    if (!o.handoff) {
+      return '<div style="margin-top:8px"><button type="button" class="btn ghost small" data-rv="ho-edit">Set ' + what + ' time</button>' +
+        '<span class="hint" style="margin-left:8px">Once you’ve agreed on it with the customer</span></div>';
+    }
+    const reminder = o.reminderSent ? (/^Not needed/.test(o.reminderSent) ? 'No reminder (set the day before)' : 'Reminder sent') : 'Reminder emails the morning before';
+    return '<div style="margin-top:8px"><strong>Agreed ' + what + ': ' + esc(SN.prettyDate(o.handoff.date)) + ' at ' + esc(fmtTime(o.handoff.time)) + '</strong>' +
+      ' <button type="button" class="link-btn" data-rv="ho-edit" style="margin-left:6px">Change</button>' +
+      '<div class="hint">' + esc(reminder) + '</div></div>';
+  }
   function renderReview() {
     const review = $('#review');
     const o = orders.find((x) => x.number === rv.number);
@@ -1001,6 +1029,22 @@
       case 'decline': rv.declining = true; renderReview(); $('#decline-note').focus(); break;
       case 'decline-cancel': rv.declining = false; renderReview(); break;
       case 'date-edit': rv.editingDate = true; renderReview(); $('#rv-date').focus(); break;
+      case 'ho-edit': rv.editingHandoff = true; renderReview(); $('#rv-ho-time').focus(); break;
+      case 'ho-cancel': rv.editingHandoff = false; renderReview(); break;
+      case 'ho-save': {
+        const d = $('#rv-ho-date').value, t = $('#rv-ho-time').value;
+        if (!d || !t) { toast('Pick a date and a time first.'); return; }
+        if (busy) return;
+        busy = true; b.textContent = 'Saving…';
+        server('adminSetHandoff', o.number, d, t, $('#rv-ho-notify').checked, $('#rv-ho-note').value.trim()).then((r) => {
+          busy = false;
+          if (!r.ok) { toast(r.error); renderReview(); return; }
+          rv.editingHandoff = false;
+          replaceOrder(r.order);
+          toast('Time saved: ' + SN.prettyDate(d) + ' at ' + fmtTime(t) + (r.emailStatus ? '. Email to customer: ' + r.emailStatus : '.'), 5000);
+        }).catch(failed);
+        break;
+      }
       case 'date-cancel': rv.editingDate = false; renderReview(); break;
       case 'date-save': {
         const d = $('#rv-date').value;

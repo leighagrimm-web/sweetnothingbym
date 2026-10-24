@@ -118,6 +118,7 @@ const SETTINGS_SPEC = [
   ['pickupCity', 'Rosemont, IL', 'text', 'Shown on the website.'],
   ['pickupAddress', '[Street address], Rosemont, IL', 'text', 'PRIVATE. Only sent in the confirmation email for pickup orders.'],
   ['pickupInstructions', '[Pickup instructions, e.g. pickup window, where to park, which door]', 'text', 'PRIVATE. Shown with the address in the confirmation email for pickup orders.'],
+  ['ownerPhone', '', 'text', 'PRIVATE. Your cell, only in the pickup / drop-off time emails, so customers can reach you on the day.'],
   ['instagram', 'https://www.instagram.com/sweet_nothings_by_m/', 'text', 'Instagram link.'],
   ['instagramHandle', '@sweet_nothings_by_m', 'text', 'Instagram name shown on the site.'],
   ['images', '{"custom":"","mini":"","large":""}', 'json', 'Menu photo paths (advanced).'],
@@ -136,7 +137,7 @@ const SETTINGS_SPEC = [
   ['environment', 'UAT', 'text', 'PRIVATE. UAT or PROD. UAT adds [TEST] to email subjects.'],
   ['adminUrl', '', 'text', 'PRIVATE. Link to the admin page (the admin deployment\'s web app URL). Used in "New order to review" emails.']
 ];
-const PRIVATE_SETTINGS = ['pickupAddress', 'pickupInstructions', 'maintenancePassword', 'adminHelpers', 'ownerEmail', 'replyToEmail', 'senderName', 'siteUrl', 'environment', 'adminUrl'];
+const PRIVATE_SETTINGS = ['pickupAddress', 'pickupInstructions', 'ownerPhone', 'maintenancePassword', 'adminHelpers', 'ownerEmail', 'replyToEmail', 'senderName', 'siteUrl', 'environment', 'adminUrl'];
 
 const STARTER_FLAVORS = [
   ['cc', 'Chocolate Chip', true, false],
@@ -233,9 +234,9 @@ const TABS = {
     headers: ['Order', 'Received', 'Status', 'Name', 'Email', 'Phone', 'Occasion', 'Date needed', 'Pickup / drop-off',
       'Street', 'City', 'ZIP', 'Allergies', 'Subtotal', 'Tax', 'Tax rate', 'Drop-off fee', 'Estimated total',
       'Customer email', 'Owner alert', 'Invoice', 'Decline note', 'QuickBooks invoice', 'Pay link', 'Updated',
-      'Type', 'Promo code', 'Discount', 'Gift card credit', 'Messages log', 'Submission ID', 'Square order', 'Event time', 'Pickup window'],
-    widths: [80, 150, 110, 150, 200, 120, 140, 110, 110, 180, 120, 70, 220, 80, 70, 70, 90, 100, 160, 160, 120, 160, 120, 160, 150, 80, 110, 80, 100, 200, 120, 160, 100, 220],
-    text: ['Order', 'Phone', 'Date needed', 'ZIP', 'Promo code', 'Submission ID', 'Square order', 'QuickBooks invoice', 'Event time', 'Pickup window'], money: ['Subtotal', 'Tax', 'Drop-off fee', 'Estimated total', 'Discount', 'Gift card credit'], datetime: ['Received', 'Updated']
+      'Type', 'Promo code', 'Discount', 'Gift card credit', 'Messages log', 'Submission ID', 'Square order', 'Event time', 'Pickup window', 'Handoff date', 'Handoff time', 'Reminder sent'],
+    widths: [80, 150, 110, 150, 200, 120, 140, 110, 110, 180, 120, 70, 220, 80, 70, 70, 90, 100, 160, 160, 120, 160, 120, 160, 150, 80, 110, 80, 100, 200, 120, 160, 100, 220, 110, 90, 150],
+    text: ['Order', 'Phone', 'Date needed', 'ZIP', 'Promo code', 'Submission ID', 'Square order', 'QuickBooks invoice', 'Event time', 'Pickup window', 'Handoff date', 'Handoff time', 'Reminder sent'], money: ['Subtotal', 'Tax', 'Drop-off fee', 'Estimated total', 'Discount', 'Gift card credit'], datetime: ['Received', 'Updated']
   },
   OrderItems: {
     headers: ['Order', 'Line', 'Item', 'Kind', 'Qty', 'Designs', 'Flavors', 'Flavors (data)', 'Description', 'Photo', 'Unit price', 'Line total', 'Event ID'],
@@ -1320,6 +1321,8 @@ function orderFromRow_(h, r, items) {
     promoCode: String(g('Promo code') || ''), discount: Number(g('Discount')) || 0, giftCredit: Number(g('Gift card credit')) || 0,
     items: items[num] || [], invoice: json('Invoice', null), declineNote: String(g('Decline note') || ''),
     messages: json('Messages log', []),
+    handoff: toISODate_(g('Handoff date')) ? { date: toISODate_(g('Handoff date')), time: String(g('Handoff time') || '') } : null,
+    reminderSent: String(g('Reminder sent') || ''),
     emailStatus: String(g('Customer email') || ''), updatedAt: iso(g('Updated'))
   };
 }
@@ -1541,6 +1544,50 @@ function adminChangeDate(number, newDate, notify, note) {
     o.messages = logOrderMessage_(o, msg, emailStatus);
   }
   return { ok: true, order: o, emailStatus, weekCounts: weekCountsNow_() };
+}
+
+// The pickup / drop-off time Melissa agreed with the customer. Emailing it is optional; either way the customer
+// gets a reminder the morning before (checkPayments), unless the time is already tomorrow or sooner.
+function adminSetHandoff(number, date, time, notify, note) {
+  requireOwner_();
+  const d = toISODate_(date);
+  const t = clean_(time, 20);
+  if (!d || !t) return { ok: false, error: 'Pick a date and a time.' };
+  const o = loadOrder_(number);
+  if (o.type === 'Class') return { ok: false, error: 'Classes don’t have a pickup time.' };
+  if (['Declined', 'Cancelled'].indexOf(o.status) !== -1) return { ok: false, error: number + ' is ' + o.status + '.' };
+  const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
+  const row = findOrderRow_(sh, number);
+  const tomorrow = Utilities.formatDate(new Date(Date.now() + 864e5), tz_(), 'yyyy-MM-dd');
+  o.handoff = { date: d, time: t };
+  o.reminderSent = d <= tomorrow ? 'Not needed (set the day before)' : '';
+  setCell_(sh, row, 'Handoff date', d);
+  setCell_(sh, row, 'Handoff time', t);
+  setCell_(sh, row, 'Reminder sent', o.reminderSent);
+  setCell_(sh, row, 'Updated', new Date());
+  let emailStatus = '';
+  if (notify) {
+    emailStatus = sendSafely_(() => sendHandoffEmail_(getConfig_(), o, 'confirm', clean_(note, 2000)));
+    o.messages = logOrderMessage_(o, handoffLabel_(o) + ' time confirmed: ' + handoffWhen_(o) + (clean_(note, 2000) ? '\n\n' + clean_(note, 2000) : ''), emailStatus);
+  }
+  return { ok: true, order: o, emailStatus };
+}
+
+// Morning-before reminders, from the 5-minute check: cookie orders with an agreed time tomorrow, sent once, after 8 AM.
+function sendHandoffReminders_(sh, rows) {
+  const now = new Date();
+  if (Number(Utilities.formatDate(now, tz_(), 'H')) < 8) return [];
+  const tomorrow = Utilities.formatDate(new Date(now.getTime() + 864e5), tz_(), 'yyyy-MM-dd');
+  const sent = [];
+  rows.filter((r) => String(r.Type || 'Cookies') !== 'Class' && toISODate_(r['Handoff date']) === tomorrow && !String(r['Reminder sent'] || '') &&
+      ['Declined', 'Cancelled', 'Completed', 'Pending review'].indexOf(String(r.Status)) === -1)
+    .forEach((r) => {
+      const o = loadOrder_(String(r.Order));
+      const status = sendSafely_(() => sendHandoffEmail_(getConfig_(), o, 'reminder', ''));
+      setCell_(sh, r._row, 'Reminder sent', status);
+      sent.push(o.number);
+    });
+  return sent;
 }
 
 function logOrderMessage_(o, text, emailStatus) {
@@ -2062,7 +2109,7 @@ function confirmClass_(o, status, late) {
 function checkPayments() {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) return { ok: false, error: 'A payment check is already running.' };
-  const summary = { invoicesPaid: [], classesPaid: [], expired: [], errors: [] };
+  const summary = { invoicesPaid: [], classesPaid: [], expired: [], remindersSent: [], errors: [] };
   try {
     const cfg = getConfig_();
     const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
@@ -2127,6 +2174,7 @@ function checkPayments() {
     }
     if (summary.classesPaid.length || summary.expired.length || summary.invoicesPaid.length) clearConfigCache_();
     // Emails an admin helper queued, sent now from the shop's account.
+    try { summary.remindersSent = sendHandoffReminders_(sh, rows); } catch (e) { summary.errors.push('Reminders: ' + e.message); }
     try { summary.emailsSent = sendOutbox_(); } catch (e) { summary.errors.push('Outbox: ' + e.message); }
     SCRIPT_PROPS().setProperty('PAYMENTS_LAST_CHECK', JSON.stringify(Object.assign({ at: new Date().toISOString() }, summary)));
     return Object.assign({ ok: true }, summary);
@@ -2463,6 +2511,48 @@ function sendOrderMessageEmail_(cfg, o, text) {
     body: text + '\n\n— Sweet Nothings\n\nYour order ' + o.number + ':\n' +
       (o.type === 'Class' ? classText_(o) : 'Needed by: ' + prettyDate_(o.dateNeeded) + '\n' + itemsText_(o)) + '\n\nJust reply to this email to answer.',
     name: cfg.senderName, replyTo: cfg.replyToEmail
+  });
+}
+
+/* ---------- Pickup / drop-off time: confirmed, and the reminder the day before ---------- */
+function handoffLabel_(o) { return o.fulfillment === 'delivery' ? 'Drop-off' : 'Pickup'; }
+// "Fri, Nov 6 at 5:00 PM" (times saved as 17:00 from the admin's time box)
+function handoffWhen_(o) {
+  const t = String(o.handoff.time || '');
+  const m = t.match(/^(\d{1,2}):(\d{2})$/);
+  const time = m ? ((Number(m[1]) % 12) || 12) + ':' + m[2] + ' ' + (Number(m[1]) < 12 ? 'AM' : 'PM') : t;
+  return prettyDate_(o.handoff.date) + ' at ' + time;
+}
+// kind: 'confirm' (Melissa set the time) or 'reminder' (the morning before). note: optional words from Melissa.
+function sendHandoffEmail_(cfg, o, kind, note) {
+  const label = handoffLabel_(o);
+  const isDel = o.fulfillment === 'delivery' && o.address;
+  const when = handoffWhen_(o);
+  const place = isDel ? o.address.street + ', ' + o.address.city + ' ' + o.address.zip : cfg.pickupAddress;
+  const title = kind === 'reminder' ? (isDel ? 'Your cookies arrive tomorrow' : 'See you tomorrow!') : 'Your ' + label.toLowerCase() + ' time is set';
+  const intro = kind === 'reminder'
+    ? 'Just a reminder about your ' + label.toLowerCase() + ' tomorrow.'
+    : 'Thanks for working out a time with me! Here’s what we agreed.';
+  const phone = cfg.ownerPhone
+    ? '<p style="margin:0 0 18px;font-size:15px">Running late or need to change something? Text or call me at <a href="tel:' + esc_(String(cfg.ownerPhone).replace(/[^\d+]/g, '')) + '" style="color:' + C.navy + ';font-weight:600">' + esc_(cfg.ownerPhone) + '</a>.</p>'
+    : '<p style="margin:0 0 18px;font-size:15px">Need to change something? Just reply to this email.</p>';
+  const html = shell_(cfg, title, o.number,
+    p_(intro, 15) +
+    (note ? '<div style="font-size:15px;white-space:pre-wrap;margin-bottom:18px;color:' + C.navy + '">' + esc_(note) + '</div>' : '') +
+    '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;margin-bottom:18px">' +
+      '<div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em">' + label + '</div>' +
+      '<div style="font-weight:700;font-size:18px;margin-top:2px">' + esc_(when) + '</div>' +
+      (place ? '<div style="margin-top:8px;font-size:15px">' + esc_(place) + '</div>' : '') +
+      (!isDel && cfg.pickupInstructions ? '<div style="color:' + C.muted + ';margin-top:6px;font-size:14px">' + esc_(cfg.pickupInstructions) + '</div>' : '') +
+    '</div>' +
+    phone + itemsBlock_(o, 'Your order') + p_('— Sweet Nothings', 15));
+  const text = [intro, note || '', label + ': ' + when, place || '', !isDel && cfg.pickupInstructions ? cfg.pickupInstructions : '',
+    cfg.ownerPhone ? 'Running late or need to change something? Text or call me at ' + cfg.ownerPhone + '.' : 'Need to change something? Just reply to this email.',
+    '', 'Your order ' + o.number + ':', itemsText_(o), '', '— Sweet Nothings'].filter((l, i, a) => l !== '' || a[i - 1] !== '').join('\n');
+  sendMail_({
+    to: o.customer.email,
+    subject: subjectPrefix_(cfg) + (kind === 'reminder' ? 'Reminder: ' + label.toLowerCase() + ' tomorrow, ' + when.replace(/^.* at /, '') : label + ' time confirmed: ' + when) + ' – Sweet Nothings ' + o.number,
+    htmlBody: html, body: text, name: cfg.senderName, replyTo: cfg.replyToEmail
   });
 }
 
