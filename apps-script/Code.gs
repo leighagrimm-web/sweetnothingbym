@@ -233,9 +233,9 @@ const TABS = {
     headers: ['Order', 'Received', 'Status', 'Name', 'Email', 'Phone', 'Occasion', 'Date needed', 'Pickup / drop-off',
       'Street', 'City', 'ZIP', 'Allergies', 'Subtotal', 'Tax', 'Tax rate', 'Drop-off fee', 'Estimated total',
       'Customer email', 'Owner alert', 'Invoice', 'Decline note', 'QuickBooks invoice', 'Pay link', 'Updated',
-      'Type', 'Promo code', 'Discount', 'Gift card credit', 'Messages log', 'Submission ID', 'Square order'],
-    widths: [80, 150, 110, 150, 200, 120, 140, 110, 110, 180, 120, 70, 220, 80, 70, 70, 90, 100, 160, 160, 120, 160, 120, 160, 150, 80, 110, 80, 100, 200, 120, 160],
-    text: ['Order', 'Phone', 'Date needed', 'ZIP', 'Promo code', 'Submission ID', 'Square order', 'QuickBooks invoice'], money: ['Subtotal', 'Tax', 'Drop-off fee', 'Estimated total', 'Discount', 'Gift card credit'], datetime: ['Received', 'Updated']
+      'Type', 'Promo code', 'Discount', 'Gift card credit', 'Messages log', 'Submission ID', 'Square order', 'Event time', 'Pickup window'],
+    widths: [80, 150, 110, 150, 200, 120, 140, 110, 110, 180, 120, 70, 220, 80, 70, 70, 90, 100, 160, 160, 120, 160, 120, 160, 150, 80, 110, 80, 100, 200, 120, 160, 100, 220],
+    text: ['Order', 'Phone', 'Date needed', 'ZIP', 'Promo code', 'Submission ID', 'Square order', 'QuickBooks invoice', 'Event time', 'Pickup window'], money: ['Subtotal', 'Tax', 'Drop-off fee', 'Estimated total', 'Discount', 'Gift card credit'], datetime: ['Received', 'Updated']
   },
   OrderItems: {
     headers: ['Order', 'Line', 'Item', 'Kind', 'Qty', 'Designs', 'Flavors', 'Flavors (data)', 'Description', 'Photo', 'Unit price', 'Line total', 'Event ID'],
@@ -687,7 +687,7 @@ function submitOrder_(b) {
         'Occasion': o.eventType, 'Date needed': o.dateNeeded,
         'Pickup / drop-off': o.type === 'Class' ? 'Class' : o.fulfillment === 'delivery' ? 'Drop-off' : 'Pickup',
         'Street': o.address ? o.address.street : '', 'City': o.address ? o.address.city : '', 'ZIP': o.address ? o.address.zip : '',
-        'Allergies': o.allergies, 'Subtotal': o.subtotal, 'Tax': o.tax, 'Tax rate': o.taxRate, 'Drop-off fee': o.deliveryFee,
+        'Allergies': o.allergies, 'Event time': o.eventTime, 'Pickup window': o.pickupWindow, 'Subtotal': o.subtotal, 'Tax': o.tax, 'Tax rate': o.taxRate, 'Drop-off fee': o.deliveryFee,
         'Estimated total': o.total, 'Promo code': o.promoCode, 'Discount': o.discount, 'Gift card credit': o.giftCredit,
         'Invoice': o.invoice ? JSON.stringify(o.invoice) : '', 'Submission ID': sid,
         'Customer email': 'Sending…', 'Owner alert': 'Sending…', 'Updated': now
@@ -739,7 +739,7 @@ function submitOrder_(b) {
 
   const pub = (o) => ({
     number: o.number, type: o.type, status: o.status, createdAt: o.createdAt.toISOString(), items: o.items, eventType: o.eventType,
-    dateNeeded: o.dateNeeded, allergies: o.allergies, fulfillment: o.fulfillment, address: o.address, customer: o.customer,
+    dateNeeded: o.dateNeeded, allergies: o.allergies, eventTime: o.eventTime, pickupWindow: o.pickupWindow, fulfillment: o.fulfillment, address: o.address, customer: o.customer,
     subtotal: o.subtotal, discount: o.discount, promoCode: o.promoCode, tax: o.tax, deliveryFee: o.deliveryFee, giftCredit: o.giftCredit,
     total: o.total, taxRate: o.taxRate, payUrl: o.payUrl || ''
   });
@@ -833,7 +833,7 @@ function validateOrder_(cfg, b) {
     const giftCredit = round2_(Math.min(giftLeft, subtotal - discount));
     giftLeft = round2_(giftLeft - giftCredit);
     cls = {
-      type: 'Class', items: classes, eventType: '', dateNeeded: classes.map((it) => it.date).filter(Boolean).sort()[0] || '', allergies: '',
+      type: 'Class', items: classes, eventType: '', dateNeeded: classes.map((it) => it.date).filter(Boolean).sort()[0] || '', allergies: '', eventTime: '', pickupWindow: '',
       fulfillment: 'class', address: null, customer, subtotal, discount, tax: 0, deliveryFee: 0, giftCredit,
       total: round2_(subtotal - discount - giftCredit), taxRate: 0, promoCode: code ? code.code : ''
     };
@@ -874,7 +874,7 @@ function validateOrder_(cfg, b) {
     const beforeCredit = round2_(subtotal - discount + tax + deliveryFee);
     const giftCredit = round2_(Math.min(giftLeft, beforeCredit));
     cookie = {
-      type: 'Cookies', items: cookies, eventType, dateNeeded, allergies: clean_(b.allergies, 1000), fulfillment, address, customer,
+      type: 'Cookies', items: cookies, eventType, dateNeeded, allergies: clean_(b.allergies, 1000), eventTime: clean_(b.eventTime, 60), pickupWindow: clean_(b.pickupWindow, 300), fulfillment, address, customer,
       subtotal, discount, tax, deliveryFee, giftCredit, total: round2_(beforeCredit - giftCredit), taxRate: 0, promoCode: code ? code.code : ''
     };
   }
@@ -1312,7 +1312,7 @@ function orderFromRow_(h, r, items) {
     number: num, type: String(g('Type') || '') || (how === 'Class' ? 'Class' : 'Cookies'),
     createdAt: iso(g('Received')), status: String(g('Status') || 'Pending review'),
     customer: { name: String(g('Name') || ''), email: String(g('Email') || ''), phone: String(g('Phone') || '') },
-    eventType: String(g('Occasion') || ''), dateNeeded: toISODate_(g('Date needed')), allergies: String(g('Allergies') || ''),
+    eventType: String(g('Occasion') || ''), dateNeeded: toISODate_(g('Date needed')), allergies: String(g('Allergies') || ''), eventTime: String(g('Event time') || ''), pickupWindow: String(g('Pickup window') || ''),
     fulfillment: how === 'Class' ? 'class' : delivery ? 'delivery' : 'pickup',
     address: delivery ? { street: String(g('Street') || ''), city: String(g('City') || ''), zip: String(g('ZIP') || '') } : null,
     subtotal: Number(g('Subtotal')) || 0, tax: Number(g('Tax')) || 0, taxRate: Number(g('Tax rate')) || 0,
@@ -2251,7 +2251,8 @@ function sendOrderRequestEmail_(cfg, o) {
     'NOT A FINAL ORDER: this email confirms we received your request. Your order is not confirmed yet, your date is not reserved, and the price below is an estimate. You haven’t been charged anything.', '',
     'What happens next:', '1. Request received (this email).', '2. I review your order, usually within 1–2 days.',
     '3. You get a second email with your confirmation, final price and a QuickBooks invoice.', '4. Pay the invoice to lock in your date.', '',
-    'Needed by: ' + prettyDate_(o.dateNeeded), 'Occasion: ' + occasion_(o),
+    'Needed by: ' + prettyDate_(o.dateNeeded) + (o.eventTime ? ' (event at ' + o.eventTime + ')' : ''), 'Occasion: ' + occasion_(o),
+    o.pickupWindow ? windowLabel_(o) + ': ' + o.pickupWindow : '',
     o.address ? 'Drop-off to: ' + o.address.street + ', ' + o.address.city + ' ' + o.address.zip : 'Pickup: ' + cfg.pickupCity + ' (address sent once confirmed)',
     o.allergies ? 'Allergies / dietary needs: ' + o.allergies : '', '',
     itemsText_(o), '', totalsText_(o, 'Estimated total*'), '',
@@ -2278,7 +2279,8 @@ function sendOwnerOrderAlert_(cfg, o) {
   const text = [
     'New order to review: ' + o.number, '', o.customer.name, o.customer.email, o.customer.phone, '',
     o.allergies ? 'ALLERGIES / DIETARY NEEDS: ' + o.allergies + '\n' : '',
-    'Needed by: ' + prettyDate_(o.dateNeeded), 'Occasion: ' + occasion_(o),
+    'Needed by: ' + prettyDate_(o.dateNeeded) + (o.eventTime ? ' (event at ' + o.eventTime + ')' : ''), 'Occasion: ' + occasion_(o),
+    o.pickupWindow ? windowLabel_(o) + ': ' + o.pickupWindow : '',
     o.address ? 'Drop-off to: ' + o.address.street + ', ' + o.address.city + ' ' + o.address.zip : 'Pickup',
     '', itemsText_(o, true), '', totalsText_(o, 'Estimated total'), '', cfg.adminUrl ? 'Review in admin: ' + cfg.adminUrl : 'Orders sheet: ' + SpreadsheetApp.getActive().getUrl()
   ].join('\n');
@@ -2531,6 +2533,9 @@ function nextSteps_() {
     }).join('') + '</table></div>';
 }
 
+// "Best pickup window" or "Best drop-off window": when the customer said they can meet Melissa (she confirms the exact time).
+function windowLabel_(o) { return o.fulfillment === 'delivery' ? 'Best drop-off window' : 'Best pickup window'; }
+
 // forOwner: true for the owner alert; 'confirmed' for email #2 (the pickup address is shown above the facts there).
 function facts_(o, forOwner) {
   const where = o.fulfillment === 'delivery' && o.address
@@ -2538,8 +2543,9 @@ function facts_(o, forOwner) {
     : ['Pickup', forOwner === true ? 'Pickup' : esc_(getConfig_().pickupCity) + (forOwner === 'confirmed' ? ' (address above)' : ' (address sent once confirmed)')];
   const cell = (k, v) => '<td style="width:50%;vertical-align:top;padding:0 12px 14px 0"><div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em">' + k + '</div><div style="font-weight:600;margin-top:2px;font-size:14px">' + v + '</div></td>';
   return '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:4px">' +
-    '<tr>' + cell('Needed by', esc_(prettyDate_(o.dateNeeded))) + cell('Occasion', esc_(occasion_(o))) + '</tr>' +
+    '<tr>' + cell('Needed by', esc_(prettyDate_(o.dateNeeded)) + (o.eventTime ? '<br><span style="font-weight:400">Event at ' + esc_(o.eventTime) + '</span>' : '')) + cell('Occasion', esc_(occasion_(o))) + '</tr>' +
     '<tr>' + cell(where[0], where[1]) + cell('Contact', esc_(o.customer.name) + '<br>' + esc_(o.customer.phone)) + '</tr>' +
+    (o.pickupWindow ? '<tr><td colspan="2" style="padding:0 0 14px"><div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em">' + windowLabel_(o) + '</div><div style="font-weight:600;margin-top:2px;font-size:14px">' + esc_(o.pickupWindow) + '</div></td></tr>' : '') +
     (o.allergies && forOwner !== true ? '<tr><td colspan="2" style="padding:0 0 14px"><div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em">Allergies / dietary needs</div><div style="font-weight:600;margin-top:2px;font-size:14px">' + esc_(o.allergies) + '</div></td></tr>' : '') +
   '</table>';
 }

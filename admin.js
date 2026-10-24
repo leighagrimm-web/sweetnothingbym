@@ -812,10 +812,11 @@
     return '<div class="rv-facts">' +
         '<div><div class="k">Customer</div><div class="v">' + esc(o.customer.name) + '</div><div class="hint">' + esc(o.customer.email) + '<br>' + esc(o.customer.phone) + '</div></div>' +
         '<div><div class="k">' + (isClass(o) ? 'Class date' : 'Needed by') + '</div><div class="v">' + dateBlock + '</div>' +
-          (isClass(o) ? '' : '<div class="hint">' + esc(o.eventType || 'Occasion not specified') + '</div>') + '</div>' +
+          (isClass(o) ? '' : '<div class="hint">' + esc(o.eventType || 'Occasion not specified') + (o.eventTime ? ' · event at ' + esc(o.eventTime) : '') + '</div>') + '</div>' +
         (wk.text ? '<div style="grid-column:1 / -1"><div class="k">That week so far</div><div class="v" style="font-weight:500' + (wk.over ? ';color:var(--error)' : '') + '">' +
           esc(wk.text) + (wk.over ? '. Approving puts it over your limit (' + esc(wk.over) + ').' : '') + '</div></div>' : '') +
-        '<div style="grid-column:1 / -1"><div class="k">Pickup / drop-off</div><div class="v">' + where + '</div></div>' +
+        '<div style="grid-column:1 / -1"><div class="k">Pickup / drop-off</div><div class="v">' + where + '</div>' +
+          (o.pickupWindow ? '<div class="hint">' + (o.fulfillment === 'delivery' ? 'Best drop-off window' : 'Best pickup window') + ': ' + esc(o.pickupWindow) + '</div>' : '') + '</div>' +
         (o.allergies ? '<div style="grid-column:1 / -1"><div class="k" style="color:var(--error)">Allergies / dietary needs</div><div class="v">' + esc(o.allergies) + '</div></div>' : '') +
         (o.promoCode ? '<div style="grid-column:1 / -1"><div class="k">Code used</div><div class="v">' + esc(o.promoCode) +
           (o.giftCredit && !o.invoice ? ' <span class="hint">(gift card: about ' + money(o.giftCredit) + ' comes off when you approve, from its balance at that time)</span>' : '') + '</div></div>' : '') +
