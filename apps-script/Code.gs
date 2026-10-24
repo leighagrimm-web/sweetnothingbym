@@ -2488,7 +2488,7 @@ function itemHeading_(it) {
 
 /* ---------- Building blocks ---------- */
 function shell_(cfg, title, number, inner) {
-  const logo = cfg.siteUrl ? '<img src="' + esc_(cfg.siteUrl) + 'logo.png" width="110" height="110" alt="Sweet Nothings by M" style="display:block;margin:0 auto;width:110px;height:110px;border:0">' : '';
+  const logo = cfg.siteUrl ? '<img src="' + esc_(cfg.siteUrl) + 'logo.png?v=2" width="110" height="110" alt="Sweet Nothings by M" style="display:block;margin:0 auto;width:110px;height:110px;border:0;border-radius:50%">' : '';
   return '<!doctype html><html><body style="margin:0;padding:0;background:' + C.ground + '">' +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:' + C.ground + '"><tr><td align="center" style="padding:32px 16px">' +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#FFFFFF;border-radius:16px;overflow:hidden;font-family:' + SANS + ';color:' + C.navy + ';line-height:1.5">' +
