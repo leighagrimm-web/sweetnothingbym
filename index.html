@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261026q">
+<link rel="stylesheet" href="styles.css?v=20261026r">
 </head>
 <body data-page="home">
 <div id="site-header"></div>
@@ -93,9 +93,9 @@
 </main>
 
 <div id="site-footer"></div>
-<script src="config.js?v=20261026q"></script>
-<script src="layout.js?v=20261026q"></script>
-<script src="order.js?v=20261026q"></script>
+<script src="config.js?v=20261026r"></script>
+<script src="layout.js?v=20261026r"></script>
+<script src="order.js?v=20261026r"></script>
 <script>
 SN.ready.then(function () {
   const cfg = SN.load();
@@ -116,7 +116,26 @@ SN.ready.then(function () {
     const url = SN.photoUrl(photo);
     return url ? '<img src="' + SN.esc(url) + '" alt="' + SN.esc(alt) + '">' : '<img src="logo.png" alt="" class="make-logo">';
   };
-  document.getElementById('make-custom-photo').innerHTML = photoBox(cfg.images && cfg.images.custom, 'Custom cookies');
+  // Custom cookies photo: a slideshow when Melissa adds slideshow photos (admin → Website pages), else the menu photo.
+  let slides = cfg.homeSlides;
+  if (typeof slides === 'string') { try { slides = JSON.parse(slides); } catch (e) { slides = null; } }
+  slides = (Array.isArray(slides) ? slides : []).map((x) => SN.photoUrl(x && x.photo)).filter(Boolean);
+  const customBox = document.getElementById('make-custom-photo');
+  if (slides.length < 2) customBox.innerHTML = photoBox(slides[0] || (cfg.images && cfg.images.custom), 'Custom cookies');
+  else {
+    customBox.innerHTML = slides.map((u, i) => '<img src="' + SN.esc(u) + '" alt="' + (i ? '' : 'Custom cookies') + '" class="slide' + (i ? '' : ' on') + '">').join('') +
+      '<span class="make-dots" aria-hidden="true">' + slides.map((u, i) => '<i' + (i ? '' : ' class="on"') + '></i>').join('') + '</span>';
+    const imgs = customBox.querySelectorAll('img'), dots = customBox.querySelectorAll('.make-dots i');
+    let at = 0, paused = false;
+    customBox.closest('.make-feature').addEventListener('mouseenter', () => { paused = true; });
+    customBox.closest('.make-feature').addEventListener('mouseleave', () => { paused = false; });
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) setInterval(() => {
+      if (paused || document.hidden) return;
+      imgs[at].classList.remove('on'); dots[at].classList.remove('on');
+      at = (at + 1) % imgs.length;
+      imgs[at].classList.add('on'); dots[at].classList.add('on');
+    }, 4500);
+  }
   const LINK = {
     custom: ['order.html?add=custom', 'Order'], mini: ['order.html?add=mini', 'Order'], large: ['order.html?add=large', 'Order'],
     order: ['order.html', 'Order'], events: ['events.html', 'See events'], contact: ['contact.html', 'Ask about it'], message: ['', 'Message me']

@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261026q';
+const SN_BUILD = '20261026r';
 
 const SN_ENV = (function () {
   const API = {
@@ -57,6 +57,7 @@ const SN_DEFAULTS = {
   // link: custom | mini | large (opens that item on the Order page), order, events, contact, or message ("Message me").
   // A blank line shows the live price for mini/large; a blank photo uses that item's menu photo.
   homeItems: [{"name":"Mini artisan","line":"","photo":"","link":"mini"},{"name":"Large artisan","line":"","photo":"","link":"large"},{"name":"Cookie kits","line":"At pop-ups and events","photo":"","link":"events"}],
+  homeSlides: [],   // Home page Custom cookies slideshow: [{ photo }] in order; empty = the Custom Cookies menu photo
   classHoldMinutes: 30,       // a class spot is held this long while the customer pays in Square
   classesPayOnline: true,     // from the server: class checkout goes on to Square
   // Maintenance mode (admin → Website pages): visitors see a "back soon" page; the password lets you in to test.

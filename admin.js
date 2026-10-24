@@ -238,7 +238,10 @@
   function homeItemsEditor() {
     return '<h3 style="font-size:19px;margin:20px 0 6px">"What I make": the short list</h3>' +
       '<p class="hint" style="margin:0 0 10px">Shown next to the big Custom Cookies photo, in this order. Leave the line blank on Mini or Large Artisan to show the price; leave the photo blank to use that item’s menu photo.</p>' +
-      '<div id="home-items-editor" style="border-top:1px solid var(--line)"></div><button type="button" class="btn dashed" data-act="add-home-item" style="margin-top:14px">+ Add to the list</button>';
+      '<div id="home-items-editor" style="border-top:1px solid var(--line)"></div><button type="button" class="btn dashed" data-act="add-home-item" style="margin-top:14px">+ Add to the list</button>' +
+      '<h3 style="font-size:19px;margin:24px 0 6px">"What I make": Custom Cookies slideshow</h3>' +
+      '<p class="hint" style="margin:0 0 10px">The big Custom Cookies photo fades through these, in this order (4 or 5 works well). With none, it shows the Custom Cookies menu photo.</p>' +
+      '<div id="home-slides-editor" style="border-top:1px solid var(--line)"></div><button type="button" class="btn dashed" data-act="add-home-slide" style="margin-top:14px">+ Add a photo</button>';
   }
   function photoField(id, label, dataAttrs) {
     return '<div class="field"><label class="label" for="' + id + '">' + label + '</label>' +
@@ -1367,7 +1370,19 @@
     $$('#home-items-editor [data-key="photo"]').forEach(thumb);
   }
 
-  const RENDER_LIST = { faqs: () => renderFaqs(), events: () => renderEvents(), gallery: () => renderGallery(), homeItems: () => renderHomeItems() };
+  function renderHomeSlides() {
+    if (!Array.isArray(cfg.homeSlides)) cfg.homeSlides = [];
+    const n = cfg.homeSlides.length;
+    $('#home-slides-editor').innerHTML = n ? cfg.homeSlides.map((h, i) =>
+      '<div class="flavor-row" style="gap:10px">' +
+        '<span class="photo-thumb" data-thumb-for="hs-' + i + '"></span>' +
+        '<div style="flex:1;min-width:0"><label class="sr-only" for="hs-' + i + '">Slideshow photo ' + (i + 1) + ' link</label><input class="input" id="hs-' + i + '" type="text" placeholder="Photo link" data-list="homeSlides" data-i="' + i + '" data-key="photo" value="' + esc(h.photo) + '"></div>' +
+        moveButtons('homeSlides', i, n, 'slideshow photo ' + (i + 1)) +
+      '</div>').join('') : '<p class="hint" style="padding:14px 0">No slideshow photos yet.</p>';
+    $$('#home-slides-editor [data-key="photo"]').forEach(thumb);
+  }
+
+  const RENDER_LIST = { faqs: () => renderFaqs(), events: () => renderEvents(), gallery: () => renderGallery(), homeItems: () => renderHomeItems(), homeSlides: () => renderHomeSlides() };
 
   async function onListClick(b) {
     const i = Number(b.dataset.i);
@@ -1388,6 +1403,7 @@
         cfg.events.push({ id: 'e' + Date.now().toString(36), show: true, photo: '', when: '', title: '', date: '', start: '', end: '', address: '', price: '', max: '', desc: '', button: 'Add to bag' });
         renderEvents(); $('#ev-title-' + (cfg.events.length - 1)).focus(); break;
       case 'add-photo': cfg.gallery.push({ show: true, photo: '', caption: '' }); renderGallery(); $('#gp-' + (cfg.gallery.length - 1)).focus(); break;
+      case 'add-home-slide': cfg.homeSlides.push({ photo: '' }); renderHomeSlides(); $('#hs-' + (cfg.homeSlides.length - 1)).focus(); break;
       case 'add-home-item': cfg.homeItems.push({ name: '', line: '', photo: '', link: 'events' }); renderHomeItems(); $('#hn-' + (cfg.homeItems.length - 1)).focus(); break;
       case 'toggle-show': cfg[list][i].show = cfg[list][i].show === false; RENDER_LIST[list](); break;
       case 'del-item': {
@@ -1500,6 +1516,7 @@
     c.events = c.events.filter((e) => (e.title || '').trim()).map((e) => { delete e.booked; delete e.spotsLeft; return e; });
     c.gallery = c.gallery.filter((g) => (g.photo || '').trim());
     c.homeItems = (c.homeItems || []).filter((h) => (h.name || '').trim());
+    c.homeSlides = (c.homeSlides || []).filter((h) => (h.photo || '').trim());
     delete c.weekCounts;   // booking counts come from orders, not settings
     delete c.images;
     return c;
@@ -1559,6 +1576,7 @@
     renderEvents();
     renderGallery();
     renderHomeItems();
+    renderHomeSlides();
     renderBusyDays();
   }
 

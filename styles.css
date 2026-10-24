@@ -87,6 +87,11 @@ button { font: inherit; color: inherit; }
 .make-feature:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(31, 42, 68, .10); color: var(--navy); }
 .make-feature-photo { flex: 1; min-height: 260px; position: relative; background: var(--blush); display: flex; align-items: center; justify-content: center; }
 .make-feature-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.make-feature-photo img.slide { opacity: 0; transition: opacity 1s ease; }
+.make-feature-photo img.slide.on { opacity: 1; }
+.make-dots { position: absolute; left: 0; right: 0; bottom: 12px; display: flex; justify-content: center; gap: 7px; }
+.make-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, .55); box-shadow: 0 0 3px rgba(0, 0, 0, .25); transition: background .3s; }
+.make-dots i.on { background: #fff; }
 .make-feature-text { padding: 20px 22px; display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
 .make-feature-text h3 { font-size: 30px; margin: 0; }
 .make-feature-text p { margin: 2px 0 0; color: var(--muted); }

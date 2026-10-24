@@ -122,6 +122,7 @@ const SETTINGS_SPEC = [
   ['instagramHandle', '@sweet_nothings_by_m', 'text', 'Instagram name shown on the site.'],
   ['images', '{"custom":"","mini":"","large":""}', 'json', 'Menu photo paths (advanced).'],
   ['homeItems', '[{"name":"Mini artisan","line":"","photo":"","link":"mini"},{"name":"Large artisan","line":"","photo":"","link":"large"},{"name":"Cookie kits","line":"At pop-ups and events","photo":"","link":"events"}]', 'json', 'Home page "What I make" short list (edit on the admin’s Website pages tab). link: custom, mini, large, order, events, contact or message.'],
+  ['homeSlides', '[]', 'json', 'Home page: Custom cookies slideshow photos, in order (edit on the admin’s Website pages tab). Empty = the Custom Cookies menu photo.'],
   ['classHoldMinutes', 30, 'number', 'Minutes a class spot is held while the customer pays in Square. Unpaid after this, the booking expires and the spot opens up.'],
   ['maintenanceMode', false, 'bool', 'TRUE shows the "back soon" page to visitors and turns away orders and messages. People with maintenancePassword see the whole site.'],
   ['maintenanceTitle', 'Something sweet is in the oven', 'text', 'Heading on the maintenance page.'],
