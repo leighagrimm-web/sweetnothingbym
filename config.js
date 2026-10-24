@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261027f';
+const SN_BUILD = '20261027g';
 
 const SN_ENV = (function () {
   const API = {
@@ -191,7 +191,7 @@ const SN = {
     });
   },
 
-  /* ---------- "Did you mean …@gmail.com?" under every email box ---------- */
+  /* ---------- "Are you sure? … Did you mean …@gmail.com?" under every email box ---------- */
   emailHints() {
     const hintFor = (input) => {
       let h = input.parentNode.querySelector('.email-hint[data-for="' + input.id + '"]');
@@ -204,7 +204,7 @@ const SN = {
         h.setAttribute('aria-live', 'polite');
         input.insertAdjacentElement('afterend', h);
       }
-      h.innerHTML = 'Did you mean <strong>' + SN.esc(fix) + '</strong>? <button type="button" class="link-btn" data-email-fix="' + SN.esc(fix) + '">Use it</button>';
+      h.innerHTML = '<strong>Are you sure? This email looks like it has a typo.</strong> Did you mean ' + SN.esc(fix) + '? <button type="button" class="link-btn" data-email-fix="' + SN.esc(fix) + '">Use it</button>';
       h.hidden = false;
     };
     document.addEventListener('input', (e) => { if (e.target.type === 'email' && e.target.id) hintFor(e.target); });
