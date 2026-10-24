@@ -167,6 +167,8 @@ button { font: inherit; color: inherit; }
 .btn[aria-disabled="true"] { background: #E9DCD5; color: var(--muted); }
 .btn.small { min-height: 40px; padding: 0 16px; font-size: 14px; }
 .link-btn { background: transparent; border: 0; padding: 6px 0; color: var(--coral-dark); font-size: 13px; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.email-hint { margin: 6px 0 0; font-size: 14px; color: var(--navy); }
+.email-hint .link-btn { font-size: 14px; padding: 0 0 0 4px; }
 .pill { min-height: 44px; min-width: 52px; padding: 0 18px; border-radius: 999px; border: 1px solid var(--field); background: var(--white); color: var(--navy); font-weight: 600; cursor: pointer; }
 .pill[aria-pressed="true"] { background: var(--navy); border-color: var(--navy); color: var(--white); }
 .choice { text-align: left; padding: 14px 16px; border-radius: 14px; border: 2px solid #E3D6CE; background: var(--white); color: var(--navy); cursor: pointer; min-height: 44px; }

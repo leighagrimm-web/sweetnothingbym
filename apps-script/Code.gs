@@ -2804,7 +2804,11 @@ function clean_(v, max) { return String(v == null ? '' : v).trim().slice(0, max 
 function cell_(v) { return typeof v === 'string' && /^[=+\-@]/.test(v) ? "'" + v : v; }
 
 // Same checks as SN.validEmail / SN.phoneDigits in the site's config.js.
-function validEmail_(s) { return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[A-Za-z]{2,}$/.test(s); }
+// Also refuses endings that are almost always typos (.cm, .con, .nte…), like SN.emailFix on the site.
+function validEmail_(s) {
+  return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[A-Za-z]{2,}$/.test(s) &&
+    ['cm', 'con', 'cmo', 'comm', 'om', 'vom', 'xom', 'cpm', 'ocm', 'coom', 'nte', 'ner', 'nett', 'ogr', 'orh', 'rog'].indexOf(String(s).split('.').pop().toLowerCase()) === -1;
+}
 
 // "847-555-0100" for a 10-digit US number (a leading country code 1 is dropped), or '' if it isn't one.
 function formatPhone_(s) {

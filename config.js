@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261027e';
+const SN_BUILD = '20261027f';
 
 const SN_ENV = (function () {
   const API = {
@@ -188,6 +188,35 @@ const SN = {
     }).catch((r) => {
       if (!lost(r)) throw r;
       throw { ok: false, error: 'We couldn’t confirm your message was sent. Please wait a minute before trying again; if it went through, you’ll get a reply by email. You can also message us on Instagram ' + (SN.load().instagramHandle || '') + '.' };
+    });
+  },
+
+  /* ---------- "Did you mean …@gmail.com?" under every email box ---------- */
+  emailHints() {
+    const hintFor = (input) => {
+      let h = input.parentNode.querySelector('.email-hint[data-for="' + input.id + '"]');
+      const fix = SN.emailFix(input.value);
+      if (!fix) { if (h) h.hidden = true; return; }
+      if (!h) {
+        h = document.createElement('p');
+        h.className = 'email-hint';
+        h.dataset.for = input.id;
+        h.setAttribute('aria-live', 'polite');
+        input.insertAdjacentElement('afterend', h);
+      }
+      h.innerHTML = 'Did you mean <strong>' + SN.esc(fix) + '</strong>? <button type="button" class="link-btn" data-email-fix="' + SN.esc(fix) + '">Use it</button>';
+      h.hidden = false;
+    };
+    document.addEventListener('input', (e) => { if (e.target.type === 'email' && e.target.id) hintFor(e.target); });
+    document.addEventListener('focusout', (e) => { if (e.target.type === 'email' && e.target.id) hintFor(e.target); });
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-email-fix]');
+      if (!b) return;
+      e.preventDefault();
+      const input = document.getElementById(b.closest('.email-hint').dataset.for);
+      input.value = b.dataset.emailFix;
+      ['input', 'change', 'focusout'].forEach((t) => input.dispatchEvent(new Event(t, { bubbles: true })));
+      input.focus();
     });
   },
 
@@ -390,7 +419,41 @@ const SN = {
 
   /* ---------- Contact details ---------- */
   // Rejects things like "a@b", "a@b.c" and "a@b..com". apps-script/Code.gs uses the same check.
-  validEmail(s) { return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[A-Za-z]{2,}$/.test(String(s || '').trim()); },
+  validEmail(s) { return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[A-Za-z]{2,}$/.test(String(s || '').trim()) && !SN.emailFix(s); },
+  // A likely typo in an email's ending or a big provider's name ("pat@gmial.cm" -> "pat@gmail.com"), else ''.
+  // Endings like .cm and .con are real or near-real, but for a local bakery they're almost always a slip.
+  emailFix(s) {
+    const m = String(s || '').trim().match(/^([^\s@]+)@([^\s@]+\.[A-Za-z]+)$/);
+    if (!m) return '';
+    const domain = m[2].toLowerCase();
+    const OK = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'aol.com', 'live.com', 'msn.com', 'me.com', 'mac.com',
+      'comcast.net', 'att.net', 'sbcglobal.net', 'verizon.net', 'ymail.com', 'mail.com', 'email.com', 'gmx.com', 'proton.me', 'protonmail.com',
+      'fastmail.com', 'hey.com', 'duck.com', 'rocketmail.com'];
+    if (OK.indexOf(domain) !== -1) return '';
+    const TLD = { cm: 'com', con: 'com', cmo: 'com', comm: 'com', om: 'com', vom: 'com', xom: 'com', cpm: 'com', ocm: 'com', coom: 'com',
+      nte: 'net', ner: 'net', nett: 'net', ogr: 'org', orh: 'org', rog: 'org' };
+    const parts = domain.split('.');
+    let tld = parts.pop();
+    let name = parts.join('.');
+    if (TLD[tld]) tld = TLD[tld];
+    // Big providers, misspelled by a letter or two (or a swapped pair), or with a short ending like gmail.co.
+    const BIG = { gmail: 'com', yahoo: 'com', hotmail: 'com', outlook: 'com', icloud: 'com', comcast: 'net', sbcglobal: 'net' };
+    const dist = (a, b) => {
+      const d = Array.from({ length: a.length + 1 }, (_, i) => [i].concat(Array(b.length).fill(0)));
+      for (let j = 1; j <= b.length; j++) d[0][j] = j;
+      for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      }
+      return d[a.length][b.length];
+    };
+    if (!/\./.test(name)) {
+      const hit = Object.keys(BIG).find((p) => p === name || (name.length >= 4 && dist(name, p) <= (p.length >= 7 ? 2 : 1)));
+      if (hit) { name = hit; tld = BIG[hit]; }
+    }
+    const fixed = name + '.' + tld;
+    return fixed !== domain ? m[1] + '@' + fixed : '';
+  },
   // Just the digits of a US phone number, at most 10. A leading country code 1 is dropped (e.g. pasted "+1 847…").
   phoneDigits(s) {
     let d = String(s || '').replace(/\D/g, '');

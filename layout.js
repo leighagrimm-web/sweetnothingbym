@@ -13,6 +13,7 @@
   const SHOW_KEY = { about: 'showAbout', events: 'showEvents', gallery: 'showGallery', faq: 'showFaq' };
   const shown = (cfg, key) => !SHOW_KEY[key] || cfg[SHOW_KEY[key]] !== false;
 
+  SN.emailHints();
   // Phone menu: open/close the page links under the header; tapping outside or Escape closes it.
   function setMenu(open) {
     const btn = document.getElementById('menu-btn'), nav = document.getElementById('main-nav');
