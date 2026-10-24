@@ -389,7 +389,7 @@
       if (el.dataset.type === 'num') v = v === '' ? 0 : parseFloat(v);
       if (el.dataset.key === 'zip') { v = v.replace(/\D/g, '').slice(0, 5); if (el.value !== v) el.value = v; }
       list[Number(el.dataset.i)][el.dataset.key] = v;
-      if (el.dataset.key === 'photo') thumb(el);
+      if (el.dataset.key === 'photo' || el.dataset.key === 'flyer') thumb(el);
       if (el.dataset.list === 'events' && el.dataset.key === 'button') renderEvents();
       if (el.dataset.list === 'homeItems' && el.dataset.key === 'link') { const l = $('#hl-' + el.dataset.i); if (l) l.placeholder = /^(mini|large|custom)$/.test(v) ? 'Blank = shows the price' : 'Short line'; }
       markDirty();
@@ -1320,22 +1320,25 @@
         field(id('title'), 'Title', '<input class="input" id="' + id('title') + '" type="text" ' + attrs('title') + ' value="' + esc(ev.title) + '" style="font-weight:600">') +
         '<div class="grid-2">' +
           field(id('date'), 'Date', '<input class="input" id="' + id('date') + '" type="date" ' + attrs('date') + ' value="' + esc(ev.date) + '">') +
-          field(id('address'), 'Address', '<input class="input" id="' + id('address') + '" type="text" ' + attrs('address') + ' value="' + esc(ev.address) + '" placeholder="e.g. 123 Main St, Rosemont">') +
+          field(id('venue'), 'Location name', '<input class="input" id="' + id('venue') + '" type="text" ' + attrs('venue') + ' value="' + esc(ev.venue) + '" placeholder="e.g. Khepri Kitchen & Coffee">') +
           field(id('start'), 'Start time', '<input class="input" id="' + id('start') + '" type="text" ' + attrs('start') + ' value="' + esc(ev.start) + '" placeholder="e.g. 2:00 PM">') +
           field(id('end'), 'End time', '<input class="input" id="' + id('end') + '" type="text" ' + attrs('end') + ' value="' + esc(ev.end) + '" placeholder="e.g. 4:00 PM">') +
           field(id('price'), 'Price per person', '<div class="input-wrap"><span>$</span><input id="' + id('price') + '" type="number" min="0" step="1" ' + attrs('price') + ' value="' + esc(ev.price) + '"></div>') +
           field(id('max'), 'Max attendees', '<input class="input" id="' + id('max') + '" type="number" min="1" ' + attrs('max') + ' value="' + esc(ev.max) + '" placeholder="No limit">',
             ev.button === 'Add to bag' && ev.max !== '' && ev.max != null ? (ev.booked || 0) + ' booked, ' + Math.max(0, ev.max - (ev.booked || 0)) + ' spots left' : (ev.booked ? ev.booked + ' booked' : '')) +
         '</div>' +
+        field(id('address'), 'Address', '<input class="input" id="' + id('address') + '" type="text" ' + attrs('address') + ' value="' + esc(ev.address) + '" placeholder="e.g. 106 S. Emerson St., Mount Prospect, IL">', 'Customers tap it for directions in their maps app.') +
         field(id('when'), 'Small text above the title (optional)', '<input class="input" id="' + id('when') + '" type="text" ' + attrs('when') + ' value="' + esc(ev.when) + '" placeholder="e.g. Holiday special">', 'Leave blank to show the date and time there instead.') +
-        field(id('desc'), 'Description', '<textarea class="input" id="' + id('desc') + '" rows="3" ' + attrs('desc') + '>' + esc(ev.desc) + '</textarea>') +
+        field(id('summary'), 'Short line on the card (optional)', '<input class="input" id="' + id('summary') + '" type="text" ' + attrs('summary') + ' value="' + esc(ev.summary) + '" placeholder="e.g. Decorate 6 fall cookies to take home. All supplies included.">', 'Leave blank to show the start of the description.') +
+        field(id('desc'), 'Full description', '<textarea class="input" id="' + id('desc') + '" rows="4" ' + attrs('desc') + '>' + esc(ev.desc) + '</textarea>', 'Shows when customers tap "See details".') +
         photoField(id('photo'), 'Photo', attrs('photo') + ' value="' + esc(ev.photo) + '"') +
+        photoField(id('flyer'), 'Flyer (optional)', attrs('flyer') + ' value="' + esc(ev.flyer) + '"') +
         field(id('button'), 'Button', '<select class="input" id="' + id('button') + '" ' + attrs('button') + '>' +
           ['Add to bag', 'Order now', 'Message me', 'None'].map((b) => '<option' + (b === ev.button ? ' selected' : '') + '>' + b + '</option>').join('') + '</select>',
           ev.button === 'Add to bag' ? (Number(ev.price) > 0 ? 'Customers book and pay at checkout; no approval needed.' : 'Add a price so customers can book it.') : '') +
       '</div>';
     }).join('') : '<p class="hint">No events yet. Add one below.</p>';
-    $$('#events-editor [data-key="photo"]').forEach(thumb);
+    $$('#events-editor [data-key="photo"], #events-editor [data-key="flyer"]').forEach(thumb);
   }
   function renderGallery() {
     const n = cfg.gallery.length;
@@ -1400,7 +1403,7 @@
       case 'del-zone': cfg.zones.splice(i, 1); renderZones(); break;
       case 'add-faq': cfg.faqs.push({ q: '', a: '' }); renderFaqs(); $('#fq-' + (cfg.faqs.length - 1)).focus(); break;
       case 'add-event':
-        cfg.events.push({ id: 'e' + Date.now().toString(36), show: true, photo: '', when: '', title: '', date: '', start: '', end: '', address: '', price: '', max: '', desc: '', button: 'Add to bag' });
+        cfg.events.push({ id: 'e' + Date.now().toString(36), show: true, photo: '', when: '', title: '', date: '', start: '', end: '', venue: '', address: '', price: '', max: '', summary: '', desc: '', flyer: '', button: 'Add to bag' });
         renderEvents(); $('#ev-title-' + (cfg.events.length - 1)).focus(); break;
       case 'add-photo': cfg.gallery.push({ show: true, photo: '', caption: '' }); renderGallery(); $('#gp-' + (cfg.gallery.length - 1)).focus(); break;
       case 'add-home-slide': cfg.homeSlides.push({ photo: '' }); renderHomeSlides(); $('#hs-' + (cfg.homeSlides.length - 1)).focus(); break;

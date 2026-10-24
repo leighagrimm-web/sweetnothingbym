@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261027a">
+<link rel="stylesheet" href="styles.css?v=20261027b">
 </head>
 <body data-page="events">
 <div id="site-header"></div>
@@ -23,9 +23,9 @@
   </section>
 </main>
 <div id="site-footer"></div>
-<script src="config.js?v=20261027a"></script>
-<script src="layout.js?v=20261027a"></script>
-<script src="order.js?v=20261027a"></script>
+<script src="config.js?v=20261027b"></script>
+<script src="layout.js?v=20261027b"></script>
+<script src="order.js?v=20261027b"></script>
 <script>
 // Heading from the Sheet's Pages tab; one card per row on the Events tab. Anything left blank doesn't show.
 // Classes ("Add to bag") show spots left and go in the bag, booked and paid at checkout with no approval needed.
@@ -40,40 +40,53 @@ SN.ready.then(function () {
   const isClass = (ev) => ev.button === 'Add to bag';
   const canBook = (ev) => isClass(ev) && Number(ev.price) > 0 && !(ev.date && ev.date < today);
 
-  function bookArea(ev) {
+  // where: 'card' or 'panel', so the card and the open Details panel each get their own spots picker.
+  function bookArea(ev, where) {
     if (!isClass(ev)) return '';
     if (ev.date && ev.date < today) return '<p class="hint">This class has already happened.</p>';
     if (!(Number(ev.price) > 0)) return '<a class="btn ghost" href="#" aria-disabled="true">Booking opens soon</a>';
     const left = ev.spotsLeft === undefined ? 10 : ev.spotsLeft - inBag(ev.id);
     if (ev.spotsLeft === 0) return '<a class="btn ghost" href="#" aria-disabled="true">Sold out</a>';
     const have = inBag(ev.id);
+    const sel = 'spots-' + where + '-' + esc(ev.id);
     const opts = Array.from({ length: Math.max(0, Math.min(10, left)) }, (_, i) => '<option>' + (i + 1) + '</option>').join('');
     return (opts
       ? '<div class="row-gap" style="gap:8px;align-items:center">' +
-          '<label class="sr-only" for="spots-' + esc(ev.id) + '">Spots for ' + esc(ev.title) + '</label>' +
-          '<select class="input" id="spots-' + esc(ev.id) + '" style="width:auto;min-height:44px">' + opts + '</select>' +
-          '<button type="button" class="btn" data-add-class="' + esc(ev.id) + '">Add to bag</button></div>'
+          '<label class="sr-only" for="' + sel + '">Spots for ' + esc(ev.title) + '</label>' +
+          '<select class="input" id="' + sel + '" style="width:auto;min-height:44px">' + opts + '</select>' +
+          '<button type="button" class="btn" data-add-class="' + esc(ev.id) + '" data-spots="' + sel + '">Add to bag</button></div>'
       : '') +
       (have ? '<p class="hint" style="margin-top:8px">' + have + ' in your bag · <a href="order.html?bag=1" data-open-bag>View bag</a></p>' : '');
   }
+  const priceText = (ev) => (ev.price === '' || ev.price == null ? '' : isNaN(Number(ev.price)) ? String(ev.price) : SN.money(ev.price) + (isClass(ev) ? ' per person' : ''));
+  const spotsText = (ev) => (isClass(ev) && ev.spotsLeft !== undefined && canBook(ev) ? (ev.spotsLeft ? ev.spotsLeft + ' of ' + ev.max + ' spots left' : 'Sold out') : '');
+  const priceLine = (ev) => {
+    const price = priceText(ev), spots = spotsText(ev);
+    return price || spots ? '<p class="price">' + esc(price) + (spots ? ' <span>· ' + esc(spots) + '</span>' : '') + '</p>' : '';
+  };
+  const otherButtons = (ev) =>
+    (ev.button === 'Order now' ? '<a class="btn" href="order.html">Order now</a>' : '') +
+    (ev.button === 'Message me' ? '<button type="button" class="btn ghost" data-quick-message="Special events or classes">Message me</button>' : '');
+  // Details is worth opening when there's more than the card shows: the full description, an address or a flyer.
+  const hasDetails = (ev) => !!(ev.flyer || ev.address || (ev.desc && (ev.summary || ev.desc.length > 140)));
+  const mapLink = (ev) => (ev.address ? '<a href="' + esc(SN.mapsUrl(ev)) + '" target="_blank" rel="noopener">' + esc(ev.address) + '</a>' : '');
 
+  // Short card: the full description, address and flyer live in the Details panel.
   function card(ev) {
     const when = SN.classWhen(ev);
-    const spots = isClass(ev) && ev.spotsLeft !== undefined && canBook(ev)
-      ? (ev.spotsLeft ? ev.spotsLeft + ' of ' + ev.max + ' spots left' : 'Sold out') : '';
-    const price = ev.price === '' || ev.price == null ? '' : isNaN(Number(ev.price)) ? String(ev.price) : SN.money(ev.price) + (isClass(ev) ? ' per person' : '');
-    return '<article class="card">' +
+    const line = ev.summary || ev.desc;
+    return '<article class="card ev-card">' +
       SN.photoHtml(ev.photo, ev.title, 'height:200px;border-radius:0') +
       '<div class="card-body">' +
         (ev.when || when ? '<p class="eyebrow" style="margin:0">' + esc(ev.when || when) + '</p>' : '') +
         '<h3>' + esc(ev.title) + '</h3>' +
         (ev.when && when ? '<p class="hint">' + esc(when) + '</p>' : '') +
-        (ev.address ? '<p class="hint">' + esc(ev.address) + '</p>' : '') +
-        (ev.desc ? '<div class="desc">' + SN.paras(ev.desc) + '</div>' : '') +
-        (price || spots ? '<p class="price">' + esc(price) + (spots ? ' <span>· ' + esc(spots) + '</span>' : '') + '</p>' : '') +
-        (ev.button === 'Order now' ? '<a class="btn" href="order.html">Order now</a>' : '') +
-        (ev.button === 'Message me' ? '<button type="button" class="btn ghost" data-quick-message="Special events or classes">Message me</button>' : '') +
-        '<div data-book="' + esc(ev.id) + '">' + bookArea(ev) + '</div>' +
+        (ev.venue || ev.address ? '<p class="hint">' + esc(ev.venue || ev.address) + '</p>' : '') +
+        (line ? '<p class="desc ev-line">' + esc(line) + '</p>' : '<div class="desc"></div>') +
+        priceLine(ev) +
+        otherButtons(ev) +
+        '<div data-book="' + esc(ev.id) + '" data-where="card">' + bookArea(ev, 'card') + '</div>' +
+        (hasDetails(ev) ? '<button type="button" class="link-btn ev-more" data-details="' + esc(ev.id) + '">See details →</button>' : '') +
       '</div>' +
     '</article>';
   }
@@ -81,16 +94,67 @@ SN.ready.then(function () {
   const list = document.getElementById('events');
   list.innerHTML = (cfg.events || []).map(card).join('') || '<p class="muted">No events right now. Follow along on Instagram for the next one.</p>';
 
-  // The bag changed (removed an item, or booked from the bag on this page): refresh each class's "in your bag" note.
-  document.addEventListener('sn:bag-changed', () => {
-    list.querySelectorAll('[data-book]').forEach((area) => { const ev = cfg.events.find((x) => x.id === area.dataset.book); if (ev) area.innerHTML = bookArea(ev); });
+  // Details panel (slides in like the bag) and the full-size flyer view.
+  document.body.insertAdjacentHTML('beforeend',
+    '<div class="scrim" id="ev-scrim"></div>' +
+    '<aside class="panel" id="ev-panel" role="dialog" aria-modal="true" aria-labelledby="ev-panel-title" tabindex="-1"></aside>' +
+    '<div class="flyer-view" id="flyer-view" hidden><button type="button" class="x-btn" data-flyer-close aria-label="Close flyer">' + SN_ICONS.close + '</button><img alt=""></div>');
+  const panel = document.getElementById('ev-panel'), scrim = document.getElementById('ev-scrim'), flyer = document.getElementById('flyer-view');
+  let opener = null, openId = null;
+  function openDetails(ev, from) {
+    opener = from; openId = ev.id;
+    const when = SN.classWhen(ev);
+    const flyerUrl = SN.photoUrl(ev.flyer);
+    const hasFoot = isClass(ev) || ev.button === 'Order now' || ev.button === 'Message me';
+    panel.innerHTML =
+      '<div class="panel-head"><div><h2 id="ev-panel-title">' + esc(ev.title) + '</h2>' + (ev.when || when ? '<p>' + esc([ev.when, when].filter(Boolean).join(' · ')) + '</p>' : '') + '</div>' +
+        '<button type="button" class="x-btn" data-ev-close aria-label="Close">' + SN_ICONS.close + '</button></div>' +
+      '<div class="panel-body"><div class="stack" style="gap:18px">' +
+        (ev.venue || ev.address ? '<div><span class="label">Where</span>' + (ev.venue ? '<div>' + esc(ev.venue) + '</div>' : '') +
+          (ev.address ? '<div>' + mapLink(ev) + '</div><p class="hint" style="margin:2px 0 0">Tap the address for directions.</p>' : '') + '</div>' : '') +
+        (ev.desc ? '<div class="desc">' + SN.paras(ev.desc) + '</div>' : '') +
+        (flyerUrl ? '<div><span class="label">Flyer</span><button type="button" class="flyer-thumb" data-flyer="' + esc(flyerUrl) + '" aria-label="Open the flyer full size"><img src="' + esc(flyerUrl) + '" alt="Flyer for ' + esc(ev.title) + '"></button>' +
+          '<p class="hint" style="margin:6px 0 0">Tap the flyer to see it full size.</p></div>' : '') +
+        priceLine(ev) +
+      '</div></div>' +
+      (hasFoot ? '<div class="panel-foot">' + otherButtons(ev) + '<div data-book="' + esc(ev.id) + '" data-where="panel">' + bookArea(ev, 'panel') + '</div></div>' : '');
+    panel.classList.add('open'); scrim.classList.add('open'); document.body.classList.add('locked');
+    panel.focus();
+  }
+  function closeDetails() {
+    if (!panel.classList.contains('open')) return;
+    panel.classList.remove('open'); scrim.classList.remove('open'); document.body.classList.remove('locked');
+    openId = null;
+    if (opener && document.body.contains(opener)) opener.focus();
+  }
+  function showFlyer(url) { flyer.querySelector('img').src = url; flyer.hidden = false; flyer.querySelector('[data-flyer-close]').focus(); }
+  scrim.addEventListener('click', closeDetails);
+  flyer.addEventListener('click', () => { flyer.hidden = true; });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!flyer.hidden) flyer.hidden = true; else closeDetails();
   });
-  list.addEventListener('click', (e) => {
+  // Opening the bag or "Message me" from inside Details closes Details first, so the panels don't stack.
+  panel.addEventListener('click', (e) => { if (e.target.closest('[data-open-bag], [data-quick-message]')) closeDetails(); }, true);
+
+  // The bag changed (removed an item, or booked from the bag on this page): refresh each class's "in your bag" note.
+  const refreshBooking = () => document.querySelectorAll('[data-book]').forEach((area) => {
+    const ev = cfg.events.find((x) => x.id === area.dataset.book);
+    if (ev) area.innerHTML = bookArea(ev, area.dataset.where);
+  });
+  document.addEventListener('sn:bag-changed', refreshBooking);
+  document.addEventListener('click', (e) => {
     if (e.target.closest('a[aria-disabled="true"]')) { e.preventDefault(); return; }
+    if (e.target.closest('[data-ev-close]')) { closeDetails(); return; }
+    const d = e.target.closest('[data-details]');
+    if (d) { openDetails(cfg.events.find((x) => x.id === d.dataset.details), d); return; }
+    const f = e.target.closest('[data-flyer]');
+    if (f) { showFlyer(f.dataset.flyer); return; }
     const b = e.target.closest('[data-add-class]');
     if (!b) return;
+    const where = b.closest('[data-book]').dataset.where;
     const ev = cfg.events.find((x) => x.id === b.dataset.addClass);
-    const qty = Number(document.getElementById('spots-' + ev.id).value) || 1;
+    const qty = Number(document.getElementById(b.dataset.spots).value) || 1;
     const bag = SN.getBag();
     const existing = bag.find((it) => it.kind === 'class' && it.eventId === ev.id);
     if (existing) existing.qty += qty;
@@ -98,9 +162,9 @@ SN.ready.then(function () {
     SN.setBag(bag);
     document.dispatchEvent(new CustomEvent('sn:bag'));   // the bag (order.js) picks up the change
     document.querySelectorAll('.bag-count').forEach((c) => { c.textContent = bag.reduce((a, it) => a + it.qty, 0); });
-    const area = list.querySelector('[data-book="' + ev.id + '"]');
-    area.innerHTML = bookArea(ev);
-    area.insertAdjacentHTML('afterbegin', '<p class="hint" role="status" style="margin:0 0 8px;color:var(--ok)">Added to your bag.</p>');
+    refreshBooking();
+    document.querySelector('[data-book="' + ev.id + '"][data-where="' + where + '"]')
+      .insertAdjacentHTML('afterbegin', '<p class="hint" role="status" style="margin:0 0 8px;color:var(--ok)">Added to your bag.</p>');
   });
 });
 </script>

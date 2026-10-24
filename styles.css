@@ -98,6 +98,16 @@ button { font: inherit; color: inherit; }
 .card-body .desc p + p { margin-top: 8px; }
 .card-body .price { margin-top: 6px; font-weight: 600; }
 .card-body .price span { font-weight: 400; color: var(--muted); }
+/* Special Events: short cards; the full text, address and flyer open in a Details panel */
+.ev-line { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.card-body .ev-more { align-self: flex-start; margin-top: 2px; min-height: 44px; font-size: 15px; text-decoration: none; }
+.card-body .ev-more:hover { text-decoration: underline; }
+.flyer-thumb { display: block; width: 100%; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--white); cursor: zoom-in; }
+.flyer-thumb img { display: block; width: 100%; height: auto; }
+.flyer-view { position: fixed; inset: 0; z-index: 70; background: rgba(20, 24, 36, .88); display: flex; align-items: center; justify-content: center; padding: 56px 16px 16px; cursor: zoom-out; }
+.flyer-view img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+.flyer-view .x-btn { position: absolute; top: 12px; right: 12px; background: var(--white); }
+#ev-panel .panel-foot .btn + div:not(:empty) { margin-top: 10px; }
 
 /* Home page "What I make": one big feature plus a short editable list */
 .make-intro { color: var(--muted); margin: -6px 0 22px; max-width: 640px; }

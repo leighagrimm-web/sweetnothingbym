@@ -202,7 +202,8 @@ const STARTER_EVENTS = [
   { id: 'e3', show: true, title: 'Planning something bigger?', date: '', start: '', end: '', address: '', price: '', max: '', desc: 'For weddings, corporate gifts or large events, start an order and describe what you have in mind, or send me a message.', photo: '[Event photo]', when: '', button: 'Message me' }
 ];
 // Events tab column for each field above.
-const EVENT_COLS = { id: 'ID', show: 'Show', title: 'Title', date: 'Date', start: 'Start time', end: 'End time', address: 'Address', price: 'Price', max: 'Max attendees', desc: 'Description', photo: 'Photo', when: 'When', button: 'Button' };
+const EVENT_COLS = { id: 'ID', show: 'Show', title: 'Title', date: 'Date', start: 'Start time', end: 'End time', address: 'Address', price: 'Price', max: 'Max attendees', desc: 'Description', photo: 'Photo', when: 'When', button: 'Button',
+  venue: 'Location', summary: 'Card line', flyer: 'Flyer' };
 const CODE_TYPES = ['Percent off', 'Gift card'];
 // Show, Photo, Caption. The first 4 shown also appear under "Recent creations" on the home page.
 const STARTER_GALLERY = ['Birthday', 'Baby shower', 'Wedding shower', 'Anniversary', 'Holiday', 'Party', 'Artisan box', 'Custom set']
@@ -217,9 +218,10 @@ const TABS = {
   FAQ: { headers: ['Question', 'Answer'], widths: [300, 700] },
   Pages: { headers: ['Key', 'Text', 'Where it shows'], widths: [170, 560, 380], text: ['Key', 'Text'] },
   Events: {
-    headers: ['ID', 'Show', 'Title', 'Date', 'Start time', 'End time', 'Address', 'Price', 'Max attendees', 'Description', 'Photo', 'When', 'Button'],
-    widths: [50, 60, 220, 110, 90, 90, 220, 80, 100, 360, 220, 160, 110],
-    text: ['ID', 'Date', 'Start time', 'End time', 'Photo', 'When'], money: ['Price']
+    // Location = the place's name; Card line = the short text on the card (the full Description shows in Details).
+    headers: ['ID', 'Show', 'Title', 'Date', 'Start time', 'End time', 'Address', 'Price', 'Max attendees', 'Description', 'Photo', 'When', 'Button', 'Location', 'Card line', 'Flyer'],
+    widths: [50, 60, 220, 110, 90, 90, 220, 80, 100, 360, 220, 160, 110, 200, 260, 220],
+    text: ['ID', 'Date', 'Start time', 'End time', 'Photo', 'When', 'Flyer'], money: ['Price']
   },
   Gallery: { headers: ['Show', 'Photo', 'Caption'], widths: [60, 320, 260], text: ['Photo'] },
   Codes: {
@@ -509,7 +511,8 @@ function buildConfig_(admin) {
         id: String(r.ID || '').trim() || ('row' + (i + 2)), title: String(r.Title).trim(), date: toISODate_(r.Date),
         start: timeText_(r['Start time']), end: timeText_(r['End time']), address: String(r.Address || '').trim(),
         price: num(r.Price), max: num(r['Max attendees']), desc: String(r.Description || '').trim(), photo: String(r.Photo || '').trim(),
-        when: String(r.When || '').trim(), button: EVENT_BUTTONS.indexOf(String(r.Button)) !== -1 ? String(r.Button) : 'None'
+        when: String(r.When || '').trim(), button: EVENT_BUTTONS.indexOf(String(r.Button)) !== -1 ? String(r.Button) : 'None',
+        venue: String(r.Location || '').trim(), summary: String(r['Card line'] || '').trim(), flyer: String(r.Flyer || '').trim()
       };
       ev.booked = counts.seats[ev.id] || 0;
       if (ev.max !== '') ev.spotsLeft = Math.max(0, ev.max - ev.booked);
@@ -802,7 +805,7 @@ function validateOrder_(cfg, b) {
         errors.push(ev.spotsLeft ? 'fewer spots in ' + ev.title + ' (only ' + ev.spotsLeft + ' left)' : ev.title + ' is sold out. Please remove it');
         return;
       }
-      classes.push({ kind, eventId: ev.id, title: ev.title, date: ev.date, start: ev.start, end: ev.end, address: ev.address, qty, unit: round2_(ev.price), lineTotal: round2_(qty * ev.price), summary: classWhen_(ev) });
+      classes.push({ kind, eventId: ev.id, title: ev.title, date: ev.date, start: ev.start, end: ev.end, address: [ev.venue, ev.address].filter(Boolean).join(', '), qty, unit: round2_(ev.price), lineTotal: round2_(qty * ev.price), summary: classWhen_(ev) });
     } else {
       errors.push('a valid item');
     }
@@ -1008,7 +1011,7 @@ function sendOutbox_() {
  * Saves to the Messages tab and emails the owner with reply-to set to the customer.
  */
 
-const MESSAGE_TOPICS = ['General question', 'Custom design idea', 'Allergies or dietary needs', 'An existing order', 'Special events or classes', 'Other', 'Quick message'];
+const MESSAGE_TOPICS = ['General question', 'Custom design idea', 'Allergies or dietary needs', 'Rush order', 'An existing order', 'Special events or classes', 'Other', 'Quick message'];
 
 function sendMessage_(b) {
   // A retry of a message that already went through (the reply got lost on the way back) gets the same answer

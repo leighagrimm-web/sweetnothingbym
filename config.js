@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261027a';
+const SN_BUILD = '20261027b';
 
 const SN_ENV = (function () {
   const API = {
@@ -451,6 +451,13 @@ const SN = {
     const room = (cap, used) => (Number(cap) > 0 ? Math.max(0, Number(cap) - used) : null);
     return { custom: room(cfg.capCustomPerWeek, load.custom), artisan: room(cfg.capArtisanPerWeek, load.artisan) };
   },
+  // "Khepri Kitchen & Coffee, 106 S. Emerson St., Mount Prospect, IL"
+  eventPlace(ev) { return [ev.venue, ev.address].filter(Boolean).join(', '); },
+  // A maps link for an event: Apple Maps on iPhone, iPad and Mac, Google Maps everywhere else.
+  mapsUrl(ev) {
+    const q = encodeURIComponent(SN.eventPlace(ev));
+    return /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? 'https://maps.apple.com/?q=' + q : 'https://www.google.com/maps/search/?api=1&query=' + q;
+  },
   // "Sat, Dec 6 · 2:00 PM–4:00 PM"
   classWhen(ev) {
     const day = ev.date ? SN.prettyDate(ev.date, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
@@ -482,7 +489,7 @@ const SN = {
   itemHeading(it) { return it.kind === 'class' ? it.qty + ' spot' + (it.qty > 1 ? 's' : '') + ' · ' + it.title : it.qty + ' ' + SN.itemLabel(it.kind); },
 
   describeItem(cfg, it) {
-    if (it.kind === 'class') { const ev = SN.classEvent(cfg, it) || it; return [it.summary || SN.classWhen(ev), ev.address].filter(Boolean).join(' · '); }
+    if (it.kind === 'class') { const ev = SN.classEvent(cfg, it) || it; return [it.summary || SN.classWhen(ev), SN.eventPlace(ev)].filter(Boolean).join(' · '); }
     if (it.kind === 'custom') {
       return it.designs + ' design' + (it.designs > 1 ? 's' : '') + ' · estimated at ' + SN.money(SN.customPrice(cfg)) + ' each' + (it.photoName ? ' · photo attached' : '');
     }
