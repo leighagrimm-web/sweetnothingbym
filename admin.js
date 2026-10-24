@@ -137,7 +137,7 @@
       '<div class="fields">' +
         field('customBasePrice', 'Starting price', numInput('customBasePrice', 'min="0" step="0.25"', '$', '/ cookie')) +
         field('minQty', 'Minimum order', numInput('minQty', 'min="1"', '', 'cookies', 'int')) +
-        field('maxDesigns', 'Most designs a customer can pick', numInput('maxDesigns', 'min="1" max="24"', '', 'designs', 'int')) +
+        field('maxDesigns', 'Most designs', numInput('maxDesigns', 'min="1" max="24"', '', 'designs', 'int'), 'The most a customer can pick') +
         '<div class="field" style="grid-column:1 / -1"><label class="label" for="customNote">Pricing note shown to customers</label><textarea class="input" id="customNote" rows="2" data-path="customNote"></textarea></div>' +
         '<div class="field" style="grid-column:1 / -1"><label class="label" for="allergyNote">Allergy note (shown with an * on custom cookies and at checkout)</label><textarea class="input" id="allergyNote" rows="2" data-path="allergyNote"></textarea></div>' +
       '</div>');
