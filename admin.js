@@ -1436,7 +1436,6 @@
     $('#messages-h').innerHTML = 'Messages' + (unread ? ' <span class="count-pill">' + unread + ' new</span>' : '');
     navCount('messages', unread ? unread + ' new' : '');
     $('#msg-list').innerHTML = messages.length ? messages.map((m) => {
-      const subject = encodeURIComponent('Re: your question for Sweet Nothings by M');
       const when = m.createdAt ? new Date(m.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
       return '<div class="msg' + (m.status === 'New' ? ' unread' : '') + '">' +
         '<div class="msg-top"><strong>' + esc(m.name || m.email) + ' <span class="muted" style="font-weight:400">· ' + esc(m.topic) + (m.orderNumber ? ' · ' + esc(m.orderNumber) : '') + '</span></strong>' +
@@ -1454,7 +1453,7 @@
               '<div class="row-gap" style="margin-top:8px;gap:8px;align-items:center">' +
                 '<button type="button" class="btn small" data-msg="send" data-id="' + m.id + '">Send reply</button>' +
                 '<button type="button" class="btn ghost small" data-msg="close" data-id="' + m.id + '">Cancel</button>' +
-                '<a class="link-btn" style="font-size:13px" href="mailto:' + esc(m.email) + '?subject=' + subject + '" data-msg="reply" data-id="' + m.id + '">Open in my email instead</a>' +
+                '<a class="link-btn" style="font-size:13px" href="' + esc(gmailReply(m)) + '" target="_blank" rel="noopener" data-msg="reply" data-id="' + m.id + '">Open in Gmail instead</a>' +
               '</div></div>'
           : '<div class="row-gap" style="margin-top:6px;gap:8px">' +
               '<button type="button" class="btn small" data-msg="write" data-id="' + m.id + '">Reply</button>' +
@@ -1464,6 +1463,15 @@
         '</div>';
     }).join('') : '<p class="hint">No messages yet.</p>';
     loadPhotos($('#msg-list'));
+  }
+  function gmailReply(m) {
+    const draft = (replyOpen[m.id] || '').trim();
+    const when = m.createdAt ? new Date(m.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    const quoted = (m.message || '').split('\n').map((l) => '> ' + l).join('\n');
+    const body = (draft ? draft + '\n\n' : '') + 'On ' + when + ', ' + (m.name || m.email) + ' wrote:\n' + quoted;
+    const from = (cfg && (cfg.replyToEmail || cfg.ownerEmail)) || '';
+    return 'https://mail.google.com/mail/?view=cm&fs=1' + (from ? '&authuser=' + encodeURIComponent(from) : '') +
+      '&to=' + encodeURIComponent(m.email) + '&su=' + encodeURIComponent('Re: your question for Sweet Nothings by M') + '&body=' + encodeURIComponent(body);
   }
   async function onMessageClick(b) {
     const m = messages.find((x) => String(x.id) === b.dataset.id);
@@ -1492,6 +1500,9 @@
       }).catch(failed);
       return;
     }
+    // The admin runs in Google's sandboxed frame, where a plain mailto: link does nothing, so this opens Gmail's
+    // compose window in a new tab with what she's typed so far and their message quoted.
+    if (b.dataset.msg === 'reply') b.href = gmailReply(m);
     if (b.dataset.msg === 'reply' || b.dataset.msg === 'toggle') {
       const next = b.dataset.msg === 'reply' ? 'Replied' : (m.status === 'New' ? 'Replied' : 'New');
       if (m.status === next) return;
