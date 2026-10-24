@@ -190,6 +190,12 @@ textarea.input { resize: vertical; }
 @supports (-webkit-touch-callout: none) {   /* iPhone / iPad only */
   .input[type="date"] { -webkit-appearance: none; appearance: none; }
 }
+/* Checkout time boxes: event time, and the pickup / drop-off window */
+.time-input { width: 100%; }
+.field > .date-wrap:has(.time-input) { max-width: 180px; }
+.time-range { gap: 12px; flex-wrap: wrap; }
+.time-part { display: flex; flex-direction: column; gap: 4px; font-size: 13px; flex: 1 1 140px; max-width: 180px; }
+.time-part .time-input { max-width: none; }
 .date-wrap { position: relative; max-width: 100%; }
 .date-ph { display: none; }
 /* iPhone / iPad (html.ios is set in config.js): Safari shows an empty date box with no "mm/dd/yyyy" hint, so add one. */

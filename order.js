@@ -17,7 +17,7 @@ SN.ready.then(function () {
   let toastTimer = null;
   const checkout = {
     eventType: '', eventOther: '', date: '', fulfillment: 'pickup',
-    address: '', city: '', zip: '', name: '', email: '', phone: '', allergies: '', code: '', eventTime: '', pickupWindow: ''
+    address: '', city: '', zip: '', name: '', email: '', phone: '', allergies: '', code: '', eventTime: '', winFrom: '', winTo: '', winNote: ''
   };
   // The Sheet couldn't be reached: built-in prices and flavors may be out of date, so ordering pauses.
   const paused = SN.configFailed;
@@ -377,7 +377,7 @@ SN.ready.then(function () {
               '<p>If you need your cookies sooner than ' + cfg.leadDays + ' days, <a href="contact.html?topic=rush">send me a message</a> before ordering to see if I can fit you in. Rush orders have an extra rush fee, added to your final price.</p>' +
             '</details></div></div>' +
           '<div class="field"><label class="label" for="c-time">Time of your event <span class="muted" style="font-weight:400">(optional)</span></label>' +
-            '<input class="input" id="c-time" type="text" data-co="eventTime" placeholder="e.g. 2:00 PM" value="' + esc(checkout.eventTime) + '"></div>' +
+            '<div class="date-wrap' + (checkout.eventTime ? ' has-value' : '') + '"><input class="input time-input" id="c-time" type="time" data-co="eventTime" value="' + esc(checkout.eventTime) + '"><span class="date-ph" aria-hidden="true">Tap to pick</span></div></div>' +
           '<div class="field"><label class="label" for="c-allergies">Allergies or dietary needs <span class="muted" style="font-weight:400">(optional)</span></label>' +
             '<textarea class="input" id="c-allergies" rows="2" data-co="allergies" placeholder="e.g. one guest has a nut allergy, need 6 gluten-free">' + esc(checkout.allergies) + '</textarea>' +
             (cfg.allergyNote ? '<div class="note-box fold-box" style="margin-top:10px"><details><summary>Allergy-friendly swaps</summary><p>' + esc(cfg.allergyNote) + '</p></details></div>' : '') + '</div>' +
@@ -395,8 +395,13 @@ SN.ready.then(function () {
             '<p class="hint full" id="zip-msg" aria-live="polite"></p>' +
           '</div>' +
           // Melissa bakes from home, so pickup and drop-off happen at a time she confirms with the customer.
-          '<div class="field" style="margin-top:14px"><label class="label" for="c-window"><span id="window-label">' + (isDel ? 'Best drop-off window' : 'Best pickup window') + '</span></label>' +
-            '<input class="input" id="c-window" type="text" data-co="pickupWindow" placeholder="e.g. Fri after 5 PM or Sat morning" value="' + esc(checkout.pickupWindow) + '">' +
+          '<div class="field" style="margin-top:14px"><span class="label" id="window-label">' + (isDel ? 'Best drop-off window' : 'Best pickup window') + '</span>' +
+            '<div class="row-gap time-range" role="group" aria-labelledby="window-label">' +
+              '<label class="time-part"><span class="muted">From</span><div class="date-wrap' + (checkout.winFrom ? ' has-value' : '') + '"><input class="input time-input" id="c-win-from" type="time" data-co="winFrom" value="' + esc(checkout.winFrom) + '"><span class="date-ph" aria-hidden="true">Tap to pick</span></div></label>' +
+              '<label class="time-part"><span class="muted">To</span><div class="date-wrap' + (checkout.winTo ? ' has-value' : '') + '"><input class="input time-input" id="c-win-to" type="time" data-co="winTo" value="' + esc(checkout.winTo) + '"><span class="date-ph" aria-hidden="true">Tap to pick</span></div></label>' +
+            '</div>' +
+            '<label class="sr-only" for="c-win-note">Note about timing</label>' +
+            '<input class="input" id="c-win-note" type="text" data-co="winNote" style="margin-top:8px" placeholder="Note (optional), e.g. Friday after 5 also works" value="' + esc(checkout.winNote) + '">' +
             '<div class="note-box fold-box" style="margin-top:10px"><details><summary>How pickup &amp; drop-off times work</summary>' +
               '<p>I bake from home and have little ones, so pickup and drop-off are by appointment. Share the days and times that work best for you, and I’ll confirm an exact time by email before your order date.</p>' +
             '</details></div></div>' +
@@ -515,7 +520,8 @@ SN.ready.then(function () {
         if (!checkout.address.trim() || !checkout.city.trim()) m.push('drop-off address');
         if (!q.zone) m.push('a ZIP in our drop-off area');
       }
-      if (!checkout.pickupWindow.trim()) m.push(q.isDel ? 'a drop-off window' : 'a pickup window');
+      if (!checkout.winFrom || !checkout.winTo) m.push(q.isDel ? 'a drop-off window (from and to)' : 'a pickup window (from and to)');
+      else if (checkout.winTo <= checkout.winFrom) m.push('a window that ends after it starts');
     }
     if (!checkout.name.trim()) m.push('name');
     if (!SN.validEmail(checkout.email)) m.push('a valid email');
@@ -686,6 +692,8 @@ SN.ready.then(function () {
         $('[data-act="apply-code"]', panel).textContent = 'Apply';
       }
       checkout[t.dataset.co] = v;
+      const tw = t.type === 'time' && t.closest('.date-wrap');
+      if (tw) tw.classList.toggle('has-value', !!v);   // hides the iPhone "Tap to pick" hint
       if (t.dataset.co === 'eventType') $('#other-wrap').hidden = v !== 'Other';
       updateCheckoutUI();
     }
@@ -774,8 +782,9 @@ SN.ready.then(function () {
       eventOther: checkout.eventOther.trim(),
       dateNeeded: checkout.date,
       allergies: checkout.allergies.trim(),
-      eventTime: checkout.eventTime.trim(),
-      pickupWindow: checkout.pickupWindow.trim(),
+      eventTime: SN.time12(checkout.eventTime),
+      // One line for admin and the emails: "5:00 PM – 7:00 PM · Friday after 5 also works"
+      pickupWindow: [SN.time12(checkout.winFrom) + ' – ' + SN.time12(checkout.winTo), checkout.winNote.trim()].filter(Boolean).join(' · '),
       fulfillment: checkout.fulfillment,
       address: { street: checkout.address.trim(), city: checkout.city.trim(), zip: checkout.zip },
       customer: { name: checkout.name.trim(), email: checkout.email.trim(), phone: checkout.phone.trim() },

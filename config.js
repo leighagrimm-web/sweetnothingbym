@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261027d';
+const SN_BUILD = '20261027e';
 
 const SN_ENV = (function () {
   const API = {
@@ -450,6 +450,11 @@ const SN = {
     const load = (cfg.weekLoads || {})[SN.mondayOf(iso)] || { custom: 0, artisan: 0 };
     const room = (cap, used) => (Number(cap) > 0 ? Math.max(0, Number(cap) - used) : null);
     return { custom: room(cfg.capCustomPerWeek, load.custom), artisan: room(cfg.capArtisanPerWeek, load.artisan) };
+  },
+  // "17:00" (from a time box) -> "5:00 PM"; anything else comes back as is.
+  time12(t) {
+    const m = String(t || '').match(/^(\d{1,2}):(\d{2})/);
+    return m ? ((Number(m[1]) % 12) || 12) + ':' + m[2] + ' ' + (Number(m[1]) < 12 ? 'AM' : 'PM') : String(t || '').trim();
   },
   // "Khepri Kitchen & Coffee, 106 S. Emerson St., Mount Prospect, IL"
   eventPlace(ev) { return [ev.venue, ev.address].filter(Boolean).join(', '); },
