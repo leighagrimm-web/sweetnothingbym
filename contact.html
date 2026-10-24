@@ -65,6 +65,7 @@
             <div class="field">
               <span class="label">Photos (optional)</span>
               <div id="m-photos"></div>
+              <div class="note-box fold-box" id="m-ai-note" style="margin-top:10px"></div>
             </div>
             <div class="hp" aria-hidden="true"><label>Website <input type="text" id="m-website" tabindex="-1" autocomplete="off"></label></div>
             <div>
@@ -107,6 +108,7 @@
 
   // Up to 5 photos, shrunk in the browser and sent with the message (SN.photoPicker). Send waits while they're prepared.
   const picker = SN.photoPicker($('#m-photos'), { id: 'm-photo', label: 'Add inspiration photos' });
+  $('#m-ai-note').innerHTML = SN.aiPhotoNote;
 
   SN.phoneInput($('#m-phone'));
   // Phone is optional, but if they type one it must be a full 10-digit number.

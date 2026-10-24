@@ -273,6 +273,8 @@ const SN = {
   // Most photos a customer can attach to a custom cookie item or a message (the server allows the same).
   maxPhotos: 5,
 
+  // Tap-to-open note shown under every inspiration-photo upload (order and contact pages).
+  aiPhotoNote: '<details><summary>Using AI images for inspiration?</summary><p>AI images are welcome as inspiration! Just know they often show details that can’t be made with real icing and cookies, so your set will be my hand-decorated take on the idea, not an exact match to the picture.</p></details>',
   // The "add up to 5 photos" box on the order and contact pages: previews with × to remove, and an add button.
   // el is an empty container; opts: { id (for the file input), label, photos (to start with), onChange }.
   // Returns { photos() → [{ name, data }], busy() → true while a photo is still being shrunk }.
