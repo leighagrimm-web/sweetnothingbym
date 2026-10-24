@@ -448,7 +448,9 @@ const SN = {
       return d[a.length][b.length];
     };
     if (!/\./.test(name)) {
-      const hit = Object.keys(BIG).find((p) => p === name || (name.length >= 4 && dist(name, p) <= (p.length >= 7 ? 2 : 1)));
+      const hit = Object.keys(BIG).find((p) => p === name ||
+        (name.length >= 3 && name[0] === p[0] && dist(name, p) <= 2) ||   // gml, gmal, yhoo, hotmal
+        (name.length >= 4 && dist(name, p) <= (p.length >= 7 ? 2 : 1)));
       if (hit) { name = hit; tld = BIG[hit]; }
     }
     const fixed = name + '.' + tld;
