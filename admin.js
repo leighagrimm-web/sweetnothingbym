@@ -266,9 +266,9 @@
       '<div class="fields">' +
         field('ownerEmail', 'New-order alerts go to', '<input class="input" id="ownerEmail" type="email" data-path="ownerEmail" placeholder="Blank = your Google account">') +
         field('replyToEmail', 'Customer replies go to', '<input class="input" id="replyToEmail" type="email" data-path="replyToEmail" placeholder="Blank = same as alerts">') +
-        field('pickupCity', 'Pickup area (shown on site)', '<input class="input" id="pickupCity" type="text" data-path="pickupCity">') +
-        field('pickupAddress', 'Pickup address (only in the confirmation email)', '<input class="input" id="pickupAddress" type="text" data-path="pickupAddress">') +
-        field('pickupInstructions', 'Pickup instructions (only in the confirmation email)', '<input class="input" id="pickupInstructions" type="text" data-path="pickupInstructions">') +
+        field('pickupCity', 'Pickup area', '<input class="input" id="pickupCity" type="text" data-path="pickupCity">', 'Shown on the site') +
+        field('pickupAddress', 'Pickup address', '<input class="input" id="pickupAddress" type="text" data-path="pickupAddress">', 'Only in the confirmation email') +
+        field('pickupInstructions', 'Pickup instructions', '<input class="input" id="pickupInstructions" type="text" data-path="pickupInstructions">', 'Only in the confirmation email') +
         field('instagram', 'Instagram link', '<input class="input" id="instagram" type="url" data-path="instagram">') +
         field('instagramHandle', 'Instagram handle', '<input class="input" id="instagramHandle" type="text" data-path="instagramHandle">') +
         '<div class="field" style="grid-column:1 / -1"><label class="label" for="adminHelpers">Admin helpers (optional)</label>' +
