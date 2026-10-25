@@ -170,22 +170,22 @@ Object.assign(SN_DEFAULTS, {
  },
  "homeItems": [
   {
-   "line": "",
-   "photo": "https://drive.google.com/file/d/1FwRES_GHzSirQCc_xtX3Kl9vWhhzeg6G/view?usp=drive_link",
    "link": "mini",
-   "name": "Mini artisan"
+   "name": "Mini artisan",
+   "photo": "https://drive.google.com/file/d/1FwRES_GHzSirQCc_xtX3Kl9vWhhzeg6G/view?usp=drive_link",
+   "line": ""
   },
   {
    "line": "",
-   "photo": "https://drive.google.com/file/d/1HEZfTu1RtfmPz3D9hi2d6oMivoNZfkOe/view?usp=drive_link",
+   "link": "large",
    "name": "Large artisan",
-   "link": "large"
+   "photo": "https://drive.google.com/file/d/1HEZfTu1RtfmPz3D9hi2d6oMivoNZfkOe/view?usp=drive_link"
   },
   {
+   "line": "At pop-ups and events",
    "link": "events",
    "photo": "https://drive.google.com/file/d/1BlHGZAJ0M8oz3b-BuSUnvp47CJ37aF7p/view?usp=sharing",
-   "name": "Cookie kits",
-   "line": "At pop-ups and events"
+   "name": "Cookie kits"
   }
  ],
  "homeSlides": [
@@ -362,7 +362,7 @@ Object.assign(SN_DEFAULTS, {
   "aboutStoryHeading": "The story",
   "aboutStory": "Sweet Nothings by M started with one cookie that quickly became a fan favorite!\n\nI’ve loved baking since I was young, and I’ve always enjoyed bringing sweet treats to share with family and friends, and to spoil the nurses and doctors I work with every day. I’ve been a PICU nurse for 20 years, and Sweet Nothings is how I turned my passion for baking into a small, home-based cottage bakery.\n\nI love being part of people’s lives and their special moments, and cookies give me the chance to do that every day.",
   "aboutGoodToKnowHeading": "Good to know",
-  "aboutGoodToKnow": "How ordering works:\nPlease order at least 14 days before you need your cookies. When you send your order, it’s a request, not a final order. I’ll review the details and email you a confirmation with your final price and an invoice. Your date is reserved once the invoice is paid.\n\nNeed them sooner? \nIf you need your cookies sooner than 14 days, send me a message before ordering to see if I can fit you in. Rush orders have an extra rush fee, added to your final price.\n\nAllergies and dietary needs: \nNeed allergy-friendly swaps, like gluten-free or dairy-free? Happy to help! Ingredient changes for allergies or dietary needs add an extra cost, which I’ll include in your final price. Please note my kitchen is not allergen-free, so I can’t guarantee against cross-contact for severe allergies.",
+  "aboutGoodToKnow": "How ordering works:\nPlease order at least 14 days before you need your cookies. When you send your order, it’s a request, not a final order. I’ll review the details and email you a confirmation with your final price and an invoice. Your date is reserved once the invoice is paid.\n\nAllergies and dietary needs: \nNeed allergy-friendly swaps, like gluten-free or dairy-free? Happy to help! Ingredient changes for allergies or dietary needs add an extra cost, which I’ll include in your final price. Please note my kitchen is not allergen-free, so I can’t guarantee against cross-contact for severe allergies.",
   "eventsTitle": "Classes, pop-ups & seasonal specials",
   "eventsIntro": "Limited-time cookies and cookie decorating classes. Follow along on Instagram for the latest dates.",
   "galleryTitle": "Past creations",
