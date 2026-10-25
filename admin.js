@@ -413,6 +413,9 @@
   const pickable = (o) => (isClass(o) ? (CLASS_STATUSES.indexOf(o.status) === -1 ? [o.status] : []).concat(CLASS_STATUSES) : AFTER_INVOICE.indexOf(o.status) !== -1 ? AFTER_INVOICE : null);
   const badge = (st) => '<span class="status-badge" style="' + (STATUS_STYLE[st] || '') + '">' + esc(st) + '</span>';
   const isActive = (o) => ['Completed', 'Declined', 'Cancelled', 'Expired'].indexOf(o.status) === -1;
+  // Cookie orders are paid a week before their date: approved but unpaid and under 8 days out = needs attention.
+  const daysUntil = (iso) => Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(SN.isoDate(new Date()) + 'T12:00:00Z')) / 864e5);
+  const payOverdue = (o) => !isClass(o) && o.status === 'Invoice sent' && !!o.dateNeeded && daysUntil(o.dateNeeded) < 8;
 
   function renderOrders() {
     const pending = orders.filter((o) => o.status === 'Pending review').length;
@@ -441,14 +444,15 @@
       const action = '<button type="button" class="btn ' + (o.status === 'Pending review' ? '' : 'ghost ') + 'small" data-rv="open" data-n="' + esc(o.number) + '">' + (o.status === 'Pending review' ? 'Review' : 'View') + '</button>';
       const at = o.createdAt ? new Date(o.createdAt) : null;
       const received = at ? { date: at.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), time: at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) } : null;
-      return '<tr' + (o.status === 'Pending review' ? ' class="row-pending"' : '') + '>' +
+      return '<tr' + (o.status === 'Pending review' ? ' class="row-pending"' : payOverdue(o) ? ' class="row-unpaid"' : '') + '>' +
         '<td><div class="order-cell">' + action + '<div><strong>' + esc(o.number) + '</strong>' + (received ? '<br><span style="font-size:13px;white-space:nowrap">Ordered ' + esc(received.date) + '</span>' + small(esc(received.time)) : '') +
           (o.allergies ? '<br><span class="status-badge" style="background:#FBEDEA;color:#B23A2B;margin-top:4px">Allergy</span>' : '') + '</div></div></td>' +
         '<td class="wrap-any">' + esc(o.customer.name) + small(esc(o.customer.email)) + small(esc(isClass(o) ? 'Class' : o.eventType || 'Occasion not given')) + '</td>' +
         '<td class="nowrap">' + esc(o.dateNeeded ? SN.prettyDate(o.dateNeeded, { weekday: 'short', month: 'short', day: 'numeric' }) : '—') + small(ful) + '</td>' +
         '<td>' + items + '</td>' +
         '<td class="nowrap">' + total + '</td>' +
-        '<td>' + status + '</td></tr>';
+        '<td>' + status + (payOverdue(o) ? '<div class="unpaid-note">Unpaid · ' + (daysUntil(o.dateNeeded) < 0 ? 'date has passed' : daysUntil(o.dateNeeded) + ' day' + (daysUntil(o.dateNeeded) === 1 ? '' : 's') + ' to go') +
+          (o.payReminderSent ? '<br>Reminder sent' : '') + '</div>' : '') + '</td></tr>';
     }).join('');
   }
   // Newest first, by when the customer sent it.
