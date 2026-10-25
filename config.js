@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261027k';
+const SN_BUILD = '20261027l';
 
 const SN_ENV = (function () {
   const API = {
@@ -137,6 +137,413 @@ const SN_DEFAULTS = {
   gallery: ['Birthday', 'Baby shower', 'Wedding shower', 'Anniversary', 'Holiday', 'Party', 'Artisan box', 'Custom set']
     .map((l) => ({ photo: '[' + l + ' cookie photo]', caption: l + ' cookies' }))
 };
+/* LIVE SNAPSHOT START */
+// Live settings as of 2026-10-25 (node .claude/snapshot.js). The Sheet always wins once it answers.
+Object.assign(SN_DEFAULTS, {
+ "acceptingOrders": true,
+ "leadDays": 14,
+ "capCustomPerWeek": 50,
+ "capArtisanPerWeek": 75,
+ "minQty": 12,
+ "maxDesigns": 6,
+ "customBasePrice": 5,
+ "customNote": "Pricing may vary based on the complexity of the design and the number of different designs.",
+ "allergyNote": "Need allergy-friendly swaps, like gluten-free or dairy-free? Happy to help! Ingredient changes for allergies or dietary needs add an extra cost, which I'll include in your final price.",
+ "miniPerDozen": 24,
+ "largePerDozen": 36,
+ "flavorsPerDozen": 4,
+ "flavorsMax": 6,
+ "flavorsMaxAt": 24,
+ "specialText": "Check out our new cookie decorating class in Special Events!",
+ "specialUntil": "2026-11-19",
+ "showAbout": true,
+ "showEvents": true,
+ "showGallery": true,
+ "showFaq": true,
+ "pickupCity": "Rosemont, IL",
+ "instagram": "https://www.instagram.com/sweet_nothings_by_m/",
+ "instagramHandle": "@sweet_nothings_by_m",
+ "images": {
+  "custom": "https://drive.google.com/file/d/1Y_muW7U8fjlWHTmlAUtLkz6d2zizJKaM/view?usp=drive_link",
+  "mini": "https://drive.google.com/file/d/1oMg8CgGeHU2J70Co8hTl23JtIjU73oua/view?usp=drive_link",
+  "large": "https://drive.google.com/file/d/1fVEvptw39Sxuikk8194DzSi2cyhli1HP/view?usp=drive_link"
+ },
+ "homeItems": [
+  {
+   "line": "",
+   "photo": "https://drive.google.com/file/d/1FwRES_GHzSirQCc_xtX3Kl9vWhhzeg6G/view?usp=drive_link",
+   "link": "mini",
+   "name": "Mini artisan"
+  },
+  {
+   "line": "",
+   "photo": "https://drive.google.com/file/d/1HEZfTu1RtfmPz3D9hi2d6oMivoNZfkOe/view?usp=drive_link",
+   "name": "Large artisan",
+   "link": "large"
+  },
+  {
+   "link": "events",
+   "photo": "https://drive.google.com/file/d/1BlHGZAJ0M8oz3b-BuSUnvp47CJ37aF7p/view?usp=sharing",
+   "name": "Cookie kits",
+   "line": "At pop-ups and events"
+  }
+ ],
+ "homeSlides": [
+  {
+   "photo": "https://drive.google.com/file/d/1FcY8pb2v3EFW__h0OjLcCkTFLebwjkb5/view?usp=drive_link"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1N3frQACziYnjKCK6Uymb0xhQjKfJQDKF/view?usp=drive_link"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/11kD-C2BF0GiC4ZXE-HSBzczVTK1lycSF/view?usp=drive_link"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1WJxTRfeHGAZ6IWPFU94ePWp3JDDGijY1/view?usp=drive_link"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1awI4HSH5wzdqZAIzU_0avCKqM5oQDRH7/view?usp=drive_link"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1zSis-DU2QpFcp5V_3uNzLf6oZD-ww1-9/view?usp=drive_link"
+  }
+ ],
+ "classHoldMinutes": 15,
+ "maintenanceTitle": "Something sweet is in the oven",
+ "maintenanceMessage": "We’re mixing up a fresh batch of updates to the site. Check back soon, or follow along on Instagram in the meantime!",
+ "flavors": [
+  {
+   "id": "cc",
+   "name": "Brown Butter Chocolate Chip",
+   "on": true,
+   "special": false
+  },
+  {
+   "id": "ff",
+   "name": "Confetti Golden Oreo",
+   "on": true,
+   "special": false
+  },
+  {
+   "id": "sd",
+   "name": "Snickerdoodle",
+   "on": true,
+   "special": false
+  },
+  {
+   "id": "dc",
+   "name": "Peanut Butter Chocolate",
+   "on": true,
+   "special": false
+  },
+  {
+   "id": "ps",
+   "name": "Pumpkin Spice",
+   "on": true,
+   "special": true
+  },
+  {
+   "id": "ls",
+   "name": "Lemon Crinkle",
+   "on": true,
+   "special": false
+  },
+  {
+   "id": "fmvirytkp",
+   "name": "Strawberry Crunch",
+   "on": true,
+   "special": false
+  },
+  {
+   "id": "fmvmst1cq",
+   "name": "Banana Pudding",
+   "on": true,
+   "special": false
+  }
+ ],
+ "zones": [
+  {
+   "zip": "60018",
+   "area": "Rosemont / Des Plaines",
+   "fee": 5
+  },
+  {
+   "zip": "60016",
+   "area": "Des Plaines",
+   "fee": 5
+  },
+  {
+   "zip": "60068",
+   "area": "Park Ridge",
+   "fee": 5
+  },
+  {
+   "zip": "60656",
+   "area": "Chicago (O’Hare)",
+   "fee": 5
+  },
+  {
+   "zip": "60007",
+   "area": "Elk Grove Village",
+   "fee": 10
+  },
+  {
+   "zip": "60056",
+   "area": "Mount Prospect",
+   "fee": 10
+  },
+  {
+   "zip": "60004",
+   "area": "Arlington Heights",
+   "fee": 10
+  },
+  {
+   "zip": "60074",
+   "area": "Palatine",
+   "fee": 10
+  },
+  {
+   "zip": "60068",
+   "area": "Park Ridge",
+   "fee": 5
+  },
+  {
+   "zip": "60025",
+   "area": "Glenview",
+   "fee": 10
+  }
+ ],
+ "faqs": [
+  {
+   "q": "What ingredients do you use?",
+   "a": "I bake everything from scratch with using real ingredients. Custom cookies are a vanilla based sugar cookie that are hand decorated with royal icing."
+  },
+  {
+   "q": "Can you make allergen-friendly cookies?",
+   "a": "Yes! I’ve made gluten-free, dairy-free and nut-free cookies before. Just mention any allergies or dietary needs when you order (there’s a spot for it at checkout), or send me a message first. Please note my kitchen is not allergen-free, so I can’t guarantee against cross-contact for severe allergies."
+  },
+  {
+   "q": "How far ahead should I order?",
+   "a": "Please order at least 14 days before you need your cookies. Larger custom orders and busy seasons (holidays, graduation, wedding season) book up fast, so earlier is better.\n\nNeed them sooner? If you need your cookies sooner than 14 days, send me a message before ordering to see if I can fit you in. Rush orders have an extra rush fee, added to your final price."
+  },
+  {
+   "q": "How does ordering work?",
+   "a": "Choose your cookies and send your order request. You’ll get an email right away, but it’s not a final order yet. I’ll review the details and send a second email with your confirmation, final price and a QuickBooks invoice. Your date is reserved once the invoice is paid."
+  },
+  {
+   "q": "How much do custom cookies cost?",
+   "a": "Custom cookies start at $5 per cookie with a 1 dozen minimum. Pricing may vary based on the complexity of the design and the number of different designs. You’ll see an estimate when you order, and I’ll confirm the final price before you pay."
+  },
+  {
+   "q": "Do you deliver?",
+   "a": "Pickup is free in Rosemont, IL (exact address is in your confirmation). Local drop-off is available to nearby ZIP codes for $5–$10. You’ll see the fee for your ZIP at checkout. \n\nOutside my drop-off area? No problem. We can meet at a spot within my drop-off zone! Just choose drop-off at checkout and enter the meet-up spot’s address in the address section."
+  },
+  {
+   "q": "How do I pay?",
+   "a": "Once I approve your order, you’ll get a QuickBooks invoice by email. You can pay securely by card or bank transfer."
+  },
+  {
+   "q": "How should I store my cookies?",
+   "a": "Artisan cookies stay fresh for about 5 days at room temperature in an airtight container in their sealed individual bags. Decorated cookies can stay at room temperature in their sealed bags for up to 10 days. All cookies can be frozen for up to 6 months. Keep them out of direct sunlight and away from heat."
+  }
+ ],
+ "pages": {
+  "homeTitle": "Handmade cookies for life’s sweetest moments",
+  "homeIntro": "Hand-decorated custom sets for birthdays, showers and celebrations, plus small-batch artisan favorites by the dozen.",
+  "homeHeroPhoto": "https://drive.google.com/file/d/18rIL8mi96GNpsKh0XivYNDhKISk-AejT/view?usp=drive_link",
+  "homeMakeIntro": "Hand-decorated custom sets, small-batch artisan favorites, and kits to decorate at home.",
+  "homeEventsLine": "Decorating classes and pop-ups around the northwest suburbs",
+  "photoCustom": "https://drive.google.com/file/d/1Y_muW7U8fjlWHTmlAUtLkz6d2zizJKaM/view?usp=drive_link",
+  "photoMini": "https://drive.google.com/file/d/1oMg8CgGeHU2J70Co8hTl23JtIjU73oua/view?usp=drive_link",
+  "photoLarge": "https://drive.google.com/file/d/1fVEvptw39Sxuikk8194DzSi2cyhli1HP/view?usp=drive_link",
+  "aboutTitle": "Hi, I'm Melissa",
+  "aboutIntro": "Sweet Nothings by M bakes custom decorated and artisan cookies for the moments worth celebrating.",
+  "aboutPhoto": "https://drive.google.com/file/d/1kgXEHECkF32WkBQ_hGyZorMeggvUvnel/view?usp=drive_link",
+  "aboutStoryHeading": "The story",
+  "aboutStory": "Sweet Nothings by M started with one cookie that quickly became a fan favorite!\n\nI’ve loved baking since I was young, and I’ve always enjoyed bringing sweet treats to share with family and friends, and to spoil the nurses and doctors I work with every day. I’ve been a PICU nurse for 20 years, and Sweet Nothings is how I turned my passion for baking into a small, home-based cottage bakery.\n\nI love being part of people’s lives and their special moments, and cookies give me the chance to do that every day.",
+  "aboutGoodToKnowHeading": "Good to know",
+  "aboutGoodToKnow": "How ordering works:\nPlease order at least 14 days before you need your cookies. When you send your order, it’s a request, not a final order. I’ll review the details and email you a confirmation with your final price and an invoice. Your date is reserved once the invoice is paid.\n\nNeed them sooner? \nIf you need your cookies sooner than 14 days, send me a message before ordering to see if I can fit you in. Rush orders have an extra rush fee, added to your final price.\n\nAllergies and dietary needs: \nNeed allergy-friendly swaps, like gluten-free or dairy-free? Happy to help! Ingredient changes for allergies or dietary needs add an extra cost, which I’ll include in your final price. Please note my kitchen is not allergen-free, so I can’t guarantee against cross-contact for severe allergies.",
+  "eventsTitle": "Classes, pop-ups & seasonal specials",
+  "eventsIntro": "Limited-time cookies and cookie decorating classes. Follow along on Instagram for the latest dates.",
+  "galleryTitle": "Past creations",
+  "galleryIntro": "A peek at cookies made for birthdays, showers, weddings and more. See the newest work on Instagram."
+ },
+ "events": [
+  {
+   "id": "e1",
+   "title": "Cookie Decorating Class",
+   "date": "2026-11-19",
+   "start": "6:00pm",
+   "end": "8:00pm",
+   "address": "106 S. Emerson St., Mount Prospect, IL",
+   "price": 60,
+   "max": 18,
+   "desc": "Join us for a fun, hands-on class where you'll learn basic cookie decorating techniques and create this adorable set of 6-fall-themed cookies!\n\nAll supplies included. Step-by-step instruction. No experience needed. Take home (and eat!) your creations.\n\nMust by 12 years or older to participate.",
+   "photo": "https://drive.google.com/file/d/1r01WNCMsYuTcFPB9FyRbiFubL_qbehvC/view?usp=drive_link",
+   "when": "",
+   "button": "Add to bag",
+   "venue": "Khepri Kitchen & Coffee",
+   "summary": "Decorate 6 fall themed cookies to take home. All supplies included.",
+   "flyer": "https://drive.google.com/file/d/1kp9mdYHQpO5teBcrMWsZNA0mjXNNNBld/view?usp=drive_link"
+  },
+  {
+   "id": "e2",
+   "title": "Arlington Heights Farmers Market",
+   "date": "",
+   "start": "",
+   "end": "",
+   "address": "",
+   "price": "",
+   "max": "",
+   "desc": "Find me at the Downtown Arlington Heights Farmer's Market on Saturdays!",
+   "photo": "https://drive.google.com/file/d/1t63ARqrHbJhECsrEj5XOsbl8xr2W7ZYT/view?usp=drive_link",
+   "when": "See you next year! Thanks to everyone who came to buy cookies!",
+   "button": "None",
+   "venue": "Season has ended.",
+   "summary": "",
+   "flyer": ""
+  },
+  {
+   "id": "e3",
+   "title": "Planning something bigger?",
+   "date": "",
+   "start": "",
+   "end": "",
+   "address": "",
+   "price": "",
+   "max": "",
+   "desc": "For weddings, corporate gifts or large events, start an order and describe what you have in mind, or send me a message.",
+   "photo": "https://drive.google.com/file/d/1NTfE0oM1IIXXaQ2nUncBhSwjJ0_ZJgao/view?usp=drive_link",
+   "when": "",
+   "button": "Message me",
+   "venue": "",
+   "summary": "",
+   "flyer": ""
+  }
+ ],
+ "gallery": [
+  {
+   "photo": "https://drive.google.com/file/d/195x0hS57V75HZyoTL26h7ozvB19fJKL6/view?usp=drive_link",
+   "caption": "Birthday cookies"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1q0DR7rL7BpoTElkGvcmlfjG0xIThHlvS/view?usp=drive_link",
+   "caption": "Baby shower cookies"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1pY87fAp4FOo0eqBQzsgMbER453gJHVeL/view?usp=drive_link",
+   "caption": "Wedding shower cookies"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1yhgHxLn81YeqbXrzTkUn91zyNxzCO8-y/view?usp=drive_link",
+   "caption": "Graduation"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1GiLNI6cM58DUyoNQXeSGO9d1mep6UsLF/view?usp=drive_link",
+   "caption": "Birthday"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1eDpEn84y0RrwhJ3GN-3lg8_IuC3XnQ3m/view?usp=drive_link",
+   "caption": "Artisan box cookies"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/12R4TcQpX64dxld6iQ3tHxttQ1q0XpEc9/view?usp=drive_link",
+   "caption": "Custom set cookies"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1UR51KuNMQnnrrx4mzgMyFp7yb8lSsCHA/view?usp=drive_link",
+   "caption": "Birthday Party"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1dVtaE7qWS6-cL5rwnSvdk7UCa2p0zL_B/view?usp=drive_link",
+   "caption": "Dog Party"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1VFocdWGkiHFdOxNk5y0k-JwsowS87i-a/view?usp=drive_link",
+   "caption": "Baby Shower"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1yqE328FmyqKofRU9MKnzfpcBM_wZSjqv/view?usp=drive_link",
+   "caption": "Garden Theme"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/132TROTZh-hjQDt1wtaOK1tx5AbkCx-IX/view?usp=drive_link",
+   "caption": "Winnie the Pooh Theme"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1rqe5y84dXJuM4Rmh1tFTpAxln5jQrzEj/view?usp=drive_link",
+   "caption": "KPop Demon Hunters"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1fYECyAJd7J-w7hlB9V69aYYyvDI_w9Oj/view?usp=drive_link",
+   "caption": "Strawberry"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1VIMJ_DNH9n5xiBPa08k-vhi-vHUcjKtf/view?usp=drive_link",
+   "caption": "Woodland Theme"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1mdw67eE9nWjsOtVVPgOr7bB1eeY9tRky/view?usp=drive_link",
+   "caption": "Lego Theme"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1zSis-DU2QpFcp5V_3uNzLf6oZD-ww1-9/view?usp=drive_link",
+   "caption": "New York"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1g93i7Thw2uUFYRmas8Xn0e0aI28uBxsk/view?usp=drive_link",
+   "caption": "Tennis"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1LXugSYUowI-IqQOZ8xHxyAMMqhtvZWRN/view?usp=drive_link",
+   "caption": "Irish Wedding Shower"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1FcY8pb2v3EFW__h0OjLcCkTFLebwjkb5/view?usp=drive_link",
+   "caption": "Minnie Mouse"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/10cGMRIEdQV9RVesUlzDubgmnGEJBm1e2/view?usp=drive_link",
+   "caption": "Cars"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/16xF6UAppepucHISEP77GPvtCif9QNsPC/view?usp=drive_link",
+   "caption": "Poker"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1FwRES_GHzSirQCc_xtX3Kl9vWhhzeg6G/view?usp=drive_link",
+   "caption": "Smores"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1LMJsMtDU3zhurBb-DL89K7RC2rtaUt0l/view?usp=drive_link",
+   "caption": "Lemon"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1E58pWiHJ-cChyhlQVp5aumJBNftwtA-0/view?usp=drive_link",
+   "caption": "Baby Sprinkle"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1kcxYKAkPdEnJcJZdR9OEpth4msZpFWaI/view?usp=drive_link",
+   "caption": "College Bound"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/1UX44Ke2QSElo_kKQHVrCxkry37gPef_u/view?usp=drive_link",
+   "caption": "Halloween Birthday"
+  },
+  {
+   "photo": "https://drive.google.com/file/d/126aKxCEUYkBwX360-en-sMM2wmBZ9xU8/view?usp=drive_link",
+   "caption": "Business"
+  }
+ ],
+ "classesPayOnline": true,
+ "blockedDates": [
+  "2026-11-26",
+  "2026-12-24",
+  "2026-12-25",
+  "2026-12-26"
+ ]
+});
+/* LIVE SNAPSHOT END */
 
 const SN = {
   clone(o) { return JSON.parse(JSON.stringify(o)); },
@@ -255,9 +662,17 @@ const SN = {
       fetchFresh().then((ok) => { if (ok) document.dispatchEvent(new CustomEvent('sn:config')); }).catch(() => { /* keep the remembered copy */ });
       return Promise.resolve();
     }
-    return fetchFresh()
+    // Waiting on the Sheet (first visit, or a copy older than 30 minutes): the page content stays hidden so built-in
+    // values don't flash, then fades in once the real settings are on the page (or after 2.5 s if the Sheet is slow).
+    const root = document.documentElement;
+    root.classList.add('sn-loading');
+    const reveal = () => root.classList.remove('sn-loading');
+    setTimeout(reveal, 2500);
+    const p = fetchFresh()
       .catch(() => { /* Sheet unreachable: pages fall back to SN_DEFAULTS */ })
       .then(() => { SN.configFailed = !SN._live; });
+    p.then(() => setTimeout(reveal, 30));   // after the pages' own SN.ready handlers have filled things in
+    return p;
   },
   CONFIG_KEY: 'sn_live_cfg_v2',
   // Forget the remembered settings, so the next page asks the server (after booking spots, leaving preview).
