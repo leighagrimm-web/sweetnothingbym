@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Add to calendar · Sweet Nothings by M</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=20261027m">
+</head>
+<body data-page="privacy">
+<div id="site-header"></div>
+<main>
+  <section class="hero wrap" style="max-width:640px">
+    <p class="eyebrow">Add to calendar</p>
+    <h1 id="cal-title">Opening your calendar…</h1>
+    <p class="lead" id="cal-msg">One moment.</p>
+    <div class="row-gap" id="cal-btns" style="gap:10px;margin-top:18px" hidden>
+      <a class="btn" id="cal-google" target="_blank" rel="noopener">Add to Google Calendar</a>
+      <a class="btn ghost" id="cal-file">Add to Apple / Outlook calendar</a>
+    </div>
+  </section>
+</main>
+<div id="site-footer"></div>
+<script src="config.js?v=20261027m"></script>
+<script src="layout.js?v=20261027m"></script>
+<script src="order.js?v=20261027m"></script>
+<script>
+// "Add to calendar" for a class, from the booking email and the booking-confirmed screen:
+//   calendar.html?event=e1&to=google -> Google Calendar's ready-to-save event
+//   calendar.html?event=e1           -> the calendar file from Apps Script (?action=ics): iPhone/iPad/Mac open it
+//                                      right in Calendar; other computers download it for Outlook / their calendar.
+SN.ready.then(function () {
+  const q = new URLSearchParams(location.search);
+  const ev = (SN.load().events || []).find((e) => e.id === q.get('event'));
+  const $ = (id) => document.getElementById(id);
+  if (!ev || !ev.date || !ev.start) {
+    $('cal-title').textContent = 'We couldn’t find that class';
+    $('cal-msg').innerHTML = 'It may have been moved or removed. See <a href="events.html">Special Events</a> for the latest.';
+    return;
+  }
+  // "6:00 PM" / "6pm" / "18:00" -> [18, 0]
+  const clock = (t) => {
+    const m = String(t || '').trim().match(/^(\d{1,2})(?::(\d{2}))?\s*([ap])?\.?m?\.?$/i);
+    if (!m) return null;
+    let h = Number(m[1]) % (m[3] ? 12 : 24);
+    if (m[3] && /p/i.test(m[3])) h += 12;
+    return [h, Number(m[2] || 0)];
+  };
+  const s = clock(ev.start), e = clock(ev.end) || (s && [s[0] + 2, s[1]]);
+  const two = (n) => String(n).padStart(2, '0');
+  const day = ev.date.replace(/-/g, '');
+  const place = SN.eventPlace(ev);
+  const google = s ? 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(ev.title) +
+    '&dates=' + day + 'T' + two(s[0]) + two(s[1]) + '00/' + day + 'T' + two(Math.min(e[0], 23)) + two(e[1]) + '00' +
+    '&ctz=America/Chicago&details=' + encodeURIComponent(String(ev.desc || '').slice(0, 1200) + '\n\nDetails: ' + location.origin + location.pathname.replace(/calendar\.html$/, 'events.html')) +
+    '&location=' + encodeURIComponent(place) : '';
+  const icsUrl = SN_ENV.api + '?action=ics&event=' + encodeURIComponent(ev.id);
+
+  $('cal-title').textContent = ev.title;
+  $('cal-msg').textContent = [SN.classWhen(ev), place].filter(Boolean).join(' · ');
+  $('cal-google').href = google;
+  $('cal-file').href = icsUrl;
+  $('cal-btns').hidden = false;
+
+  const apple = /iPhone|iPad|Macintosh/.test(navigator.userAgent);
+  // Elsewhere, download the file with a proper name so Outlook / the calendar app opens it.
+  const download = () => fetch(icsUrl).then((r) => r.text()).then((text) => {
+    if (!/BEGIN:VCALENDAR/.test(text)) throw new Error('no calendar');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/calendar' }));
+    a.download = 'Sweet-Nothings-' + ev.title.replace(/[^\w]+/g, '-') + '.ics';
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+  $('cal-file').addEventListener('click', (evt) => {
+    if (apple) return;   // Apple devices open the file straight from the link
+    evt.preventDefault();
+    download().catch(() => { location.href = icsUrl; });
+  });
+
+  if (q.get('to') === 'google' && google) { location.replace(google); return; }
+  if (!q.get('to')) {
+    if (apple) location.href = icsUrl;
+    else download().catch(() => { /* the buttons are still there */ });
+  }
+});
+</script>
+</body>
+</html>

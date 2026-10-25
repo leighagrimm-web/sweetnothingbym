@@ -32,6 +32,12 @@ function doGet(e) {
       return json_({ ok: true, config: publicConfig_(live) });
     }
     if (p.action === 'ping') return json_({ ok: true, time: new Date().toISOString() });
+    if (p.action === 'ics') {
+      const ev = (getConfig_().events || []).find((x) => x.id === String(p.event || ''));
+      const ics = ev ? classIcs_(getConfig_(), ev) : '';
+      if (!ics) return json_({ ok: false, error: 'That class isn’t on the calendar.' });
+      return ContentService.createTextOutput(ics).setMimeType(ContentService.MimeType.ICAL);
+    }
     return json_({ ok: false, error: 'Unknown action.' });
   } catch (err) {
     console.error('doGet failed', err && err.stack || err);
@@ -2209,7 +2215,7 @@ function checkClassPayment_(b) {
   }
   return {
     ok: true, number: o.number, status: o.status, total: o.total,
-    classes: o.items.map((it) => ({ title: it.title, summary: it.summary, qty: it.qty })),
+    classes: o.items.map((it) => ({ title: it.title, summary: it.summary, qty: it.qty, eventId: it.eventId })),
     payUrl: o.status === 'Awaiting payment' && o.invoice && o.invoice.square ? o.invoice.square.url : '',
     holdMinutes: Number(getConfig_().classHoldMinutes) || 30
   };
@@ -2442,14 +2448,14 @@ function sendClassBookingEmail_(cfg, o) {
   const html = shell_(cfg, 'You’re booked' + (first ? ', ' + esc_(first) : '') + '!', o.number,
     '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">Your spot' + (o.items.reduce((a, it) => a + it.qty, 0) > 1 ? 's are' : ' is') +
       ' saved. ' + classPayLine_(o) + '</div>' +
-    classDetails_(o) + totalsBlock_(o, paid ? 'Paid' : 'Total') +
+    classDetails_(o) + totalsBlock_(o, paid ? 'Paid' : 'Total') + classInfoBlock_(cfg, o) +
     p_('Questions or need to change your booking? Just reply to this email and mention your order number.', 14));
   sendMail_({
     to: o.customer.email,
     subject: subjectPrefix_(cfg) + 'You’re booked! – Sweet Nothings ' + o.number,
     htmlBody: html,
     body: ['You’re booked' + (first ? ', ' + first : '') + '!', 'Order number ' + o.number, '', classPayLine_(o), '',
-      classText_(o), '', totalsText_(o, paid ? 'Paid' : 'Total'), '', 'Questions? Just reply to this email.'].join('\n'),
+      classText_(o), '', totalsText_(o, paid ? 'Paid' : 'Total'), '', classInfoText_(cfg, o), '', 'Questions? Just reply to this email.'].join('\n'),
     name: cfg.senderName, replyTo: cfg.replyToEmail
   });
 }
@@ -2504,6 +2510,88 @@ function sendOwnerClassAlert_(cfg, o, late) {
   });
 }
 
+/* ---------- Class details and "Add to calendar" ---------- */
+// "6:00 PM", "6pm", "18:00" -> [18, 0]; anything else -> null.
+function clock24_(t) {
+  const m = String(t || '').trim().match(/^(\d{1,2})(?::(\d{2}))?\s*([ap])?\.?m?\.?$/i);
+  if (!m) return null;
+  let h = Number(m[1]) % (m[3] ? 12 : 24);
+  if (m[3] && /p/i.test(m[3])) h += 12;
+  return [h, Number(m[2] || 0)];
+}
+// Local (Chicago) start and end for a class, as "20261119T180000". No end time: two hours after the start.
+function classTimes_(ev) {
+  if (!ev || !ev.date) return null;
+  const s = clock24_(ev.start);
+  if (!s) return null;
+  const e = clock24_(ev.end) || [s[0] + 2, s[1]];
+  const d = String(ev.date).replace(/-/g, '');
+  const two = (n) => String(n).padStart(2, '0');
+  return { start: d + 'T' + two(s[0]) + two(s[1]) + '00', end: d + 'T' + two(Math.min(e[0], 23)) + two(e[1]) + '00' };
+}
+function classPlace_(ev) { return [ev.venue, ev.address].filter(Boolean).join(', '); }
+function googleCalUrl_(cfg, ev) {
+  const t = classTimes_(ev);
+  if (!t) return '';
+  const details = [String(ev.desc || '').slice(0, 1200), cfg.siteUrl ? 'Details: ' + cfg.siteUrl + 'events.html' : ''].filter(Boolean).join('\n\n');
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(ev.title) +
+    '&dates=' + t.start + '/' + t.end + '&ctz=America/Chicago&details=' + encodeURIComponent(details) + '&location=' + encodeURIComponent(classPlace_(ev));
+}
+// A calendar file (Apple Calendar, Outlook), in Chicago time.
+function classIcs_(cfg, ev) {
+  const t = classTimes_(ev);
+  if (!t) return '';
+  const esc = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Sweet Nothings by M//Classes//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    'BEGIN:VTIMEZONE', 'TZID:America/Chicago',
+    'BEGIN:DAYLIGHT', 'TZOFFSETFROM:-0600', 'TZOFFSETTO:-0500', 'TZNAME:CDT', 'DTSTART:19700308T020000', 'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU', 'END:DAYLIGHT',
+    'BEGIN:STANDARD', 'TZOFFSETFROM:-0500', 'TZOFFSETTO:-0600', 'TZNAME:CST', 'DTSTART:19701101T020000', 'RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU', 'END:STANDARD',
+    'END:VTIMEZONE',
+    'BEGIN:VEVENT', 'UID:' + ev.id + '-' + t.start + '@sweetnothingsbym.com', 'DTSTAMP:' + Utilities.formatDate(new Date(), 'UTC', "yyyyMMdd'T'HHmmss'Z'"),
+    'DTSTART;TZID=America/Chicago:' + t.start, 'DTEND;TZID=America/Chicago:' + t.end,
+    'SUMMARY:' + esc(ev.title), 'LOCATION:' + esc(classPlace_(ev)),
+    'DESCRIPTION:' + esc([String(ev.desc || '').slice(0, 1200), cfg.siteUrl ? 'Details: ' + cfg.siteUrl + 'events.html' : ''].filter(Boolean).join('\n\n')),
+    'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+}
+// A Drive share link as an image address (like SN.photoUrl on the site), else ''.
+function photoUrl_(v) {
+  const s = String(v || '').trim();
+  if (!s || s[0] === '[') return '';
+  const m = s.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=)([\w-]{10,})/);
+  if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1600';
+  return /^https?:\/\//.test(s) ? s : '';
+}
+// The full class info for the booking email: where (with a directions link), the description, the flyer and
+// calendar buttons. Uses the class as it is on the Events tab now, so later edits (new address, flyer) show up.
+function classInfoBlock_(cfg, o) {
+  const seen = {};
+  return o.items.map((it) => (cfg.events || []).find((e) => e.id === it.eventId)).filter((ev) => ev && !seen[ev.id] && (seen[ev.id] = true)).map((ev) => {
+    const place = classPlace_(ev);
+    const maps = ev.address ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(place) : '';
+    const flyer = photoUrl_(ev.flyer);
+    const gcal = googleCalUrl_(cfg, ev);
+    const ics = cfg.siteUrl && classTimes_(ev) ? cfg.siteUrl + 'calendar.html?event=' + encodeURIComponent(ev.id) : '';
+    const btn = (href, label) => '<a href="' + esc_(href) + '" style="display:inline-block;margin:0 8px 8px 0;padding:10px 16px;border-radius:999px;border:1px solid ' + C.navy + ';color:' + C.navy + ';text-decoration:none;font-weight:600;font-size:14px">' + label + '</a>';
+    return '<div style="border-top:1px solid ' + C.line + ';padding-top:14px;margin-bottom:18px">' + h2_(esc_(ev.title)) +
+      '<div style="font-size:15px;font-weight:600;margin-bottom:8px">' + esc_([prettyDate_(ev.date), [ev.start, ev.end].filter(Boolean).join('–')].filter(Boolean).join(' · ')) + '</div>' +
+      (place ? '<div style="margin-bottom:12px;font-size:15px"><div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em">Where</div>' +
+        (ev.venue ? '<div style="font-weight:600">' + esc_(ev.venue) + '</div>' : '') +
+        (ev.address ? '<a href="' + esc_(maps) + '" style="color:' + C.navy + '">' + esc_(ev.address) + '</a><div style="color:' + C.muted + ';font-size:13px">Tap the address for directions.</div>' : '') + '</div>' : '') +
+      (ev.desc ? '<div style="font-size:15px;white-space:pre-wrap;margin-bottom:12px">' + esc_(ev.desc) + '</div>' : '') +
+      (flyer ? '<a href="' + esc_(flyer) + '"><img src="' + esc_(flyer) + '" alt="Flyer for ' + esc_(ev.title) + '" width="520" style="display:block;width:100%;max-width:520px;height:auto;border-radius:12px;border:1px solid ' + C.line + ';margin-bottom:6px"></a>' +
+        '<div style="color:' + C.muted + ';font-size:13px;margin-bottom:12px">Tap the flyer to see it full size.</div>' : '') +
+      (gcal || ics ? '<div style="margin-top:4px">' + (gcal ? btn(gcal, 'Add to Google Calendar') : '') + (ics ? btn(ics, 'Add to Apple / Outlook calendar') : '') + '</div>' : '') +
+    '</div>';
+  }).join('');
+}
+function classInfoText_(cfg, o) {
+  const seen = {};
+  return o.items.map((it) => (cfg.events || []).find((e) => e.id === it.eventId)).filter((ev) => ev && !seen[ev.id] && (seen[ev.id] = true)).map((ev) =>
+    [ev.title, [prettyDate_(ev.date), [ev.start, ev.end].filter(Boolean).join('–')].filter(Boolean).join(' · '),
+      classPlace_(ev) ? 'Where: ' + classPlace_(ev) : '', ev.desc || '', photoUrl_(ev.flyer) ? 'Flyer: ' + photoUrl_(ev.flyer) : '',
+      googleCalUrl_(cfg, ev) ? 'Add to Google Calendar: ' + googleCalUrl_(cfg, ev) : '',
+      cfg.siteUrl && classTimes_(ev) ? 'Add to Apple / Outlook calendar: ' + cfg.siteUrl + 'calendar.html?event=' + encodeURIComponent(ev.id) : ''].filter(Boolean).join('\n')).join('\n\n');
+}
 function classDetails_(o) {
   return '<div style="border-top:1px solid ' + C.line + ';padding-top:14px;margin-bottom:18px">' + h2_('Your class' + (o.items.length > 1 ? 'es' : '')) +
     o.items.map((it) =>

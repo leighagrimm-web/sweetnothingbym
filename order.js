@@ -857,7 +857,10 @@ SN.ready.then(function () {
     else if (p.status === 'Paid' || p.status === 'Booked' || p.status === 'Completed') {
       body = '<div class="check">' + SN_ICONS.check + '</div><h3>You’re booked!</h3>' +
         '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(p.number) + '</strong></p>' +
-        p.classes.map((c) => '<p style="margin:12px 0 0"><strong>' + esc(c.title) + '</strong><br><span class="muted">' + esc(c.summary || '') + ' · ' + c.qty + ' spot' + (c.qty > 1 ? 's' : '') + '</span></p>').join('') +
+        p.classes.map((c) => '<p style="margin:12px 0 0"><strong>' + esc(c.title) + '</strong><br><span class="muted">' + esc(c.summary || '') + ' · ' + c.qty + ' spot' + (c.qty > 1 ? 's' : '') + '</span></p>' +
+          (c.eventId ? '<div class="row-gap" style="justify-content:center;gap:8px;margin-top:10px">' +
+            '<a class="btn ghost small" href="calendar.html?event=' + encodeURIComponent(c.eventId) + '&to=google" target="_blank" rel="noopener">Add to Google Calendar</a>' +
+            '<a class="btn ghost small" href="calendar.html?event=' + encodeURIComponent(c.eventId) + '">Add to Apple / Outlook</a></div>' : '')).join('') +
         '<p class="muted" style="margin:12px 0 0">' + (p.status === 'Paid' ? 'Your payment went through. ' : '') + 'A confirmation email is on its way.</p>';
     } else if (p.status === 'Awaiting payment') {
       body = paidTries < 6
