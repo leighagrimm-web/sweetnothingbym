@@ -188,6 +188,19 @@ SN.ready.then(function () {
     return html;
   }
 
+  // A dropdown of times every 15 minutes from firstHour to lastHour (24-hour), saved as "17:00" and shown as "5:00 PM".
+  // (The built-in time picker's 15-minute setting is ignored on iPhones.)
+  function timeSelect(id, key, firstHour, lastHour) {
+    let opts = '<option value="">Choose a time</option>';
+    for (let h = firstHour; h <= lastHour; h++) {
+      for (let m = 0; m < 60 && !(h === lastHour && m > 0); m += 15) {
+        const v = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+        opts += '<option value="' + v + '"' + (checkout[key] === v ? ' selected' : '') + '>' + SN.time12(v) + '</option>';
+      }
+    }
+    return '<select class="input time-input" id="' + id + '" data-co="' + key + '">' + opts + '</select>';
+  }
+
   function renderCustom() {
     let pills = '';
     for (let n = 1; n <= cfg.maxDesigns; n++) pills += '<button type="button" class="pill" data-act="design" data-n="' + n + '" aria-pressed="false">' + n + '</button>';
@@ -377,7 +390,7 @@ SN.ready.then(function () {
               '<p>If you need your cookies sooner than ' + cfg.leadDays + ' days, <a href="contact.html?topic=rush">send me a message</a> before ordering to see if I can fit you in. Rush orders have an extra rush fee, added to your final price.</p>' +
             '</details></div></div>' +
           '<div class="field"><label class="label" for="c-time">Time of your event <span class="muted" style="font-weight:400">(optional)</span></label>' +
-            '<div class="date-wrap' + (checkout.eventTime ? ' has-value' : '') + '"><input class="input time-input" id="c-time" type="time" data-co="eventTime" value="' + esc(checkout.eventTime) + '"><span class="date-ph" aria-hidden="true">Tap to pick</span></div></div>' +
+            timeSelect('c-time', 'eventTime', 6, 23) + '</div>' +
           '<div class="field"><label class="label" for="c-allergies">Allergies or dietary needs <span class="muted" style="font-weight:400">(optional)</span></label>' +
             '<textarea class="input" id="c-allergies" rows="2" data-co="allergies" placeholder="e.g. one guest has a nut allergy, need 6 gluten-free">' + esc(checkout.allergies) + '</textarea>' +
             (cfg.allergyNote ? '<div class="note-box fold-box" style="margin-top:10px"><details><summary>Allergy-friendly swaps</summary><p>' + esc(cfg.allergyNote) + '</p></details></div>' : '') + '</div>' +
@@ -397,8 +410,8 @@ SN.ready.then(function () {
           // Melissa bakes from home, so pickup and drop-off happen at a time she confirms with the customer.
           '<div class="field" style="margin-top:14px"><span class="label" id="window-label">' + (isDel ? 'Best drop-off window' : 'Best pickup window') + '</span>' +
             '<div class="row-gap time-range" role="group" aria-labelledby="window-label">' +
-              '<label class="time-part"><span class="muted">From</span><div class="date-wrap' + (checkout.winFrom ? ' has-value' : '') + '"><input class="input time-input" id="c-win-from" type="time" data-co="winFrom" value="' + esc(checkout.winFrom) + '"><span class="date-ph" aria-hidden="true">Tap to pick</span></div></label>' +
-              '<label class="time-part"><span class="muted">To</span><div class="date-wrap' + (checkout.winTo ? ' has-value' : '') + '"><input class="input time-input" id="c-win-to" type="time" data-co="winTo" value="' + esc(checkout.winTo) + '"><span class="date-ph" aria-hidden="true">Tap to pick</span></div></label>' +
+              '<label class="time-part"><span class="muted">From</span>' + timeSelect('c-win-from', 'winFrom', 7, 21) + '</label>' +
+              '<label class="time-part"><span class="muted">To</span>' + timeSelect('c-win-to', 'winTo', 7, 21) + '</label>' +
             '</div>' +
             '<label class="sr-only" for="c-win-note">Note about timing</label>' +
             '<input class="input" id="c-win-note" type="text" data-co="winNote" style="margin-top:8px" placeholder="Note (optional), e.g. Friday after 5 also works" value="' + esc(checkout.winNote) + '">' +
@@ -696,8 +709,6 @@ SN.ready.then(function () {
         $('[data-act="apply-code"]', panel).textContent = 'Apply';
       }
       checkout[t.dataset.co] = v;
-      const tw = t.type === 'time' && t.closest('.date-wrap');
-      if (tw) tw.classList.toggle('has-value', !!v);   // hides the iPhone "Tap to pick" hint
       if (t.dataset.co === 'eventType') $('#other-wrap').hidden = v !== 'Other';
       updateCheckoutUI();
     }

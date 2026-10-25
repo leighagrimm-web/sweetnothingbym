@@ -196,7 +196,7 @@ textarea.input { resize: vertical; }
 }
 /* Checkout time boxes: event time, and the pickup / drop-off window */
 .time-input { width: 100%; }
-.field > .date-wrap:has(.time-input) { max-width: 180px; }
+.field > .time-input { max-width: 180px; }
 .time-range { gap: 12px; flex-wrap: wrap; }
 .time-part { display: flex; flex-direction: column; gap: 4px; font-size: 13px; flex: 1 1 140px; max-width: 180px; }
 .time-part .time-input { max-width: none; }
