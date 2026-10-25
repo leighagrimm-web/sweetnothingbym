@@ -549,7 +549,11 @@ SN.ready.then(function () {
     if (zipMsg) {
       if (checkout.zip.length < 5) { zipMsg.textContent = 'Enter your ZIP to see the drop-off fee.'; zipMsg.style.color = ''; }
       else if (q.zone) { zipMsg.textContent = 'Drop-off to ' + checkout.zip + ' (' + q.zone.area + '): ' + money(q.fee); zipMsg.style.color = ''; }
-      else { zipMsg.textContent = 'Sorry, ' + checkout.zip + ' is outside our drop-off area. Pickup in ' + cfg.pickupCity + ' is free.'; zipMsg.style.color = 'var(--error)'; }
+      else {
+        // Outside the zones: offer a meet-up spot inside them (entered as the drop-off address), or free pickup.
+        zipMsg.textContent = 'Sorry, ' + checkout.zip + ' is outside my drop-off area. We can meet at a spot inside it instead: just enter that spot’s address above. Or pick up for free in ' + cfg.pickupCity + '.';
+        zipMsg.style.color = 'var(--error)';
+      }
     }
     const dateWrap = $('.date-wrap', panel);
     if (dateWrap) dateWrap.classList.toggle('has-value', !!checkout.date);   // hides the iPhone "Tap to choose a date" hint
