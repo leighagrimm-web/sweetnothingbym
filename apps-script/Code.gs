@@ -1306,6 +1306,7 @@ function orderFromRow_(h, r, items) {
   const g = (k) => r[h.indexOf(k)];
   const iso = (v) => (v instanceof Date ? v.toISOString() : String(v || ''));
   const how = String(g('Pickup / drop-off'));
+  // Times (event time, agreed handoff time) go through timeText_: Sheets turns typed times like "2:00 PM" into time values.
   const delivery = how === 'Drop-off';
   const json = (k, fallback) => { try { return g(k) ? JSON.parse(g(k)) : fallback; } catch (e) { return fallback; } };
   const num = String(g('Order')).trim();
@@ -1313,7 +1314,7 @@ function orderFromRow_(h, r, items) {
     number: num, type: String(g('Type') || '') || (how === 'Class' ? 'Class' : 'Cookies'),
     createdAt: iso(g('Received')), status: String(g('Status') || 'Pending review'),
     customer: { name: String(g('Name') || ''), email: String(g('Email') || ''), phone: String(g('Phone') || '') },
-    eventType: String(g('Occasion') || ''), dateNeeded: toISODate_(g('Date needed')), allergies: String(g('Allergies') || ''), eventTime: String(g('Event time') || ''), pickupWindow: String(g('Pickup window') || ''),
+    eventType: String(g('Occasion') || ''), dateNeeded: toISODate_(g('Date needed')), allergies: String(g('Allergies') || ''), eventTime: timeText_(g('Event time')), pickupWindow: String(g('Pickup window') || ''),
     fulfillment: how === 'Class' ? 'class' : delivery ? 'delivery' : 'pickup',
     address: delivery ? { street: String(g('Street') || ''), city: String(g('City') || ''), zip: String(g('ZIP') || '') } : null,
     subtotal: Number(g('Subtotal')) || 0, tax: Number(g('Tax')) || 0, taxRate: Number(g('Tax rate')) || 0,
@@ -1321,7 +1322,7 @@ function orderFromRow_(h, r, items) {
     promoCode: String(g('Promo code') || ''), discount: Number(g('Discount')) || 0, giftCredit: Number(g('Gift card credit')) || 0,
     items: items[num] || [], invoice: json('Invoice', null), declineNote: String(g('Decline note') || ''),
     messages: json('Messages log', []),
-    handoff: toISODate_(g('Handoff date')) ? { date: toISODate_(g('Handoff date')), time: String(g('Handoff time') || '') } : null,
+    handoff: toISODate_(g('Handoff date')) ? { date: toISODate_(g('Handoff date')), time: timeText_(g('Handoff time')) } : null,
     reminderSent: String(g('Reminder sent') || ''),
     emailStatus: String(g('Customer email') || ''), updatedAt: iso(g('Updated'))
   };

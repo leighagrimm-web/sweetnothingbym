@@ -886,6 +886,8 @@
     return '';
   }
 
+  // "17:00" for the time box, from a saved "5:00 PM" (the Sheet hands times back that way) or "17:00"
+  const to24 = (t) => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i); if (!m) return ''; let h = Number(m[1]) % 12; if (!m[3]) h = Number(m[1]); else if (/pm/i.test(m[3])) h += 12; return String(h).padStart(2, '0') + ':' + m[2]; };
   // "5:00 PM" from the time box's "17:00"
   const fmtTime = (t) => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})$/); return m ? ((Number(m[1]) % 12) || 12) + ':' + m[2] + ' ' + (Number(m[1]) < 12 ? 'AM' : 'PM') : String(t || ''); };
   // The time Melissa agreed with the customer for pickup or drop-off. Saving can email it; a reminder goes the morning before.
@@ -897,7 +899,7 @@
       return '<div class="stack" style="gap:8px;margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:12px">' +
         '<div class="grid-2" style="gap:8px">' +
           '<div class="field"><label class="label" for="rv-ho-date">' + (what === 'pickup' ? 'Pickup' : 'Drop-off') + ' date</label><input class="input" id="rv-ho-date" type="date" value="' + esc(h.date || o.dateNeeded) + '"></div>' +
-          '<div class="field"><label class="label" for="rv-ho-time">Time</label><input class="input" id="rv-ho-time" type="time" value="' + esc(h.time || '') + '"></div>' +
+          '<div class="field"><label class="label" for="rv-ho-time">Time</label><input class="input" id="rv-ho-time" type="time" value="' + esc(to24(h.time)) + '"></div>' +
         '</div>' +
         '<label class="row-gap" style="gap:8px;font-weight:400;font-size:14px"><input type="checkbox" id="rv-ho-notify" checked> Email the customer this time (with your cell and the address)</label>' +
         '<textarea class="input" id="rv-ho-note" rows="2" placeholder="Optional note, e.g. Text me when you’re outside!"></textarea>' +
