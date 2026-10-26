@@ -1305,6 +1305,8 @@
           if (!r.ok) { err.hidden = false; err.textContent = r.error; updateReviewTotals(); return; }
           replaceOrder(r.order, r.weekCounts);
           const sent = /^Sent/.test(r.order.invoice.emailStatus);
+          // Sent: back to the orders list so the toast is in view. Not sent: stay open, where "Resend" is.
+          if (sent) closeReview();
           toast(sent ? 'Approved! Confirmation emailed to ' + o.customer.email : 'Approved, but the email didn\'t send: ' + r.order.invoice.emailStatus, sent ? 3600 : 8000);
         }).catch(failed);
         break;
