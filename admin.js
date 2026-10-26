@@ -923,7 +923,8 @@
   let po = null;
   const OCCASIONS = ['Birthday', 'Baby Shower', 'Wedding Shower', 'Anniversary', 'Party', 'Other'];
   const poBlank = () => ({ name: '', email: '', phone: '', items: [], eventType: '', eventOther: '', date: '', eventTime: '', allergies: '',
-    fulfillment: 'pickup', street: '', city: '', zip: '', fee: '', winFrom: '', winTo: '', winNote: '', code: '', sendClassEmail: true, pickers: {} });
+    fulfillment: 'pickup', street: '', city: '', zip: '', fee: '', winFrom: '', winTo: '', winNote: '', code: '', sendClassEmail: true, pickers: {},
+    extraDesc: '', extraAmount: '', note: '' });
   function openPhoneOrder(el) {
     po = poBlank();
     rv = null;
@@ -951,6 +952,7 @@
         '<div class="grid-2">' +
           field('po-q-' + i, 'How many cookies', '<input class="input" id="po-q-' + i + '" type="number" min="1" ' + attr('qty') + ' value="' + esc(it.qty) + '">') +
           field('po-d-' + i, 'Different designs', '<input class="input" id="po-d-' + i + '" type="number" min="1" ' + attr('designs') + ' value="' + esc(it.designs) + '">') +
+          field('po-u-' + i, 'Price per cookie', '<div class="input-wrap"><span>$</span><input id="po-u-' + i + '" type="number" min="0" step="0.25" ' + attr('unit') + ' value="' + esc(it.unit) + '"></div>', 'The price you agreed on the call.') +
         '</div>' +
         field('po-x-' + i, 'Describe the cookies', '<textarea class="input" id="po-x-' + i + '" rows="3" ' + attr('desc') + ' placeholder="Theme, colors, names, how many of each design…">' + esc(it.desc) + '</textarea>') +
         '<div class="field"><span class="label">Inspiration photos (optional)</span><div id="po-ph-' + i + '"></div></div></div>';
@@ -1021,22 +1023,46 @@
       : '') +
       (po.items.some((it) => it.kind === 'class')
         ? '<label class="row-gap" style="gap:8px;font-size:14px;margin-top:14px"><input type="checkbox" data-pof="sendClassEmail"' + (po.sendClassEmail ? ' checked' : '') + '> Email them the class confirmation now (details, flyer, add to calendar)</label>' : '') +
+      (cookies ? '<h3 class="rv-h">Price and confirmation</h3><div class="stack">' +
+        '<div class="grid-2">' +
+          field('po-xd', 'Extra charge (optional)', '<input class="input" id="po-xd" type="text" data-pof="extraDesc" value="' + esc(po.extraDesc) + '" placeholder="e.g. Rush fee">') +
+          field('po-xa', 'Amount', '<div class="input-wrap"><span>$</span><input id="po-xa" type="number" step="1" data-pof="extraAmount" value="' + esc(po.extraAmount) + '" placeholder="0"></div>', 'A negative amount works as a discount.') +
+        '</div>' +
+        field('po-note', 'Note to the customer (optional)', '<textarea class="input" id="po-note" rows="2" data-pof="note" placeholder="e.g. So glad we could fit you in!">' + esc(po.note) + '</textarea>', 'Shown in their confirmation email.') +
+        '<p class="hint" id="po-est"></p>' +
+      '</div>' : '') +
       '<h3 class="rv-h">Promo or gift code (optional)</h3>' +
         '<input class="input" type="text" data-pof="code" value="' + esc(po.code) + '" placeholder="e.g. HOLIDAY10">' +
       '<p class="err" id="po-err" hidden style="margin-top:14px"></p>';
-    const foot = '<p class="hint" style="margin:0 0 10px">' + (cookies ? 'Next: Review opens so you can adjust the price (a rush fee, for example) and approve. That sends the confirmation and invoice.' : 'Class bookings are saved as Booked.') + '</p>' +
-      '<button type="button" class="btn block" data-po="create">Create order</button>';
+    const foot = cookies
+      ? '<p class="hint" style="margin:0 0 10px">Creates the QuickBooks invoice and emails the customer their confirmation with the Pay button. They don’t get a “request received” email.</p>' +
+        '<button type="button" class="btn block" data-po="create-approve">Create &amp; approve</button>' +
+        '<div style="text-align:center;margin-top:8px"><button type="button" class="link-btn" data-po="create">Save without approving (review it first)</button></div>'
+      : '<p class="hint" style="margin:0 0 10px">Class bookings are saved as Booked.</p><button type="button" class="btn block" data-po="create">Create booking</button>';
     $('#review').innerHTML = head + '<div class="panel-body">' + body + '</div><div class="panel-foot">' + foot + '</div>';
+    poEstimate();
     po.items.forEach((it, i) => {
       if (it.kind !== 'custom') return;
       po.pickers[i] = SN.photoPicker($('#po-ph-' + i), { id: 'po-photo-' + i, label: 'Add inspiration photos', photos: po.pickers[i] ? po.pickers[i].photos() : [] });
     });
+  }
+  function poEstimate() {
+    const el = $('#po-est');
+    if (!el) return;
+    const per = (k) => (k === 'mini' ? cfg.miniPerDozen : cfg.largePerDozen) / 12;
+    const items = po.items.reduce((a, it) => a + (it.kind === 'custom' ? (Number(it.qty) || 0) * (Number(it.unit) || 0)
+      : it.kind === 'class' ? 0 : Object.keys(it.fq).reduce((x, id) => x + (Number(it.fq[id]) || 0), 0) * per(it.kind)), 0);
+    const zone = (cfg.zones || []).find((z) => z.zip === po.zip);
+    const fee = po.fulfillment === 'delivery' ? (po.fee !== '' ? Number(po.fee) || 0 : zone ? Number(zone.fee) || 0 : 0) : 0;
+    const extra = po.extraDesc.trim() ? Number(po.extraAmount) || 0 : 0;
+    el.textContent = 'Invoice before tax: ' + money(items + fee + extra) + (po.code.trim() ? ' (before the code)' : '') + '. QuickBooks adds sales tax.';
   }
   function onPhoneInput(e) {
     const t = e.target;
     if (t.dataset.pof) {
       const k = t.dataset.pof;
       po[k] = t.type === 'checkbox' ? t.checked : t.value;
+      poEstimate();
       if (k === 'zip') { const v = t.value.replace(/\D/g, '').slice(0, 5); if (v !== t.value) t.value = v; po.zip = v; if (v.length === 5 || v.length === 0) renderPhoneKeepFocus(t.id); }
       if (k === 'eventType') renderPhoneKeepFocus(t.id);
       return;
@@ -1049,6 +1075,7 @@
         const tot = $('#po-tot-' + t.dataset.poi);
         if (tot) tot.textContent = total + ' cookies · ' + money(total * ((it.kind === 'mini' ? cfg.miniPerDozen : cfg.largePerDozen) / 12));
       } else it[t.dataset.key] = t.value;
+      poEstimate();
     }
   }
   function renderPhoneKeepFocus(id) {
@@ -1063,7 +1090,7 @@
     if (act === 'close') { closeReview(); return; }
     if (act === 'add') {
       const k = b.dataset.kind;
-      po.items.push(k === 'custom' ? { kind: k, qty: String(cfg.minQty || 12), designs: '1', desc: '' } : k === 'class' ? { kind: k, eventId: '', qty: '1' } : { kind: k, fq: {} });
+      po.items.push(k === 'custom' ? { kind: k, qty: String(cfg.minQty || 12), designs: '1', desc: '', unit: String(cfg.customBasePrice || 0) } : k === 'class' ? { kind: k, eventId: '', qty: '1' } : { kind: k, fq: {} });
       renderPhoneOrder();
       return;
     }
@@ -1077,9 +1104,9 @@
       return;
     }
     if (act === 'pickup' || act === 'delivery') { po.fulfillment = act; renderPhoneOrder(); return; }
-    if (act === 'create') createPhoneOrder(b, false);
+    if (act === 'create' || act === 'create-approve') createPhoneOrder(b, false, act === 'create-approve');
   }
-  async function createPhoneOrder(b, confirmed) {
+  async function createPhoneOrder(b, confirmed, approve) {
     const err = $('#po-err');
     const showErr = (msg) => { err.hidden = false; err.innerHTML = msg; err.scrollIntoView({ block: 'nearest' }); };
     if (!po.items.length) { showErr('Add at least one item.'); return; }
@@ -1088,30 +1115,41 @@
     if (cookies && po.winFrom && po.winTo && po.winTo <= po.winFrom) { showErr('The window has to end after it starts.'); return; }
     const body = {
       items: po.items.map((it, i) => (it.kind === 'custom'
-        ? { kind: 'custom', qty: Number(it.qty), designs: Number(it.designs), desc: it.desc, photos: po.pickers[i] ? po.pickers[i].photos() : [] }
+        ? { kind: 'custom', qty: Number(it.qty), designs: Number(it.designs), desc: it.desc, unit: it.unit, photos: po.pickers[i] ? po.pickers[i].photos() : [] }
         : it.kind === 'class' ? { kind: 'class', eventId: it.eventId, qty: Number(it.qty) } : { kind: it.kind, fq: it.fq })),
       eventType: po.eventType, eventOther: po.eventOther, dateNeeded: po.date, eventTime: po.eventTime ? SN.time12(po.eventTime) : '', allergies: po.allergies,
       fulfillment: po.fulfillment, address: { street: po.street, city: po.city, zip: po.zip }, deliveryFee: po.fee,
       pickupWindow: po.winFrom && po.winTo ? [SN.time12(po.winFrom) + ' – ' + SN.time12(po.winTo), po.winNote.trim()].filter(Boolean).join(' · ') : po.winNote.trim(),
       customer: { name: po.name, email: po.email, phone: po.phone }, code: po.code.trim(),
-      confirmWarnings: confirmed, sendClassEmail: !!po.sendClassEmail
+      confirmWarnings: confirmed, sendClassEmail: !!po.sendClassEmail,
+      approve: !!approve, extraDesc: po.extraDesc.trim(), extraAmount: po.extraAmount, note: po.note.trim()
     };
     if (busy) return;
-    busy = true; b.textContent = 'Creating…';
+    const label = b.textContent;
+    busy = true; b.textContent = approve ? 'Creating and approving…' : 'Creating…';
     let r;
-    try { r = await server('adminCreateOrder', body); } catch (e) { busy = false; b.textContent = 'Create order'; failed(e); return; }
-    busy = false; b.textContent = 'Create order';
+    try { r = await server('adminCreateOrder', body); } catch (e) { busy = false; b.textContent = label; failed(e); return; }
+    busy = false; b.textContent = label;
     if (r.code === 'warn') {
       const ok = await ask({ title: 'Just checking', text: 'This order is outside your usual rules:', points: r.warnings.map((w) => w.charAt(0).toUpperCase() + w.slice(1) + '.'), yes: 'Create it anyway', no: 'Go back' });
-      if (ok) createPhoneOrder(b, true);
+      if (ok) createPhoneOrder(b, true, approve);
       return;
     }
     if (!r.ok) { showErr(r.errors ? '<strong>Still needed:</strong> ' + esc(r.errors.join(', ')) : esc(r.error || 'That didn’t work.')); return; }
     if (r.weekCounts) { weekCounts = r.weekCounts; renderBusyDays(); }
     const first = r.order || r.orders[0];
-    toast('Added ' + r.orders.map((o) => o.number).join(' and ') + '. No email was sent.', 5000);
+    const email = po.email;
     po = null;
     await refreshOrders().catch(() => {});
+    if (approve && r.approved) {
+      // Done in one go: back to the orders list, with the toast in view.
+      const sent = /^Sent/.test(((r.approvedOrder || {}).invoice || {}).emailStatus || '');
+      closeReview();
+      toast(first.number + ' created and approved. ' + (sent ? 'Confirmation and invoice emailed to ' + email + '.' : 'The email didn’t send; open it to resend.'), sent ? 5000 : 9000);
+      return;
+    }
+    if (approve && r.approveError) toast(first.number + ' was created, but approving didn’t work: ' + r.approveError, 9000);
+    else toast('Added ' + r.orders.map((o) => o.number).join(' and ') + '. No email was sent.', 5000);
     if (first && first.type === 'Cookies') openReview(first.number); else closeReview();
   }
 

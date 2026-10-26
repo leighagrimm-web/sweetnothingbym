@@ -765,10 +765,25 @@ function submitOrder_(b, admin) {
 }
 
 // Admin "Add phone order": the same order as the website checkout (see submitOrder_'s admin notes).
+// b.approve: approve the cookie order right away (QuickBooks invoice + confirmation email), with an optional extra
+// invoice line (b.extraDesc / b.extraAmount, e.g. a rush fee) and a note to the customer (b.note).
 function adminCreateOrder(b) {
   requireOwner_();
-  const r = submitOrder_(b || {}, true);
-  if (r.ok) { clearConfigCache_(); r.weekCounts = weekCountsNow_(); }
+  b = b || {};
+  const r = submitOrder_(b, true);
+  if (!r.ok) return r;
+  const cookie = (r.orders || []).find((o) => o.type === 'Cookies');
+  if (b.approve && cookie) {
+    const o = loadOrder_(cookie.number);
+    const lines = startingLines_(o);
+    const extra = round2_(Number(b.extraAmount));
+    if (clean_(b.extraDesc, 200) && isFinite(extra) && extra !== 0) lines.push({ desc: clean_(b.extraDesc, 200), qty: 1, unit: extra });
+    const a = adminApprove(cookie.number, { lines, fee: o.fulfillment === 'delivery' ? o.deliveryFee : 0, note: clean_(b.note, 2000) });
+    r.approved = !!a.ok;
+    if (a.ok) r.approvedOrder = a.order; else r.approveError = a.error;
+  }
+  clearConfigCache_();
+  r.weekCounts = weekCountsNow_();
   return r;
 }
 
@@ -799,7 +814,9 @@ function validateOrder_(cfg, b, admin) {
       if (!(designs >= 1 && designs <= (admin ? 24 : cfg.maxDesigns))) errors.push(label + ': 1 to ' + cfg.maxDesigns + ' designs');
       else if (designs > cfg.maxDesigns) rule(label + ': more than ' + cfg.maxDesigns + ' designs');
       if (!desc) errors.push(label + ': a description of your cookies');
-      const unit = Number(cfg.customBasePrice) || 0;
+      // Phone orders (admin) can use the price agreed on the call instead of the starting price.
+      const agreed = admin && raw.unit !== '' && raw.unit != null && isFinite(Number(raw.unit)) && Number(raw.unit) >= 0 ? Number(raw.unit) : null;
+      const unit = agreed !== null ? agreed : Number(cfg.customBasePrice) || 0;
       cookies.push({
         kind, qty, designs, desc, photos: incomingPhotos_(raw), unit: round2_(unit), lineTotal: round2_(qty * unit),
         summary: designs + ' design' + (designs > 1 ? 's' : '') + ' · estimated at ' + money_(unit) + ' each' + photoCount_(incomingPhotos_(raw).length)
