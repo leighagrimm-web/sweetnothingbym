@@ -979,7 +979,7 @@
     const isDel = po.fulfillment === 'delivery';
     const cookies = poHasCookies();
     const zone = (cfg.zones || []).find((z) => z.zip === po.zip);
-    const head = '<div class="panel-head"><div><h2 id="review-title">Add phone order</h2><p>For orders you’ve already agreed on by phone. The customer isn’t emailed now; you’ll review and approve it next.</p></div>' +
+    const head = '<div class="panel-head"><div><h2 id="review-title">Add phone order</h2></div>' +
       '<button type="button" class="x-btn" data-po="close" aria-label="Close">' + SN_ICONS.close + '</button></div>';
     const body =
       '<h3 class="rv-h">Customer</h3><div class="stack">' +
@@ -1035,7 +1035,7 @@
         '<input class="input" type="text" data-pof="code" value="' + esc(po.code) + '" placeholder="e.g. HOLIDAY10">' +
       '<p class="err" id="po-err" hidden style="margin-top:14px"></p>';
     const foot = cookies
-      ? '<p class="hint" style="margin:0 0 10px">Creates the QuickBooks invoice and emails the customer their confirmation with the Pay button. They don’t get a “request received” email.</p>' +
+      ? '<p class="hint" style="margin:0 0 10px">Emails their confirmation and invoice (no “request received” email).</p>' +
         '<button type="button" class="btn block" data-po="create-approve">Create &amp; approve</button>' +
         '<div style="text-align:center;margin-top:8px"><button type="button" class="link-btn" data-po="create">Save without approving (review it first)</button></div>'
       : '<p class="hint" style="margin:0 0 10px">Class bookings are saved as Booked.</p><button type="button" class="btn block" data-po="create">Create booking</button>';
@@ -1043,7 +1043,8 @@
     const prev = $('#review .panel-body');
     const top = po.keepScroll && prev ? prev.scrollTop : 0;
     po.keepScroll = true;
-    $('#review').innerHTML = head + '<div class="panel-body">' + body + '</div><div class="panel-foot">' + foot + '</div>';
+    // The buttons sit at the end of the form (not a fixed bar), so phones keep their screen for the form.
+    $('#review').innerHTML = head + '<div class="panel-body">' + body + '<div style="margin-top:22px;padding-top:16px;border-top:1px solid var(--line)">' + foot + '</div></div>';
     $('#review .panel-body').scrollTop = top;
     poEstimate();
     po.items.forEach((it, i) => {
