@@ -1039,7 +1039,12 @@
         '<button type="button" class="btn block" data-po="create-approve">Create &amp; approve</button>' +
         '<div style="text-align:center;margin-top:8px"><button type="button" class="link-btn" data-po="create">Save without approving (review it first)</button></div>'
       : '<p class="hint" style="margin:0 0 10px">Class bookings are saved as Booked.</p><button type="button" class="btn block" data-po="create">Create booking</button>';
+    // Redraws (pickup/drop-off, adding an item, the occasion) keep the scroll position; a new form starts at the top.
+    const prev = $('#review .panel-body');
+    const top = po.keepScroll && prev ? prev.scrollTop : 0;
+    po.keepScroll = true;
     $('#review').innerHTML = head + '<div class="panel-body">' + body + '</div><div class="panel-foot">' + foot + '</div>';
+    $('#review .panel-body').scrollTop = top;
     poEstimate();
     po.items.forEach((it, i) => {
       if (it.kind !== 'custom') return;
