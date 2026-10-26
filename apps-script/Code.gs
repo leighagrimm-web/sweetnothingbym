@@ -774,8 +774,8 @@ function adminCreateOrder(b) {
 
 // Returns { errors: [...short phrases for "Still needed: ..."], warnings, customer, cookie, cls, code }.
 // A checkout can hold cookies (sent for review) and classes (booked right away); each becomes its own order.
-// admin (a phone order from the admin page): the shop's rules become warnings Melissa can confirm (rush dates,
-// full weeks, blocked days, small quantities, extra flavors, out-of-area drop-off with her own fee).
+// admin (a phone order from the admin page): any date is fine (no lead time, blocked days or weekly limits), and the
+// other shop rules become warnings Melissa can confirm (small quantities, extra flavors, out-of-area drop-off).
 function validateOrder_(cfg, b, admin) {
   const errors = [];
   const warnings = [];
@@ -882,12 +882,10 @@ function validateOrder_(cfg, b, admin) {
     const dateNeeded = toISODate_(b.dateNeeded);
     const minISO = addDaysISO_(today, Number(cfg.leadDays) || 0);
     if (!dateNeeded) errors.push('date needed');
-    else if (admin && dateNeeded < today) errors.push('a date that isn’t in the past');
-    else {
-      if (dateNeeded < minISO) rule(admin ? 'a rush order: under ' + cfg.leadDays + ' days away' : 'a date at least ' + cfg.leadDays + ' days out');
-      if (blockedDates_(cfg).indexOf(dateNeeded) !== -1) rule(admin ? 'a blocked day on your calendar' : 'a different date (that day is booked)');
-      weekCapErrors_(cfg, dateNeeded, cookies).forEach((e) => rule(admin ? e.replace(/^a different week \((.*)\)$/, '$1') : e));
-    }
+    else if (admin) { /* phone orders can be any date: Melissa already agreed to it */ }
+    else if (dateNeeded < minISO) errors.push('a date at least ' + cfg.leadDays + ' days out');
+    else if (blockedDates_(cfg).indexOf(dateNeeded) !== -1) errors.push('a different date (that day is booked)');
+    else weekCapErrors_(cfg, dateNeeded, cookies).forEach((e) => errors.push(e));
 
     const fulfillment = b.fulfillment === 'delivery' ? 'delivery' : 'pickup';
     let address = null, deliveryFee = 0;

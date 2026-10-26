@@ -917,8 +917,8 @@
       '<div class="hint">' + esc(reminder) + '</div></div>';
   }
   /* ---------- Add phone order ---------- */
-  // Everything the website checkout asks for. Shop rules (rush dates, full weeks, blocked days, small orders, extra
-  // flavors, out-of-area drop-off) come back from the server as warnings to confirm. No emails go out; Review opens
+  // Everything the website checkout asks for. Any date works (no lead time, blocked days or weekly limits); small
+  // orders, extra flavors and out-of-area drop-off come back from the server as warnings to confirm. No emails go out; Review opens
   // next so Melissa can adjust the price (e.g. add a rush fee line) and approve.
   let po = null;
   const OCCASIONS = ['Birthday', 'Baby Shower', 'Wedding Shower', 'Anniversary', 'Party', 'Other'];
@@ -997,7 +997,7 @@
         '<div class="grid-2">' +
           field('po-occ', 'Occasion', '<select class="input" id="po-occ" data-pof="eventType"><option value="">Choose one…</option>' + OCCASIONS.map((x) => '<option' + (po.eventType === x ? ' selected' : '') + '>' + x + '</option>').join('') + '</select>') +
           (po.eventType === 'Other' ? field('po-occ-o', 'What’s the occasion?', '<input class="input" id="po-occ-o" type="text" data-pof="eventOther" value="' + esc(po.eventOther) + '">') : '') +
-          field('po-date', 'Date needed', '<input class="input" id="po-date" type="date" data-pof="date" min="' + SN.isoDate(new Date()) + '" value="' + esc(po.date) + '">', 'Rush dates are fine; you’ll get a reminder to confirm.') +
+          field('po-date', 'Date needed', '<input class="input" id="po-date" type="date" data-pof="date" value="' + esc(po.date) + '">', 'Any date works: rush orders, blocked days and full weeks included.') +
           field('po-time', 'Event time (optional)', poTimes('po-time', 'eventTime', 6, 23, 'No time given')) +
         '</div>' +
         field('po-all', 'Allergies or dietary needs (optional)', '<textarea class="input" id="po-all" rows="2" data-pof="allergies">' + esc(po.allergies) + '</textarea>') +
