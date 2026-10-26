@@ -106,7 +106,7 @@
     return '<section class="panel-card" id="orders" aria-labelledby="orders-h">' +
       '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-start">' +
         '<div><h2 id="orders-h">Orders</h2><p class="sub">Cookie requests come in as <strong>Pending review</strong>. Click <strong>Review</strong> to approve as-is or with changes, decline, message the customer, or change the date. Class bookings pay in Square at checkout: <strong>Awaiting payment</strong> while they pay, then <strong>Paid</strong> (or <strong>Expired</strong> if they don’t).</p></div>' +
-        '<button type="button" class="btn ghost small" id="orders-toggle"></button>' +
+        '<div class="row-gap" style="gap:8px"><button type="button" class="btn small" data-po="new">+ Add phone order</button><button type="button" class="btn ghost small" id="orders-toggle"></button></div>' +
       '</div>' +
       '<div class="table-wrap"><table class="orders-table"><thead><tr><th>Order &amp; order date</th><th>Customer</th><th>Date needed</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>' +
       '<tbody id="orders-body"></tbody></table></div></section>';
@@ -443,7 +443,8 @@
       const received = at ? { date: at.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), time: at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) } : null;
       return '<tr' + (o.status === 'Pending review' ? ' class="row-pending"' : '') + '>' +
         '<td><div class="order-cell">' + action + '<div><strong>' + esc(o.number) + '</strong>' + (received ? '<br><span style="font-size:13px;white-space:nowrap">Ordered ' + esc(received.date) + '</span>' + small(esc(received.time)) : '') +
-          (o.allergies ? '<br><span class="status-badge" style="background:#FBEDEA;color:#B23A2B;margin-top:4px">Allergy</span>' : '') + '</div></div></td>' +
+          (o.allergies ? '<br><span class="status-badge" style="background:#FBEDEA;color:#B23A2B;margin-top:4px">Allergy</span>' : '') +
+          (o.byPhone ? '<br><span class="status-badge" style="background:#E4E9F3;color:#1F2A44;margin-top:4px">Phone order</span>' : '') + '</div></div></td>' +
         '<td class="wrap-any">' + esc(o.customer.name) + small(esc(o.customer.email)) + small(esc(isClass(o) ? 'Class' : o.eventType || 'Occasion not given')) + '</td>' +
         '<td class="nowrap">' + esc(o.dateNeeded ? SN.prettyDate(o.dateNeeded, { weekday: 'short', month: 'short', day: 'numeric' }) : '—') + small(ful) + '</td>' +
         '<td>' + items + '</td>' +
@@ -738,6 +739,7 @@
     setTimeout(() => { const c = $('[data-rv="close"]', $('#review')); (c || $('#review')).focus(); }, 60);
   }
   function closeReview() {
+    po = null;
     $('#review').classList.remove('open');
     $('#scrim').classList.remove('open');
     document.body.classList.remove('locked');
@@ -914,6 +916,205 @@
       ' <button type="button" class="link-btn" data-rv="ho-edit" style="margin-left:6px">Change</button>' +
       '<div class="hint">' + esc(reminder) + '</div></div>';
   }
+  /* ---------- Add phone order ---------- */
+  // Everything the website checkout asks for. Shop rules (rush dates, full weeks, blocked days, small orders, extra
+  // flavors, out-of-area drop-off) come back from the server as warnings to confirm. No emails go out; Review opens
+  // next so Melissa can adjust the price (e.g. add a rush fee line) and approve.
+  let po = null;
+  const OCCASIONS = ['Birthday', 'Baby Shower', 'Wedding Shower', 'Anniversary', 'Party', 'Other'];
+  const poBlank = () => ({ name: '', email: '', phone: '', items: [], eventType: '', eventOther: '', date: '', eventTime: '', allergies: '',
+    fulfillment: 'pickup', street: '', city: '', zip: '', fee: '', winFrom: '', winTo: '', winNote: '', code: '', sendClassEmail: true, pickers: {} });
+  function openPhoneOrder(el) {
+    po = poBlank();
+    rv = null;
+    rvOpener = el || document.activeElement;
+    renderPhoneOrder();
+    $('#review').classList.add('open');
+    $('#scrim').classList.add('open');
+    document.body.classList.add('locked');
+    setTimeout(() => { const f = $('#po-name'); (f || $('#review')).focus(); }, 60);
+  }
+  function poTimes(id, key, first, last, ph) {
+    let opts = '<option value="">' + (ph || 'Choose a time') + '</option>';
+    for (let h = first; h <= last; h++) for (let m = 0; m < 60 && !(h === last && m > 0); m += 15) {
+      const v = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+      opts += '<option value="' + v + '"' + (po[key] === v ? ' selected' : '') + '>' + SN.time12(v) + '</option>';
+    }
+    return '<select class="input" id="' + id + '" data-pof="' + key + '">' + opts + '</select>';
+  }
+  const poHasCookies = () => po.items.some((it) => it.kind !== 'class');
+  function poItemHtml(it, i) {
+    const head = (title) => '<div class="faq-edit-top"><strong>' + title + '</strong><button type="button" class="icon-del" data-po="del-item" data-i="' + i + '" aria-label="Remove ' + title + '">' + SN_ICONS.trash + '</button></div>';
+    const attr = (k) => 'data-poi="' + i + '" data-key="' + k + '"';
+    if (it.kind === 'custom') {
+      return '<div class="faq-edit">' + head('Custom Cookies') +
+        '<div class="grid-2">' +
+          field('po-q-' + i, 'How many cookies', '<input class="input" id="po-q-' + i + '" type="number" min="1" ' + attr('qty') + ' value="' + esc(it.qty) + '">') +
+          field('po-d-' + i, 'Different designs', '<input class="input" id="po-d-' + i + '" type="number" min="1" ' + attr('designs') + ' value="' + esc(it.designs) + '">') +
+        '</div>' +
+        field('po-x-' + i, 'Describe the cookies', '<textarea class="input" id="po-x-' + i + '" rows="3" ' + attr('desc') + ' placeholder="Theme, colors, names, how many of each design…">' + esc(it.desc) + '</textarea>') +
+        '<div class="field"><span class="label">Inspiration photos (optional)</span><div id="po-ph-' + i + '"></div></div></div>';
+    }
+    if (it.kind === 'mini' || it.kind === 'large') {
+      const flavors = (cfg.flavors || []).filter((f) => f.on);
+      const total = flavors.reduce((a, f) => a + (Number(it.fq[f.id]) || 0), 0);
+      return '<div class="faq-edit">' + head(it.kind === 'mini' ? 'Mini Artisan' : 'Large Artisan') +
+        '<div class="stack" style="gap:6px">' + flavors.map((f) =>
+          '<div class="row-gap" style="justify-content:space-between;gap:10px"><label for="po-f-' + i + '-' + esc(f.id) + '">' + esc(f.name) + (f.special ? ' <span class="badge">SPECIAL</span>' : '') + '</label>' +
+          '<input class="input" style="width:90px;min-height:40px" id="po-f-' + i + '-' + esc(f.id) + '" type="number" min="0" data-poi="' + i + '" data-flavor="' + esc(f.id) + '" value="' + esc(it.fq[f.id] || '') + '" placeholder="0"></div>').join('') + '</div>' +
+        '<p class="hint" id="po-tot-' + i + '" style="margin-top:8px">' + total + ' cookies · ' + money(total * ((it.kind === 'mini' ? cfg.miniPerDozen : cfg.largePerDozen) / 12)) + '</p></div>';
+    }
+    const classes = (cfg.events || []).filter((e) => e.button === 'Add to bag' && Number(e.price) > 0);
+    return '<div class="faq-edit">' + head('Class booking') +
+      '<div class="grid-2">' +
+        field('po-e-' + i, 'Class', '<select class="input" id="po-e-' + i + '" ' + attr('eventId') + '><option value="">Choose a class</option>' +
+          classes.map((e) => '<option value="' + esc(e.id) + '"' + (it.eventId === e.id ? ' selected' : '') + '>' + esc(e.title) + (e.date ? ' · ' + esc(SN.prettyDate(e.date, { month: 'short', day: 'numeric' })) : '') +
+            (e.spotsLeft !== undefined ? ' (' + e.spotsLeft + ' left)' : '') + '</option>').join('') + '</select>') +
+        field('po-s-' + i, 'Spots', '<input class="input" id="po-s-' + i + '" type="number" min="1" max="20" ' + attr('qty') + ' value="' + esc(it.qty) + '">') +
+      '</div></div>';
+  }
+  function renderPhoneOrder() {
+    const isDel = po.fulfillment === 'delivery';
+    const cookies = poHasCookies();
+    const zone = (cfg.zones || []).find((z) => z.zip === po.zip);
+    const head = '<div class="panel-head"><div><h2 id="review-title">Add phone order</h2><p>For orders you’ve already agreed on by phone. The customer isn’t emailed now; you’ll review and approve it next.</p></div>' +
+      '<button type="button" class="x-btn" data-po="close" aria-label="Close">' + SN_ICONS.close + '</button></div>';
+    const body =
+      '<h3 class="rv-h">Customer</h3><div class="stack">' +
+        field('po-name', 'Name', '<input class="input" id="po-name" type="text" data-pof="name" value="' + esc(po.name) + '">') +
+        '<div class="grid-2">' +
+          field('po-email', 'Email', '<input class="input" id="po-email" type="email" data-pof="email" value="' + esc(po.email) + '">', 'Their invoice and confirmation go here.') +
+          field('po-phone', 'Phone', '<input class="input" id="po-phone" type="tel" data-pof="phone" value="' + esc(po.phone) + '">') +
+        '</div></div>' +
+      '<h3 class="rv-h">What they’re ordering</h3><div class="stack" id="po-items">' + (po.items.map(poItemHtml).join('') || '<p class="hint">Add at least one item.</p>') + '</div>' +
+      '<div class="row-gap" style="gap:8px;margin-top:10px">' +
+        '<button type="button" class="btn dashed small" data-po="add" data-kind="custom">+ Custom Cookies</button>' +
+        '<button type="button" class="btn dashed small" data-po="add" data-kind="mini">+ Mini Artisan</button>' +
+        '<button type="button" class="btn dashed small" data-po="add" data-kind="large">+ Large Artisan</button>' +
+        '<button type="button" class="btn dashed small" data-po="add" data-kind="class">+ Class</button>' +
+      '</div>' +
+      (cookies ? '<h3 class="rv-h">Their event</h3><div class="stack">' +
+        '<div class="grid-2">' +
+          field('po-occ', 'Occasion', '<select class="input" id="po-occ" data-pof="eventType"><option value="">Choose one…</option>' + OCCASIONS.map((x) => '<option' + (po.eventType === x ? ' selected' : '') + '>' + x + '</option>').join('') + '</select>') +
+          (po.eventType === 'Other' ? field('po-occ-o', 'What’s the occasion?', '<input class="input" id="po-occ-o" type="text" data-pof="eventOther" value="' + esc(po.eventOther) + '">') : '') +
+          field('po-date', 'Date needed', '<input class="input" id="po-date" type="date" data-pof="date" min="' + SN.isoDate(new Date()) + '" value="' + esc(po.date) + '">', 'Rush dates are fine; you’ll get a reminder to confirm.') +
+          field('po-time', 'Event time (optional)', poTimes('po-time', 'eventTime', 6, 23, 'No time given')) +
+        '</div>' +
+        field('po-all', 'Allergies or dietary needs (optional)', '<textarea class="input" id="po-all" rows="2" data-pof="allergies">' + esc(po.allergies) + '</textarea>') +
+        '</div>' +
+      '<h3 class="rv-h">Pickup or drop-off</h3>' +
+        '<div class="row-gap" style="gap:8px"><button type="button" class="btn small' + (isDel ? ' ghost' : '') + '" data-po="pickup" aria-pressed="' + !isDel + '">Pickup</button>' +
+        '<button type="button" class="btn small' + (isDel ? '' : ' ghost') + '" data-po="delivery" aria-pressed="' + isDel + '">Drop-off</button></div>' +
+        (isDel ? '<div class="stack" style="margin-top:12px">' +
+          field('po-st', 'Street address', '<input class="input" id="po-st" type="text" data-pof="street" value="' + esc(po.street) + '">') +
+          '<div class="grid-2">' +
+            field('po-city', 'City', '<input class="input" id="po-city" type="text" data-pof="city" value="' + esc(po.city) + '">') +
+            field('po-zip', 'ZIP', '<input class="input" id="po-zip" type="text" inputmode="numeric" maxlength="5" data-pof="zip" value="' + esc(po.zip) + '">',
+              po.zip.length === 5 ? (zone ? 'In your zones: ' + esc(zone.area) + ' · ' + money(zone.fee) : 'Not in your drop-off zones: enter your fee below.') : '') +
+          '</div>' +
+          field('po-fee', 'Drop-off fee', '<div class="input-wrap"><span>$</span><input id="po-fee" type="number" min="0" step="1" data-pof="fee" value="' + esc(po.fee) + '" placeholder="' + (zone ? esc(zone.fee) : '') + '"></div>',
+            'Leave blank to use your zone’s fee.') +
+        '</div>' : '') +
+        '<div class="field" style="margin-top:12px"><span class="label">' + (isDel ? 'Drop-off' : 'Pickup') + ' window</span><div class="grid-2">' +
+          poTimes('po-wf', 'winFrom', 7, 21, 'From') + poTimes('po-wt', 'winTo', 7, 21, 'To') + '</div>' +
+          '<input class="input" type="text" data-pof="winNote" style="margin-top:8px" placeholder="Note (optional), e.g. Friday after 5 also works" value="' + esc(po.winNote) + '"></div>'
+      : '') +
+      (po.items.some((it) => it.kind === 'class')
+        ? '<label class="row-gap" style="gap:8px;font-size:14px;margin-top:14px"><input type="checkbox" data-pof="sendClassEmail"' + (po.sendClassEmail ? ' checked' : '') + '> Email them the class confirmation now (details, flyer, add to calendar)</label>' : '') +
+      '<h3 class="rv-h">Promo or gift code (optional)</h3>' +
+        '<input class="input" type="text" data-pof="code" value="' + esc(po.code) + '" placeholder="e.g. HOLIDAY10">' +
+      '<p class="err" id="po-err" hidden style="margin-top:14px"></p>';
+    const foot = '<p class="hint" style="margin:0 0 10px">' + (cookies ? 'Next: Review opens so you can adjust the price (a rush fee, for example) and approve. That sends the confirmation and invoice.' : 'Class bookings are saved as Booked.') + '</p>' +
+      '<button type="button" class="btn block" data-po="create">Create order</button>';
+    $('#review').innerHTML = head + '<div class="panel-body">' + body + '</div><div class="panel-foot">' + foot + '</div>';
+    po.items.forEach((it, i) => {
+      if (it.kind !== 'custom') return;
+      po.pickers[i] = SN.photoPicker($('#po-ph-' + i), { id: 'po-photo-' + i, label: 'Add inspiration photos', photos: po.pickers[i] ? po.pickers[i].photos() : [] });
+    });
+  }
+  function onPhoneInput(e) {
+    const t = e.target;
+    if (t.dataset.pof) {
+      const k = t.dataset.pof;
+      po[k] = t.type === 'checkbox' ? t.checked : t.value;
+      if (k === 'zip') { const v = t.value.replace(/\D/g, '').slice(0, 5); if (v !== t.value) t.value = v; po.zip = v; if (v.length === 5 || v.length === 0) renderPhoneKeepFocus(t.id); }
+      if (k === 'eventType') renderPhoneKeepFocus(t.id);
+      return;
+    }
+    if (t.dataset.poi !== undefined) {
+      const it = po.items[Number(t.dataset.poi)];
+      if (t.dataset.flavor) {
+        it.fq[t.dataset.flavor] = Math.max(0, Math.floor(Number(t.value) || 0));
+        const total = Object.keys(it.fq).reduce((a, id) => a + (Number(it.fq[id]) || 0), 0);
+        const tot = $('#po-tot-' + t.dataset.poi);
+        if (tot) tot.textContent = total + ' cookies · ' + money(total * ((it.kind === 'mini' ? cfg.miniPerDozen : cfg.largePerDozen) / 12));
+      } else it[t.dataset.key] = t.value;
+    }
+  }
+  function renderPhoneKeepFocus(id) {
+    renderPhoneOrder();
+    const el = $('#' + id);
+    if (el) { el.focus(); if (el.setSelectionRange && el.type === 'text') el.setSelectionRange(el.value.length, el.value.length); }
+  }
+  async function onPhoneClick(b) {
+    const act = b.dataset.po;
+    if (act === 'new') { openPhoneOrder(b); return; }
+    if (!po) return;
+    if (act === 'close') { closeReview(); return; }
+    if (act === 'add') {
+      const k = b.dataset.kind;
+      po.items.push(k === 'custom' ? { kind: k, qty: String(cfg.minQty || 12), designs: '1', desc: '' } : k === 'class' ? { kind: k, eventId: '', qty: '1' } : { kind: k, fq: {} });
+      renderPhoneOrder();
+      return;
+    }
+    if (act === 'del-item') {
+      const i = Number(b.dataset.i);
+      po.items.splice(i, 1);
+      const kept = {};
+      Object.keys(po.pickers).forEach((k) => { const n = Number(k); if (n < i) kept[n] = po.pickers[k]; else if (n > i) kept[n - 1] = po.pickers[k]; });
+      po.pickers = kept;
+      renderPhoneOrder();
+      return;
+    }
+    if (act === 'pickup' || act === 'delivery') { po.fulfillment = act; renderPhoneOrder(); return; }
+    if (act === 'create') createPhoneOrder(b, false);
+  }
+  async function createPhoneOrder(b, confirmed) {
+    const err = $('#po-err');
+    const showErr = (msg) => { err.hidden = false; err.innerHTML = msg; err.scrollIntoView({ block: 'nearest' }); };
+    if (!po.items.length) { showErr('Add at least one item.'); return; }
+    if (Object.keys(po.pickers).some((k) => po.pickers[k].busy())) { showErr('Photos are still being prepared. Try again in a moment.'); return; }
+    const cookies = poHasCookies();
+    if (cookies && po.winFrom && po.winTo && po.winTo <= po.winFrom) { showErr('The window has to end after it starts.'); return; }
+    const body = {
+      items: po.items.map((it, i) => (it.kind === 'custom'
+        ? { kind: 'custom', qty: Number(it.qty), designs: Number(it.designs), desc: it.desc, photos: po.pickers[i] ? po.pickers[i].photos() : [] }
+        : it.kind === 'class' ? { kind: 'class', eventId: it.eventId, qty: Number(it.qty) } : { kind: it.kind, fq: it.fq })),
+      eventType: po.eventType, eventOther: po.eventOther, dateNeeded: po.date, eventTime: po.eventTime ? SN.time12(po.eventTime) : '', allergies: po.allergies,
+      fulfillment: po.fulfillment, address: { street: po.street, city: po.city, zip: po.zip }, deliveryFee: po.fee,
+      pickupWindow: po.winFrom && po.winTo ? [SN.time12(po.winFrom) + ' – ' + SN.time12(po.winTo), po.winNote.trim()].filter(Boolean).join(' · ') : po.winNote.trim(),
+      customer: { name: po.name, email: po.email, phone: po.phone }, code: po.code.trim(),
+      confirmWarnings: confirmed, sendClassEmail: !!po.sendClassEmail
+    };
+    if (busy) return;
+    busy = true; b.textContent = 'Creating…';
+    let r;
+    try { r = await server('adminCreateOrder', body); } catch (e) { busy = false; b.textContent = 'Create order'; failed(e); return; }
+    busy = false; b.textContent = 'Create order';
+    if (r.code === 'warn') {
+      const ok = await ask({ title: 'Just checking', text: 'This order is outside your usual rules:', points: r.warnings.map((w) => w.charAt(0).toUpperCase() + w.slice(1) + '.'), yes: 'Create it anyway', no: 'Go back' });
+      if (ok) createPhoneOrder(b, true);
+      return;
+    }
+    if (!r.ok) { showErr(r.errors ? '<strong>Still needed:</strong> ' + esc(r.errors.join(', ')) : esc(r.error || 'That didn’t work.')); return; }
+    if (r.weekCounts) { weekCounts = r.weekCounts; renderBusyDays(); }
+    const first = r.order || r.orders[0];
+    toast('Added ' + r.orders.map((o) => o.number).join(' and ') + '. No email was sent.', 5000);
+    po = null;
+    await refreshOrders().catch(() => {});
+    if (first && first.type === 'Cookies') openReview(first.number); else closeReview();
+  }
+
   function renderReview() {
     const review = $('#review');
     const o = orders.find((x) => x.number === rv.number);
@@ -1643,6 +1844,7 @@
 
   function wire() {
     document.addEventListener('input', (e) => {
+      if (po && e.target.closest('#review')) { onPhoneInput(e); return; }
       if (e.target.closest('#review')) { onReviewInput(e); return; }
       if (e.target.dataset.msgDraft) { replyOpen[e.target.dataset.msgDraft] = e.target.value; return; }
       onInput(e);
@@ -1651,6 +1853,8 @@
       if (e.target.matches('#orders-body [data-order]')) onStatusChange(e);
     });
     document.addEventListener('click', (e) => {
+      const pob = e.target.closest('[data-po]');
+      if (pob) { onPhoneClick(pob); return; }
       const rvb = e.target.closest('[data-rv]');
       if (rvb) { onReviewClick(rvb); return; }
       const db = e.target.closest('[data-dash], [data-dash-open]');
@@ -1668,7 +1872,7 @@
     $('#orders-toggle').addEventListener('click', () => { showAllOrders = !showAllOrders; renderOrders(); });
     $('#discard').addEventListener('click', discard);
     $('#scrim').addEventListener('click', closeReview);
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && rv) closeReview(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (rv || po)) closeReview(); });
     $('#review').addEventListener('keydown', (e) => {
       if (e.key !== 'Tab') return;
       const f = $$('button:not([disabled]), [href], input, select, textarea', $('#review')).filter((el) => el.offsetParent !== null);

@@ -624,7 +624,9 @@ function occasion_(o) { return o.eventType || 'Not specified'; }
 
 function itemLabel_(kind) { return kind === 'custom' ? 'Custom Cookies' : kind === 'mini' ? 'Mini Artisan' : kind === 'class' ? 'Class' : 'Large Artisan'; }
 
-function submitOrder_(b) {
+// admin: a phone order from the admin page (adminCreateOrder): no rate limit, no "taking orders" switch, rule
+// warnings need confirmWarnings, classes are booked without Square, and no request / new-order emails go out.
+function submitOrder_(b, admin) {
   // A retry of a checkout that already went through (e.g. the connection dropped before the reply arrived)
   // gets the original result back instead of creating a second order.
   const sid = clean_(b.submissionId, 60);
@@ -633,12 +635,13 @@ function submitOrder_(b) {
 
   const cfg = getConfig_();
   const hasCookies = (b.items || []).some((it) => it && it.kind !== 'class');
-  if (hasCookies && !cfg.acceptingOrders) return { ok: false, code: 'closed', error: 'Sorry, I’m not taking new cookie orders right now.' };
+  if (hasCookies && !cfg.acceptingOrders && !admin) return { ok: false, code: 'closed', error: 'Sorry, I’m not taking new cookie orders right now.' };
 
-  const v = validateOrder_(cfg, b);
+  const v = validateOrder_(cfg, b, admin);
   if (v.errors.length) return { ok: false, code: 'invalid', errors: v.errors };
+  if (admin && v.warnings.length && !b.confirmWarnings) return { ok: false, code: 'warn', warnings: v.warnings };
 
-  if (rateLimited_('order', v.customer.email, 5)) {
+  if (!admin && rateLimited_('order', v.customer.email, 5)) {
     return { ok: false, code: 'rate', error: 'We’ve received several requests from this email in the last hour. Please try again later or send a message instead.' };
   }
 
@@ -684,7 +687,7 @@ function submitOrder_(b) {
       o.createdAt = now;
       // Classes are paid at checkout through Square when it's set up (the spot is held until then); a class that's
       // free after a gift card, or with Square not set up, is booked right away.
-      o.status = o.type === 'Class' ? (squareReady_() && o.total > 0 ? 'Awaiting payment' : 'Booked') : 'Pending review';
+      o.status = o.type === 'Class' ? (!admin && squareReady_() && o.total > 0 ? 'Awaiting payment' : 'Booked') : 'Pending review';
       if (o.type === 'Class') {
         o.invoice = { lines: startingLines_(o), fee: 0, subtotal: round2_(o.subtotal - o.discount), tax: 0, credit: o.giftCredit, total: o.total, note: '', changed: false, sentAt: now.toISOString() };
       }
@@ -696,8 +699,8 @@ function submitOrder_(b) {
         'Street': o.address ? o.address.street : '', 'City': o.address ? o.address.city : '', 'ZIP': o.address ? o.address.zip : '',
         'Allergies': o.allergies, 'Event time': o.eventTime, 'Pickup window': o.pickupWindow, 'Subtotal': o.subtotal, 'Tax': o.tax, 'Tax rate': o.taxRate, 'Drop-off fee': o.deliveryFee,
         'Estimated total': o.total, 'Promo code': o.promoCode, 'Discount': o.discount, 'Gift card credit': o.giftCredit,
-        'Invoice': o.invoice ? JSON.stringify(o.invoice) : '', 'Submission ID': sid,
-        'Customer email': 'Sending…', 'Owner alert': 'Sending…', 'Updated': now
+        'Invoice': o.invoice ? JSON.stringify(o.invoice) : '', 'Submission ID': admin ? 'phone' : sid,
+        'Customer email': admin ? 'Not sent (phone order)' : 'Sending…', 'Owner alert': admin ? 'Phone order' : 'Sending…', 'Updated': now
       });
       appendObjects_(ss.getSheetByName('OrderItems'), o.items.map((it, i) => ({
         'Order': o.number, 'Line': i + 1, 'Item': itemLabel_(it.kind) + (it.kind === 'class' ? ': ' + it.title : ''), 'Kind': it.kind, 'Qty': it.qty,
@@ -718,6 +721,11 @@ function submitOrder_(b) {
 
   const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
   placed.forEach(({ order: o, row }) => {
+    // Phone orders: nothing goes out now. A class booking can send its confirmation if Melissa ticked the box.
+    if (admin) {
+      if (o.type === 'Class' && b.sendClassEmail) setCell_(sh, row, 'Customer email', sendSafely_(() => sendClassBookingEmail_(cfg, o)));
+      return;
+    }
     if (o.status === 'Awaiting payment') {
       // Square checkout link. No emails yet: the confirmation and owner alert go out once the payment goes through.
       try {
@@ -756,10 +764,22 @@ function submitOrder_(b) {
   return result;
 }
 
-// Returns { errors: [...short phrases for "Still needed: ..."], customer, cookie, cls, code }.
+// Admin "Add phone order": the same order as the website checkout (see submitOrder_'s admin notes).
+function adminCreateOrder(b) {
+  requireOwner_();
+  const r = submitOrder_(b || {}, true);
+  if (r.ok) { clearConfigCache_(); r.weekCounts = weekCountsNow_(); }
+  return r;
+}
+
+// Returns { errors: [...short phrases for "Still needed: ..."], warnings, customer, cookie, cls, code }.
 // A checkout can hold cookies (sent for review) and classes (booked right away); each becomes its own order.
-function validateOrder_(cfg, b) {
+// admin (a phone order from the admin page): the shop's rules become warnings Melissa can confirm (rush dates,
+// full weeks, blocked days, small quantities, extra flavors, out-of-area drop-off with her own fee).
+function validateOrder_(cfg, b, admin) {
   const errors = [];
+  const warnings = [];
+  const rule = (msg) => (admin ? warnings : errors).push(msg);
   const today = todayISO_();
   const flavorsById = {};
   cfg.flavors.forEach((f) => { if (f.on) flavorsById[f.id] = f; });
@@ -774,8 +794,10 @@ function validateOrder_(cfg, b) {
       const qty = Math.floor(Number(raw.qty));
       const designs = Math.floor(Number(raw.designs));
       const desc = clean_(raw.desc, 3000);
-      if (!(qty >= cfg.minQty && qty <= MAX_QTY)) errors.push(label + ': at least ' + cfg.minQty + ' cookies');
-      if (!(designs >= 1 && designs <= cfg.maxDesigns)) errors.push(label + ': 1 to ' + cfg.maxDesigns + ' designs');
+      if (!(qty >= 1 && qty <= MAX_QTY)) errors.push(label + ': a quantity');
+      else if (qty < cfg.minQty) rule(label + ': at least ' + cfg.minQty + ' cookies');
+      if (!(designs >= 1 && designs <= (admin ? 24 : cfg.maxDesigns))) errors.push(label + ': 1 to ' + cfg.maxDesigns + ' designs');
+      else if (designs > cfg.maxDesigns) rule(label + ': more than ' + cfg.maxDesigns + ' designs');
       if (!desc) errors.push(label + ': a description of your cookies');
       const unit = Number(cfg.customBasePrice) || 0;
       cookies.push({
@@ -794,8 +816,9 @@ function validateOrder_(cfg, b) {
       });
       const used = Object.keys(fq).length;
       const max = flavorLimit_(cfg, qty);
-      if (qty < cfg.minQty || qty > MAX_QTY) errors.push(label + ': at least ' + cfg.minQty + ' cookies');
-      else if (used > max) errors.push(label + ': up to ' + max + ' flavors for ' + qty + ' cookies');
+      if (!(qty >= 1) || qty > MAX_QTY) errors.push(label + ': pick some flavors');
+      else if (qty < cfg.minQty) rule(label + ': at least ' + cfg.minQty + ' cookies');
+      if (qty >= 1 && used > max) rule(label + ': up to ' + max + ' flavors for ' + qty + ' cookies');
       const unit = (kind === 'mini' ? cfg.miniPerDozen : cfg.largePerDozen) / 12;
       cookies.push({
         kind, qty, fq, unit: round2_(unit), lineTotal: round2_(qty * unit),
@@ -859,9 +882,12 @@ function validateOrder_(cfg, b) {
     const dateNeeded = toISODate_(b.dateNeeded);
     const minISO = addDaysISO_(today, Number(cfg.leadDays) || 0);
     if (!dateNeeded) errors.push('date needed');
-    else if (dateNeeded < minISO) errors.push('a date at least ' + cfg.leadDays + ' days out');
-    else if (blockedDates_(cfg).indexOf(dateNeeded) !== -1) errors.push('a different date (that day is booked)');
-    else weekCapErrors_(cfg, dateNeeded, cookies).forEach((e) => errors.push(e));
+    else if (admin && dateNeeded < today) errors.push('a date that isn’t in the past');
+    else {
+      if (dateNeeded < minISO) rule(admin ? 'a rush order: under ' + cfg.leadDays + ' days away' : 'a date at least ' + cfg.leadDays + ' days out');
+      if (blockedDates_(cfg).indexOf(dateNeeded) !== -1) rule(admin ? 'a blocked day on your calendar' : 'a different date (that day is booked)');
+      weekCapErrors_(cfg, dateNeeded, cookies).forEach((e) => rule(admin ? e.replace(/^a different week \((.*)\)$/, '$1') : e));
+    }
 
     const fulfillment = b.fulfillment === 'delivery' ? 'delivery' : 'pickup';
     let address = null, deliveryFee = 0;
@@ -870,7 +896,9 @@ function validateOrder_(cfg, b) {
       address = { street: clean_(a.street, 200), city: clean_(a.city, 80), zip: clean_(a.zip, 5).replace(/\D/g, '') };
       if (!address.street || !address.city) errors.push('drop-off address');
       const zone = cfg.zones.find((z) => z.zip === address.zip);
-      if (!zone) errors.push('a ZIP in our drop-off area');
+      const ownFee = admin && b.deliveryFee !== '' && b.deliveryFee != null && !isNaN(Number(b.deliveryFee)) ? Math.max(0, Number(b.deliveryFee)) : null;
+      if (ownFee !== null) { deliveryFee = round2_(ownFee); if (!zone) warnings.push('a drop-off outside your zones (' + (address.zip || 'no ZIP') + ')'); }
+      else if (!zone) errors.push(admin ? 'a drop-off fee (that ZIP isn’t in your zones)' : 'a ZIP in our drop-off area');
       else deliveryFee = Number(zone.fee) || 0;
     }
 
@@ -886,7 +914,7 @@ function validateOrder_(cfg, b) {
     };
   }
 
-  return { errors: errors.filter((e, i) => errors.indexOf(e) === i), customer, cookie, cls, code };
+  return { errors: errors.filter((e, i) => errors.indexOf(e) === i), warnings: warnings.filter((e, i) => warnings.indexOf(e) === i), customer, cookie, cls, code };
 }
 
 // Artisan flavor limit: flavorsPerDozen (4) below flavorsMaxAt cookies (24), then flavorsMax (6).
@@ -1330,7 +1358,8 @@ function orderFromRow_(h, r, items) {
     messages: json('Messages log', []),
     handoff: toISODate_(g('Handoff date')) ? { date: toISODate_(g('Handoff date')), time: timeText_(g('Handoff time')) } : null,
     reminderSent: String(g('Reminder sent') || ''),
-    emailStatus: String(g('Customer email') || ''), updatedAt: iso(g('Updated'))
+    emailStatus: String(g('Customer email') || ''), updatedAt: iso(g('Updated')),
+    byPhone: String(g('Submission ID') || '') === 'phone'
   };
 }
 
