@@ -1126,10 +1126,11 @@
     };
     if (busy) return;
     const label = b.textContent;
-    busy = true; b.textContent = approve ? 'Creating and approving…' : 'Creating…';
+    const working = (on, text) => { b.classList.toggle('is-busy', on); b.disabled = on; b.textContent = on ? text : label; };
+    busy = true; working(true, approve ? 'Creating and approving…' : 'Creating…');
     let r;
-    try { r = await server('adminCreateOrder', body); } catch (e) { busy = false; b.textContent = label; failed(e); return; }
-    busy = false; b.textContent = label;
+    try { r = await server('adminCreateOrder', body); } catch (e) { busy = false; working(false); failed(e); return; }
+    busy = false; working(false);
     if (r.code === 'warn') {
       const ok = await ask({ title: 'Just checking', text: 'This order is outside your usual rules:', points: r.warnings.map((w) => w.charAt(0).toUpperCase() + w.slice(1) + '.'), yes: 'Create it anyway', no: 'Go back' });
       if (ok) createPhoneOrder(b, true, approve);
@@ -1139,15 +1140,19 @@
     if (r.weekCounts) { weekCounts = r.weekCounts; renderBusyDays(); }
     const first = r.order || r.orders[0];
     const email = po.email;
-    po = null;
-    await refreshOrders().catch(() => {});
     if (approve && r.approved) {
-      // Done in one go: back to the orders list, with the toast in view.
+      // Done in one go: close now with the toast in view; the orders list catches up in the background.
       const sent = /^Sent/.test(((r.approvedOrder || {}).invoice || {}).emailStatus || '');
       closeReview();
       toast(first.number + ' created and approved. ' + (sent ? 'Confirmation and invoice emailed to ' + email + '.' : 'The email didn’t send; open it to resend.'), sent ? 5000 : 9000);
+      refreshOrders().catch(() => {});
       return;
     }
+    // Review needs the new order in the list first, so keep the spinner while it loads.
+    working(true, 'Opening review…');
+    await refreshOrders().catch(() => {});
+    working(false);
+    po = null;
     if (approve && r.approveError) toast(first.number + ' was created, but approving didn’t work: ' + r.approveError, 9000);
     else toast('Added ' + r.orders.map((o) => o.number).join(' and ') + '. No email was sent.', 5000);
     if (first && first.type === 'Cookies') openReview(first.number); else closeReview();

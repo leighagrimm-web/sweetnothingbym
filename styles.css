@@ -168,6 +168,10 @@ button { font: inherit; color: inherit; }
 .btn.dashed:hover { background: #FBF3F0; color: var(--coral-dark); }
 .btn[aria-disabled="true"] { background: #E9DCD5; color: var(--muted); }
 .btn.small { min-height: 40px; padding: 0 16px; font-size: 14px; }
+/* Busy button: a spinner before the label (admin phone orders) */
+.btn.is-busy { cursor: progress; opacity: .85; }
+.btn.is-busy::before { content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: sn-spin .7s linear infinite; }
+@keyframes sn-spin { to { transform: rotate(360deg); } }
 .link-btn { background: transparent; border: 0; padding: 6px 0; color: var(--coral-dark); font-size: 13px; font-weight: 600; text-decoration: underline; cursor: pointer; }
 .email-hint { margin: 6px 0 0; font-size: 14px; color: var(--navy); }
 .email-hint .link-btn { font-size: 14px; padding: 0 0 0 4px; }
