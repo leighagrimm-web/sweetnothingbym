@@ -817,12 +817,15 @@
   // Payments are marked Paid in the Sheet every 5 minutes, so an open admin reloads orders every 2 minutes, and when
   // Melissa comes back to the tab. Not while she's in an order panel or busy, so nothing she's typing moves.
   const AUTO_REFRESH_MS = 2 * 60000;
-  function autoRefresh() {
-    if (!dashRefreshed || document.hidden || busy || rv || Object.keys(replyOpen).length || Date.now() - (dashRefreshed ? dashRefreshed.getTime() : 0) < AUTO_REFRESH_MS - 5000) return;
+  // Coming back to the page (another tab, window or browser) checks within seconds, so others' saves show up then.
+  function autoRefresh(e) {
+    const gap = e && e.type ? 10000 : AUTO_REFRESH_MS - 5000;
+    if (!dashRefreshed || document.hidden || busy || rv || Object.keys(replyOpen).length || Date.now() - (dashRefreshed ? dashRefreshed.getTime() : 0) < gap) return;
     refreshOrders().catch(() => { /* try again next time */ });
   }
   setInterval(autoRefresh, AUTO_REFRESH_MS);
   document.addEventListener('visibilitychange', autoRefresh);
+  window.addEventListener('focus', autoRefresh);
 
   function onDashClick(b) {
     if (b.dataset.dashOpen) { openReview(b.dataset.dashOpen, b); return; }
@@ -1987,7 +1990,13 @@
       busy = false;
       $$('[data-save]').forEach((b) => { b.textContent = 'Save changes'; });
       if (r.conflict) {
-        const names = fieldList(r.fields || []);
+        if (!r.fields || !r.fields.length || !r.config) {
+          if (await ask({ title: 'The settings changed', text: 'Someone else saved changes since you opened this page.',
+            points: ['Save mine: your version replaces theirs.', 'Keep editing: nothing is saved. Reload the page to see their version (your unsaved edits would be lost).'],
+            yes: 'Save mine', no: 'Keep editing' })) save(true);
+          return;
+        }
+        const names = fieldList(r.fields);
         const pick = await ask({
           title: 'Someone else changed this too',
           text: 'Since you opened this page, someone else saved a different version of ' + names + '.',
