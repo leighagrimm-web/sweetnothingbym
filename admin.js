@@ -45,6 +45,7 @@
         '<span class="brand"><img src="' + esc(siteUrl) + 'logo.png" alt=""><span>Sweet Nothings · Admin</span></span>' +
         '<div class="row-gap" style="gap:8px">' +
           (sheetUrl ? '<a class="btn ghost small" href="' + esc(sheetUrl) + '" target="_blank" rel="noopener">Open the Sheet</a>' : '') +
+          '<button type="button" class="btn ghost small" id="refresh-site" title="After editing the Sheet directly, show those changes on the website right away">Refresh website</button>' +
           '<a class="btn ghost small" href="' + esc(siteUrl) + 'index.html" target="_blank" rel="noopener">View site</a>' +
         '</div>' +
       '</div></header>' +
@@ -106,8 +107,10 @@
   /* ---------- What's new: release notes for Melissa ---------- */
   // Newest first. Add an entry with each update (id = the date it went live); "go" links to the admin tab it's about.
   const RELEASES = [
-    { id: '2026-10-27', title: 'Release notes', items: [
-      { t: 'This “What’s new” page', d: 'Every update to your site and admin gets a short note here. The tab shows “New” until you’ve read the latest one.' }
+    { id: '2026-10-27', title: 'Release notes and small fixes', items: [
+      { t: 'This “What’s new” page', d: 'Every update to your site and admin gets a short note here. The tab shows “New” until you’ve read the latest one.' },
+      { t: '“Refresh website” button', d: 'Top of the admin, next to Open the Sheet. If you ever edit the Google Sheet directly, click it and the website shows those changes right away instead of within 10 minutes.' },
+      { t: 'Email typo fix works on the first tap', d: 'When a customer’s email looks mistyped, tapping “Use it” now fixes it in one tap.' }
     ] },
     { id: '2026-10-25', title: 'Launch week: phone orders and class emails', items: [
       { t: 'Add phone orders yourself', d: 'Orders → “+ Add phone order” for orders you agree on by phone (great for rush orders). Any date works, you can set the price per cookie, add a rush fee and a note. “Create & approve” emails the confirmation and invoice in one step; the customer never gets a “request received” email.', go: 'orders' },
@@ -1965,6 +1968,13 @@
     });
     $('#accepting').addEventListener('click', () => { cfg.acceptingOrders = !cfg.acceptingOrders; fillFields(); markDirty(); });
     $('#orders-toggle').addEventListener('click', () => { showAllOrders = !showAllOrders; renderOrders(); });
+    // After editing the Sheet directly: the website stops using its saved copy, and this page reloads the Sheet too.
+    $('#refresh-site').addEventListener('click', async (e) => {
+      const b = e.currentTarget;
+      if (dirty && !(await ask({ title: 'Drop your unsaved changes?', text: 'Refreshing reloads everything from the Sheet, so changes you haven’t saved here are lost.', yes: 'Refresh anyway', no: 'Keep editing' }))) return;
+      b.classList.add('is-busy'); b.disabled = true;
+      server('adminRefreshSite').then(() => { location.reload(); }).catch((err) => { b.classList.remove('is-busy'); b.disabled = false; failed(err); });
+    });
     $('#discard').addEventListener('click', discard);
     $('#scrim').addEventListener('click', closeReview);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (rv || po)) closeReview(); });

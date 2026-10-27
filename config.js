@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261027v';
+const SN_BUILD = '20261027w';
 
 const SN_ENV = (function () {
   const API = {
@@ -611,11 +611,16 @@ const SN = {
         h.setAttribute('aria-live', 'polite');
         input.insertAdjacentElement('afterend', h);
       }
+      // Same suggestion already showing: leave it alone (rebuilding it swallowed the first tap on Use it).
+      if (!h.hidden && h.dataset.fix === fix) return;
+      h.dataset.fix = fix;
       h.innerHTML = '<strong>Are you sure? This email looks like it has a typo.</strong> Did you mean ' + SN.esc(fix) + '? <button type="button" class="link-btn" data-email-fix="' + SN.esc(fix) + '">Use it</button>';
       h.hidden = false;
     };
     document.addEventListener('input', (e) => { if (e.target.type === 'email' && e.target.id) hintFor(e.target); });
     document.addEventListener('focusout', (e) => { if (e.target.type === 'email' && e.target.id) hintFor(e.target); });
+    // Tapping Use it shouldn't take focus off the email box first (that's what made it need two taps).
+    document.addEventListener('mousedown', (e) => { if (e.target.closest('[data-email-fix]')) e.preventDefault(); });
     document.addEventListener('click', (e) => {
       const b = e.target.closest('[data-email-fix]');
       if (!b) return;

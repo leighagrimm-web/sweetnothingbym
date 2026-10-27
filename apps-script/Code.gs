@@ -1227,6 +1227,14 @@ function adminSaveSettings(c, stamp, force) {
   }
 }
 
+// Admin "Refresh website": after editing the Sheet directly (pasting, copying tabs), drop the server's saved copy of
+// the settings so the website shows the Sheet right away instead of within 10 minutes.
+function adminRefreshSite() {
+  requireOwner_();
+  clearConfigCache_();
+  return { ok: true };
+}
+
 function adminSaveDraft(c) {
   requireOwner_();
   const sh = SpreadsheetApp.getActive().getSheetByName('Draft');
