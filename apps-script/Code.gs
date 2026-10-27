@@ -1230,12 +1230,12 @@ function adminSaveSettings(changes, base, force) {
       const fields = Object.keys(changes).filter((k) => !sameSetting_(current[k], base[k]) && !sameSetting_(current[k], changes[k]));
       if (!force && fields.length) return { ok: false, conflict: true, fields: fields, config: latest, stamp: settingsStamp_(latest) };
       c = Object.assign(current, changes);
+      writeSettings_(c, Object.keys(changes));
     } else {
       // An admin page opened before this update sends everything plus the old fingerprint.
       if (!force && base && base !== settingsStamp_(latest)) return { ok: false, conflict: true, fields: [] };
-      c = changes;
+      writeSettings_(changes);
     }
-    writeSettings_(c);
     clearDraft_();
     SpreadsheetApp.flush();
     clearConfigCache_();
@@ -1271,26 +1271,29 @@ function clearDraft_() {
   if (i !== -1) sh.getRange(i + 2, 2, 1, 2).clearContent();
 }
 
-function writeSettings_(c) {
+// Write settings to the Sheet. only = the settings to write (the ones changed in the admin); left out = all of them.
+// Writing only what changed leaves every other tab exactly as it was.
+function writeSettings_(c, only) {
   const ss = SpreadsheetApp.getActive();
+  const w = (key) => !only || only.indexOf(key) !== -1;
 
   // Settings tab: one row per setting, matched by name.
   const st = ss.getSheetByName('Settings');
   const keys = rows_(st).map((r) => String(r[0]).trim());
   SETTINGS_SPEC.forEach(([key, , type, note]) => {
-    if (key === 'images' || c[key] === undefined) return;   // menu photos are saved on the Pages tab
+    if (key === 'images' || c[key] === undefined || !w(key)) return;   // menu photos are saved on the Pages tab
     const v = type === 'json' ? JSON.stringify(c[key]) : type === 'bool' ? (c[key] ? 'TRUE' : 'FALSE') : String(c[key] == null ? '' : c[key]);
     const i = keys.indexOf(key);
     if (i === -1) { appendRows_(st, [[key, cell_(v), note]]); keys.push(key); } else st.getRange(i + 2, 2).setValue(cell_(v));
   });
 
-  replaceRows_(ss.getSheetByName('Flavors'), (c.flavors || []).map((f) => [f.id || ('f' + Date.now().toString(36)), f.name, !!f.on, !!f.special]), [3, 4]);
-  replaceRows_(ss.getSheetByName('Zones'), (c.zones || []).filter((z) => /^\d{5}$/.test(z.zip)).map((z) => [z.zip, z.area, Number(z.fee) || 0]));
+  if (w('flavors')) replaceRows_(ss.getSheetByName('Flavors'), (c.flavors || []).map((f) => [f.id || ('f' + Date.now().toString(36)), f.name, !!f.on, !!f.special]), [3, 4]);
+  if (w('zones')) replaceRows_(ss.getSheetByName('Zones'), (c.zones || []).filter((z) => /^\d{5}$/.test(z.zip)).map((z) => [z.zip, z.area, Number(z.fee) || 0]));
 
   // Blocked ranges (Start, End, Note); End blank = just the Start day. Columns matched by header.
   const bd = ss.getSheetByName('BlockedDates');
   const bm = headerMap_(bd);
-  replaceRows_(bd, (c.blockedRanges || []).filter((r) => toISODate_(r.start)).map((r) => {
+  if (w('blockedRanges')) replaceRows_(bd, (c.blockedRanges || []).filter((r) => toISODate_(r.start)).map((r) => {
     const row = new Array(bd.getLastColumn()).fill('');
     const start = toISODate_(r.start), end = toISODate_(r.end);
     row[bm.Start - 1] = start;
@@ -1299,12 +1302,12 @@ function writeSettings_(c) {
     return row;
   }));
 
-  replaceRows_(ss.getSheetByName('FAQ'), (c.faqs || []).filter((f) => (f.q || '').trim() || (f.a || '').trim()).map((f) => [f.q, f.a]));
+  if (w('faqs')) replaceRows_(ss.getSheetByName('FAQ'), (c.faqs || []).filter((f) => (f.q || '').trim() || (f.a || '').trim()).map((f) => [f.q, f.a]));
 
   // Pages tab: update each Text by key, keeping the "Where it shows" column.
   const pg = ss.getSheetByName('Pages');
   const pkeys = rows_(pg).map((r) => String(r[0]).trim());
-  Object.keys(c.pages || {}).forEach((key) => {
+  Object.keys(w('pages') ? c.pages || {} : {}).forEach((key) => {
     const i = pkeys.indexOf(key);
     if (i !== -1) { pg.getRange(i + 2, 2).setValue(cell_(String(c.pages[key] || ''))); return; }
     const starter = STARTER_PAGES.find((p) => p[0] === key);
@@ -1313,12 +1316,12 @@ function writeSettings_(c) {
   });
 
   // Events keep their IDs (class bookings point at them); new ones get one.
-  writeEvents_((c.events || []).filter((e) => (e.title || '').trim()).map((e) => Object.assign({}, e, {
+  if (w('events')) writeEvents_((c.events || []).filter((e) => (e.title || '').trim()).map((e) => Object.assign({}, e, {
     id: e.id && String(e.id).indexOf('row') !== 0 ? String(e.id) : 'e' + Utilities.getUuid().slice(0, 8),
     button: EVENT_BUTTONS.indexOf(e.button) !== -1 ? e.button : 'None'
   })));
 
-  replaceRows_(ss.getSheetByName('Gallery'), (c.gallery || []).filter((g) => (g.photo || '').trim())
+  if (w('gallery')) replaceRows_(ss.getSheetByName('Gallery'), (c.gallery || []).filter((g) => (g.photo || '').trim())
     .map((g) => [g.show !== false, g.photo, g.caption || '']), [1]);
 }
 
