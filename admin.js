@@ -59,7 +59,7 @@
             '<div class="row-gap" style="gap:10px"><button type="button" class="btn ghost" data-preview>Preview changes</button><button type="button" class="btn" data-save>Save changes</button></div>' +
           '</div>' +
           sectionDashboard() + sectionOrders() + sectionMessages() + sectionCodes() + sectionPayments() + sectionCustom() + sectionArtisan() + sectionRules() + sectionZones() + sectionFaq() +
-          sectionPages() + sectionEvents() + sectionGallery() + sectionSettings() +
+          sectionPages() + sectionEvents() + sectionGallery() + sectionSettings() + sectionWhatsNew() +
         '</main>' +
       '</div>' +
       '<div class="scrim" id="scrim"></div>' +
@@ -70,20 +70,23 @@
         '<button type="button" class="btn small" data-save>Save changes</button></div></div></div>' +
       '<div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-text"></span></div>';
     wire();
+    if (releaseSeen() < RELEASES[0].id) navCount('whatsnew', 'New');
   }
 
   // Each tab shows one section. Orders and Messages are day-to-day; the rest are shop settings (saved together).
   const TAB_GROUPS = [
     ['Orders &amp; messages', [['dashboard', 'Dashboard'], ['orders', 'Orders'], ['messages', 'Messages'], ['codes', 'Promo &amp; gift codes'], ['payments', 'Payments']]],
     ['Shop settings', [['custom', 'Custom pricing'], ['artisan', 'Artisan &amp; flavors'], ['rules', 'Ordering rules'], ['zones', 'Drop-off zones'],
-      ['faq', 'FAQ'], ['pages', 'Website pages'], ['events', 'Events'], ['gallery', 'Gallery'], ['settings', 'Contact &amp; pickup']]]
+      ['faq', 'FAQ'], ['pages', 'Website pages'], ['events', 'Events'], ['gallery', 'Gallery'], ['settings', 'Contact &amp; pickup']]],
+    ['Help', [['whatsnew', 'What’s new']]]
   ];
   const TAB_IDS = TAB_GROUPS.reduce((a, g) => a.concat(g[1].map((t) => t[0])), []);
 
   function showTab() {
     const id = TAB_IDS.indexOf(location.hash.slice(1)) !== -1 ? location.hash.slice(1) : 'dashboard';
     $$('.admin-main > .panel-card').forEach((s) => { s.hidden = s.id !== id; });
-    $('#settings-title').hidden = ['dashboard', 'orders', 'messages', 'codes', 'payments'].indexOf(id) !== -1;
+    $('#settings-title').hidden = ['dashboard', 'orders', 'messages', 'codes', 'payments', 'whatsnew'].indexOf(id) !== -1;
+    if (id === 'whatsnew') markReleasesSeen();
     if (id === 'payments' && !payInfo) loadPayments();
     $$('.admin-nav a').forEach((a) => { if (a.dataset.tab === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     window.scrollTo(0, 0);
@@ -100,6 +103,47 @@
   const numInput = (path, attrs, before, after, type) => '<div class="input-wrap">' + (before ? '<span>' + before + '</span>' : '') +
     '<input id="' + path + '" type="number" ' + attrs + ' data-path="' + path + '" data-type="' + (type || 'num') + '">' + (after ? '<span>' + after + '</span>' : '') + '</div>';
   const card = (id, title, sub, body) => '<section class="panel-card" id="' + id + '" aria-labelledby="' + id + '-h"><h2 id="' + id + '-h">' + title + '</h2>' + (sub ? '<p class="sub">' + sub + '</p>' : '') + body + '</section>';
+  /* ---------- What's new: release notes for Melissa ---------- */
+  // Newest first. Add an entry with each update (id = the date it went live); "go" links to the admin tab it's about.
+  const RELEASES = [
+    { id: '2026-10-27', title: 'Release notes', items: [
+      { t: 'This “What’s new” page', d: 'Every update to your site and admin gets a short note here. The tab shows “New” until you’ve read the latest one.' }
+    ] },
+    { id: '2026-10-25', title: 'Launch week: phone orders and class emails', items: [
+      { t: 'Add phone orders yourself', d: 'Orders → “+ Add phone order” for orders you agree on by phone (great for rush orders). Any date works, you can set the price per cookie, add a rush fee and a note. “Create & approve” emails the confirmation and invoice in one step; the customer never gets a “request received” email.', go: 'orders' },
+      { t: 'Class confirmations have everything', d: 'The “You’re booked!” email now has the class details, the location with a directions link, the flyer, and Add to Google / Apple / Outlook calendar buttons.', go: 'events' },
+      { t: 'Smoother on your phone', d: 'Review closes after you approve, so you see the “Approved!” message. Messages now pop up over open panels. The phone order form gives you the whole screen.' },
+      { t: 'Checkout tidy-ups for customers', d: 'Event time and pickup window are 15-minute dropdowns. Outside your drop-off area, customers are offered a meet-up spot inside it. Email typos like “gmial.com” or “.cm” get an “Are you sure?” with a one-tap fix.' }
+    ] },
+    { id: '2026-10-24', title: 'Pickup times, reminders and Special Events', items: [
+      { t: 'Set the pickup or drop-off time', d: 'Open an order → “Set pickup time” once you’ve agreed it with the customer. They get an email with the time, the address and your cell, and a reminder the morning before. Add your cell in Contact & pickup.', go: 'orders' },
+      { t: 'Customers give their best pickup window', d: 'Checkout asks for the time of their event (optional) and their best pickup or drop-off window, with a note explaining you’ll confirm a time.' },
+      { t: 'Special Events: short cards + “See details”', d: 'Cards stay short; the full description, a tappable address and an optional flyer open in a details panel. New boxes: Location name, Short line on the card, Flyer.', go: 'events' },
+      { t: 'Unpaid class bookings', d: 'If someone doesn’t finish paying for a class, their spot is released and they get a friendly email with a link to book again.' }
+    ] },
+    { id: '2026-10-23', title: 'Home page and emails', items: [
+      { t: 'Edit “What I make” and the slideshow', d: 'Website pages → Home page: the intro line, the short list next to Custom Cookies, and the slideshow photos.', go: 'pages' },
+      { t: 'Reply in Gmail', d: 'On a message, “Open in Gmail instead” opens a ready-made reply in a new tab.', go: 'messages' }
+    ] }
+  ];
+  const SEEN_KEY = 'sn_admin_release_seen';
+  const releaseSeen = () => { try { return localStorage.getItem(SEEN_KEY) || ''; } catch (e) { return ''; } };
+  function markReleasesSeen() {
+    try { localStorage.setItem(SEEN_KEY, RELEASES[0].id); } catch (e) { /* the badge just stays */ }
+    navCount('whatsnew', '');
+  }
+  function sectionWhatsNew() {
+    const tabName = (id) => { const t = TAB_GROUPS.reduce((a, g) => a.concat(g[1]), []).find((x) => x[0] === id); return t ? t[1] : ''; };
+    return card('whatsnew', 'What’s new', 'Updates to your site and admin, newest first.',
+      '<div class="stack" style="gap:26px">' + RELEASES.map((r) =>
+        '<div><p class="eyebrow" style="margin:0 0 4px">' + esc(SN.prettyDate(r.id)) + '</p><h3 style="font-size:24px;margin:0 0 10px">' + esc(r.title) + '</h3>' +
+          '<div class="stack" style="gap:10px">' + r.items.map((it) =>
+            '<div style="background:var(--ground);border-radius:12px;padding:12px 14px"><strong>' + esc(it.t) + '</strong>' +
+              '<p style="margin:4px 0 0;color:var(--muted);font-size:15px">' + esc(it.d) + '</p>' +
+              (it.go ? '<a class="link-btn" href="#' + it.go + '" target="_self" style="display:inline-block;margin-top:4px">Go to ' + tabName(it.go) + ' →</a>' : '') + '</div>').join('') +
+          '</div></div>').join('') + '</div>');
+  }
+
   const PHOTO_HINT = 'Paste a Google Drive share link (in Drive: Share → General access → Anyone with the link → Copy link) or an image link. [Text in brackets] shows a placeholder box; blank shows no photo.';
 
   function sectionOrders() {
