@@ -322,6 +322,8 @@ body.locked .toast { z-index: 60; }
   .admin-nav a[aria-current="page"] { box-shadow: inset 0 -3px 0 var(--coral); }
 }
 /* Admin orders table: Review button first, details stacked so it fits a laptop without scrolling sideways. */
+.row-unpaid > td { background: #FBEDEA; }
+.unpaid-note { margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--error); line-height: 1.35; }
 .orders-table td { vertical-align: top; padding-top: 14px; padding-bottom: 14px; }
 .orders-table .order-cell { display: flex; gap: 12px; align-items: flex-start; }
 .orders-table .order-cell .btn { flex: none; min-width: 78px; }

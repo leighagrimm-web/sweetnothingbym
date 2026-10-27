@@ -240,8 +240,8 @@ const TABS = {
     headers: ['Order', 'Received', 'Status', 'Name', 'Email', 'Phone', 'Occasion', 'Date needed', 'Pickup / drop-off',
       'Street', 'City', 'ZIP', 'Allergies', 'Subtotal', 'Tax', 'Tax rate', 'Drop-off fee', 'Estimated total',
       'Customer email', 'Owner alert', 'Invoice', 'Decline note', 'QuickBooks invoice', 'Pay link', 'Updated',
-      'Type', 'Promo code', 'Discount', 'Gift card credit', 'Messages log', 'Submission ID', 'Square order', 'Event time', 'Pickup window', 'Handoff date', 'Handoff time', 'Reminder sent'],
-    widths: [80, 150, 110, 150, 200, 120, 140, 110, 110, 180, 120, 70, 220, 80, 70, 70, 90, 100, 160, 160, 120, 160, 120, 160, 150, 80, 110, 80, 100, 200, 120, 160, 100, 220, 110, 90, 150],
+      'Type', 'Promo code', 'Discount', 'Gift card credit', 'Messages log', 'Submission ID', 'Square order', 'Event time', 'Pickup window', 'Handoff date', 'Handoff time', 'Reminder sent', 'Pay reminder sent'],
+    widths: [80, 150, 110, 150, 200, 120, 140, 110, 110, 180, 120, 70, 220, 80, 70, 70, 90, 100, 160, 160, 120, 160, 120, 160, 150, 80, 110, 80, 100, 200, 120, 160, 100, 220, 110, 90, 150, 150],
     text: ['Order', 'Phone', 'Date needed', 'ZIP', 'Promo code', 'Submission ID', 'Square order', 'QuickBooks invoice', 'Event time', 'Pickup window', 'Handoff date', 'Handoff time', 'Reminder sent'], money: ['Subtotal', 'Tax', 'Drop-off fee', 'Estimated total', 'Discount', 'Gift card credit'], datetime: ['Received', 'Updated']
   },
   OrderItems: {
@@ -1381,6 +1381,7 @@ function orderFromRow_(h, r, items) {
     messages: json('Messages log', []),
     handoff: toISODate_(g('Handoff date')) ? { date: toISODate_(g('Handoff date')), time: timeText_(g('Handoff time')) } : null,
     reminderSent: String(g('Reminder sent') || ''),
+    payReminderSent: String(g('Pay reminder sent') || ''),
     emailStatus: String(g('Customer email') || ''), updatedAt: iso(g('Updated')),
     byPhone: String(g('Submission ID') || '') === 'phone'
   };
@@ -1644,6 +1645,27 @@ function sendHandoffReminders_(sh, rows) {
       const o = loadOrder_(String(r.Order));
       const status = sendSafely_(() => sendHandoffEmail_(getConfig_(), o, 'reminder', ''));
       setCell_(sh, r._row, 'Reminder sent', status);
+      sent.push(o.number);
+    });
+  return sent;
+}
+
+// Cookie orders are paid in full a week before their date. An approved order that's still unpaid once it's under
+// 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
+const PAY_DUE_DAYS = 7;
+function daysUntil_(iso) {
+  const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
+  return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
+}
+function sendPayReminders_(sh, rows) {
+  if (Number(Utilities.formatDate(new Date(), tz_(), 'H')) < 9) return [];
+  const sent = [];
+  rows.filter((r) => String(r.Type || 'Cookies') !== 'Class' && String(r.Status) === 'Invoice sent' && !String(r['Pay reminder sent'] || '') &&
+      toISODate_(r['Date needed']) && daysUntil_(toISODate_(r['Date needed'])) <= PAY_DUE_DAYS && daysUntil_(toISODate_(r['Date needed'])) >= 0)
+    .forEach((r) => {
+      const o = loadOrder_(String(r.Order));
+      const status = sendSafely_(() => sendPayReminderEmail_(getConfig_(), o));
+      setCell_(sh, r._row, 'Pay reminder sent', status);
       sent.push(o.number);
     });
   return sent;
@@ -2168,7 +2190,7 @@ function confirmClass_(o, status, late) {
 function checkPayments() {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) return { ok: false, error: 'A payment check is already running.' };
-  const summary = { invoicesPaid: [], classesPaid: [], expired: [], remindersSent: [], errors: [] };
+  const summary = { invoicesPaid: [], classesPaid: [], expired: [], remindersSent: [], payRemindersSent: [], errors: [] };
   try {
     const cfg = getConfig_();
     const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
@@ -2236,6 +2258,7 @@ function checkPayments() {
     if (summary.classesPaid.length || summary.expired.length || summary.invoicesPaid.length) clearConfigCache_();
     // Emails an admin helper queued, sent now from the shop's account.
     try { summary.remindersSent = sendHandoffReminders_(sh, rows); } catch (e) { summary.errors.push('Reminders: ' + e.message); }
+    try { summary.payRemindersSent = sendPayReminders_(sh, rows); } catch (e) { summary.errors.push('Pay reminders: ' + e.message); }
     try { summary.emailsSent = sendOutbox_(); } catch (e) { summary.errors.push('Outbox: ' + e.message); }
     SCRIPT_PROPS().setProperty('PAYMENTS_LAST_CHECK', JSON.stringify(Object.assign({ at: new Date().toISOString() }, summary)));
     return Object.assign({ ok: true }, summary);
@@ -2719,6 +2742,36 @@ function sendHandoffEmail_(cfg, o, kind, note) {
     to: o.customer.email,
     subject: subjectPrefix_(cfg) + (kind === 'reminder' ? 'Reminder: ' + label.toLowerCase() + ' tomorrow, ' + when.replace(/^.* at /, '') : label + ' time confirmed: ' + when) + ' – Sweet Nothings ' + o.number,
     htmlBody: html, body: text, name: cfg.senderName, replyTo: cfg.replyToEmail
+  });
+}
+
+/* ---------- Unpaid invoice: reminder a week before the order date ---------- */
+function sendPayReminderEmail_(cfg, o) {
+  const first = (o.customer.name || '').split(' ')[0];
+  const inv = o.invoice || {};
+  const qb = inv.qb || {};
+  const due = qb.balance != null ? Number(qb.balance) : invoiceTotals_(o).total;
+  const dueBy = Utilities.formatDate(new Date(Date.parse(o.dateNeeded + 'T12:00:00Z') - PAY_DUE_DAYS * 864e5), 'UTC', 'yyyy-MM-dd');
+  const late = daysUntil_(dueBy) < 0;
+  const when = late ? 'was due ' + prettyDate_(dueBy) : daysUntil_(dueBy) === 0 ? 'is due today' : 'is due by ' + prettyDate_(dueBy);
+  const line = 'Your cookies for ' + prettyDate_(o.dateNeeded) + ' are on my calendar! Payment ' + when +
+    ' (one week before your order) so I can keep your date and start baking.';
+  const pay = qb.link
+    ? button_(qb.link, 'Pay ' + money_(due) + ' securely') + p_('Card or bank transfer, through QuickBooks' + (qb.docNumber ? ' (invoice #' + qb.docNumber + ')' : '') + '.', 13)
+    : p_('Your invoice' + (qb.docNumber ? ' #' + qb.docNumber : '') + ' came in a separate email from QuickBooks. Just reply if you need it sent again.', 14);
+  const html = shell_(cfg, 'A friendly payment reminder' + (first ? ', ' + esc_(first) : ''), o.number,
+    '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">' + esc_(line) + '</div>' +
+    '<div style="font-size:15px;margin-bottom:6px"><strong>Amount due: ' + money_(due) + '</strong></div>' + pay +
+    itemsBlock_(o, 'Your order') +
+    p_('Already paid? Thank you, and please ignore this. Questions? Just reply to this email and mention your order number.', 14));
+  sendMail_({
+    to: o.customer.email,
+    subject: subjectPrefix_(cfg) + 'Payment reminder: ' + money_(due) + ' ' + when.replace(/^is /, '') + ' – Sweet Nothings ' + o.number,
+    htmlBody: html,
+    body: [(first ? 'Hi ' + first + ',' : 'Hi,'), '', line, '', 'Amount due: ' + money_(due),
+      qb.link ? 'Pay securely here: ' + qb.link : 'Your invoice came in a separate email from QuickBooks. Just reply if you need it sent again.', '',
+      'Your order ' + o.number + ':', itemsText_(o), '', 'Already paid? Thank you, and please ignore this.'].join('\n'),
+    name: cfg.senderName, replyTo: cfg.replyToEmail
   });
 }
 
