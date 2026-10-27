@@ -250,8 +250,8 @@ const TABS = {
     text: ['Order', 'Event ID'], money: ['Unit price', 'Line total']
   },
   Messages: {
-    headers: ['ID', 'Received', 'Status', 'Topic', 'Name', 'Email', 'Phone', 'Order', 'Message', 'Photo', 'Source', 'Owner alert', 'Replies'],
-    widths: [60, 150, 90, 170, 150, 200, 120, 80, 420, 160, 100, 160, 300],
+    headers: ['ID', 'Received', 'Status', 'Topic', 'Name', 'Email', 'Phone', 'Order', 'Message', 'Photo', 'Source', 'Owner alert', 'Replies', 'Customer email'],
+    widths: [60, 150, 90, 170, 150, 200, 120, 80, 420, 160, 100, 160, 300, 160],
     text: ['Phone', 'Order', 'Replies'], datetime: ['Received']
   },
   Draft: { headers: ['Key', 'Value', 'Updated'], widths: [100, 600, 150], text: ['Key', 'Value'], datetime: ['Updated'] },
@@ -1116,6 +1116,9 @@ function sendMessageOnce_(b) {
   }
   pics.saved.forEach((s, i) => renamePhoto_(s.id, 'Message ' + m.id + ' photo' + (pics.saved.length > 1 ? ' ' + (i + 1) : '') + ' – ' + (m.name || m.email)));
   setCell_(sh, row, 'Owner alert', sendSafely_(() => sendOwnerMessageAlert_(cfg, m)));
+  // The customer gets one "we got your message" email an hour at most, so the form can't be used to flood an inbox.
+  setCell_(sh, row, 'Customer email', rateLimited_('msgack', m.email, 1)
+    ? 'Not sent (already sent one this hour)' : sendSafely_(() => sendMessageReceivedEmail_(cfg, m)));
   return { ok: true, id: m.id };
 }
 
@@ -1197,24 +1200,41 @@ function weekCountsNow_() {
   return out;
 }
 
-// Fingerprint of the editable settings, to notice edits made in the Sheet while the admin page was open.
-// Booking counts are left out: they change with orders, not edits.
-function settingsStamp_(cfg) {
-  const c = Object.assign({}, cfg);
+// The settings someone can edit. Booking counts and photo lists are left out: they change with orders, not edits.
+function editableSettings_(cfg) {
+  const c = JSON.parse(JSON.stringify(cfg));
   delete c.weekCounts;
-  c.events = (c.events || []).map((e) => { const x = Object.assign({}, e); delete x.booked; delete x.spotsLeft; return x; });
-  return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(c), Utilities.Charset.UTF_8));
+  delete c.images;
+  c.events = (c.events || []).map((e) => { delete e.booked; delete e.spotsLeft; return e; });
+  return c;
 }
+// Fingerprint of the editable settings, so an open admin notices when someone else saves.
+function settingsStamp_(cfg) {
+  return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(editableSettings_(cfg)), Utilities.Charset.UTF_8));
+}
+const sameSetting_ = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
 
-// Save settings. stamp is what adminLoad returned; if the Sheet changed since then, nothing is saved
-// unless force is true.
-function adminSaveSettings(c, stamp, force) {
+// Save the settings changed in one admin tab, merged onto the Sheet's latest, so two people editing different
+// things never undo each other. changes = { setting: new value }; base = the same settings as that tab loaded them.
+// If someone else has changed one of those settings since, nothing is saved and their names come back (fields),
+// unless force is true: then this tab's version of them wins. Everything else stays as the Sheet has it.
+function adminSaveSettings(changes, base, force) {
   requireOwner_();
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    const current = settingsStamp_(buildConfig_(true));
-    if (!force && stamp && stamp !== current) return { ok: false, conflict: true };
+    const latest = buildConfig_(true);
+    let c;
+    if (typeof base === 'object' && base) {
+      const current = editableSettings_(latest);
+      const fields = Object.keys(changes).filter((k) => !sameSetting_(current[k], base[k]) && !sameSetting_(current[k], changes[k]));
+      if (!force && fields.length) return { ok: false, conflict: true, fields: fields, config: latest, stamp: settingsStamp_(latest) };
+      c = Object.assign(current, changes);
+    } else {
+      // An admin page opened before this update sends everything plus the old fingerprint.
+      if (!force && base && base !== settingsStamp_(latest)) return { ok: false, conflict: true, fields: [] };
+      c = changes;
+    }
     writeSettings_(c);
     clearDraft_();
     SpreadsheetApp.flush();
@@ -2446,6 +2466,27 @@ function sendOwnerMessageAlert_(cfg, m) {
     body: ['New message (' + m.source + ')', 'From: ' + (m.name ? m.name + ' ' : '') + '<' + m.email + '>' + (m.phone ? ' ' + m.phone : ''),
       'Topic: ' + m.topic, m.orderNumber ? 'Order: ' + m.orderNumber : '', m.photos.map((p, i) => 'Photo' + (m.photos.length > 1 ? ' ' + (i + 1) : '') + ': ' + p.url).join('\n'), m.photoNames.length ? 'Not saved: ' + m.photoNames.join(', ') : '', '', m.message].filter((l) => l !== null).join('\n'),
     name: cfg.senderName, replyTo: m.email
+  });
+}
+
+/* ---------- Customer: we got your message ---------- */
+function sendMessageReceivedEmail_(cfg, m) {
+  const first = (m.name || '').split(' ')[0];
+  const pics = m.photos.length + m.photoNames.length;
+  const extra = [m.orderNumber ? 'Order ' + m.orderNumber : '', pics ? pics + ' photo' + (pics > 1 ? 's' : '') + ' attached' : ''].filter(Boolean).join(' · ');
+  const html = shell_(cfg, 'Thanks for your message' + (first ? ', ' + esc_(first) : '') + '!', '',
+    p_('I got your message and I’ll get back to you by email, usually within 1–2 days.', 15) +
+    '<div style="font-size:12px;color:' + C.muted + ';text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">What you sent · ' + esc_(m.topic) + '</div>' +
+    '<div style="background:#FBF7F4;border-radius:12px;padding:14px 16px;font-size:15px;white-space:pre-wrap;margin-bottom:' + (extra ? '6px' : '18px') + '">' + esc_(m.message) + '</div>' +
+    (extra ? p_(esc_(extra), 13) : '') +
+    p_('Want to add something? Just reply to this email.', 14));
+  sendMail_({
+    to: m.email,
+    subject: subjectPrefix_(cfg) + 'We got your message – Sweet Nothings by M',
+    htmlBody: html,
+    body: [(first ? 'Hi ' + first + ',' : 'Hi,'), '', 'Thanks for your message! I’ll get back to you by email, usually within 1–2 days.', '',
+      'What you sent (' + m.topic + '):', m.message, extra ? '(' + extra + ')' : '', '', 'Want to add something? Just reply to this email.'].join('\n'),
+    name: cfg.senderName, replyTo: cfg.replyToEmail
   });
 }
 

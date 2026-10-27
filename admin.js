@@ -12,7 +12,8 @@
   const money = SN.money;
 
   let cfg = null;          // settings being edited
-  let stamp = '';          // fingerprint of the Sheet's settings when loaded (to notice edits made in the Sheet)
+  let stamp = '';          // fingerprint of the Sheet's settings when loaded (to notice when someone else saves)
+  let base = null;         // the settings as last loaded or saved (cleaned), so Save sends only what changed here
   let orders = [];
   let messages = [];
   let codes = [];
@@ -65,7 +66,7 @@
       '</div>' +
       '<div class="scrim" id="scrim"></div>' +
       '<aside class="panel review-panel" id="review" role="dialog" aria-modal="true" aria-labelledby="review-title" tabindex="-1"></aside>' +
-      '<div class="save-bar" id="save-bar" role="region" aria-label="Unsaved changes"><div class="wrap"><span>You have unsaved changes.</span>' +
+      '<div class="save-bar" id="save-bar" role="region" aria-label="Unsaved changes"><div class="wrap"><span id="save-bar-text">You have unsaved changes.</span>' +
         '<div class="row-gap"><button type="button" class="btn ghost small" id="discard">Discard</button>' +
         '<button type="button" class="btn ghost small" data-preview>Preview changes</button>' +
         '<button type="button" class="btn small" data-save>Save changes</button></div></div></div>' +
@@ -105,8 +106,14 @@
     '<input id="' + path + '" type="number" ' + attrs + ' data-path="' + path + '" data-type="' + (type || 'num') + '">' + (after ? '<span>' + after + '</span>' : '') + '</div>';
   const card = (id, title, sub, body) => '<section class="panel-card" id="' + id + '" aria-labelledby="' + id + '-h"><h2 id="' + id + '-h">' + title + '</h2>' + (sub ? '<p class="sub">' + sub + '</p>' : '') + body + '</section>';
   /* ---------- What's new: release notes for Melissa ---------- */
-  // Newest first. Add an entry with each update (id = the date it went live); "go" links to the admin tab it's about.
+  // Newest first. Add an entry with each update (id = the date it went live, plus a letter for a second one that day);
+  // "go" links to the admin tab it's about.
   const RELEASES = [
+    { id: '2026-10-27b', title: 'Classes on the dashboard, message emails, safer saving', items: [
+      { t: 'One card per class on your dashboard', d: 'A class now shows as one card on its day, with the time and how many spots are booked out of the max. Click it to see everyone booked, with their spots and whether they’ve paid.', go: 'dashboard' },
+      { t: '“We got your message” email', d: 'When someone sends a message from the Contact page or “Message me”, they get a short email saying you got it and will reply within 1–2 days, with a copy of what they sent. Replies come to you.', go: 'messages' },
+      { t: 'Two people editing at once', d: 'Saving now only saves what you changed, so you and a helper can edit different things without undoing each other. If someone else saves while you’re editing, the save bar tells you, and if you both changed the same thing you choose which to keep. An admin page with no unsaved edits picks up others’ changes on its own.' }
+    ] },
     { id: '2026-10-27', title: 'Payment reminders and small fixes', items: [
       { t: 'This “What’s new” page', d: 'Every update to your site and admin gets a short note here. The tab shows “New” until you’ve read the latest one.' },
       { t: 'Payment reminders, a week before', d: 'Orders are paid a week before their date. If an approved order still isn’t paid with 7 days to go, the customer automatically gets one friendly reminder email with the Pay button, and the order turns light red in your Orders list with “Unpaid · X days to go”.', go: 'orders' },
@@ -140,7 +147,7 @@
     const tabName = (id) => { const t = TAB_GROUPS.reduce((a, g) => a.concat(g[1]), []).find((x) => x[0] === id); return t ? t[1] : ''; };
     return card('whatsnew', 'What’s new', 'Updates to your site and admin, newest first.',
       '<div class="stack" style="gap:26px">' + RELEASES.map((r) =>
-        '<div><p class="eyebrow" style="margin:0 0 4px">' + esc(SN.prettyDate(r.id)) + '</p><h3 style="font-size:24px;margin:0 0 10px">' + esc(r.title) + '</h3>' +
+        '<div><p class="eyebrow" style="margin:0 0 4px">' + esc(SN.prettyDate(r.id.slice(0, 10))) + '</p><h3 style="font-size:24px;margin:0 0 10px">' + esc(r.title) + '</h3>' +
           '<div class="stack" style="gap:10px">' + r.items.map((it) =>
             '<div style="background:var(--ground);border-radius:12px;padding:12px 14px"><strong>' + esc(it.t) + '</strong>' +
               '<p style="margin:4px 0 0;color:var(--muted);font-size:15px">' + esc(it.d) + '</p>' +
@@ -328,7 +335,12 @@
 
   /* ---------- Helpers ---------- */
   function markDirty() { dirty = true; $('#save-bar').classList.add('show'); }
-  function clearDirty() { dirty = false; $('#save-bar').classList.remove('show'); }
+  function clearDirty() { dirty = false; $('#save-bar').classList.remove('show'); saveWarning(''); }
+  // Shown in the save bar when someone else saved settings while this tab has unsaved edits.
+  function saveWarning(text) {
+    $('#save-bar-text').textContent = text || 'You have unsaved changes.';
+    $('#save-bar').classList.toggle('warn', !!text);
+  }
   // "Are you sure?" in the admin's own style (the browser's confirm() shows a scary technical address on top).
   // ask({ title, points: [...], note, yes, no, danger }) resolves true for yes, false for no / Esc / clicking outside.
   function ask(o) {
@@ -344,6 +356,7 @@
             (o.note ? '<p class="hint">' + esc(o.note) + '</p>' : '') +
           '</div>' +
           '<div class="ask-actions"><button type="button" class="btn ghost" data-ask="no">' + esc(o.no || 'Cancel') + '</button>' +
+            (o.alt ? '<button type="button" class="btn ghost" data-ask="alt">' + esc(o.alt) + '</button>' : '') +
             '<button type="button" class="btn' + (o.danger ? ' danger' : '') + '" data-ask="yes">' + esc(o.yes || 'OK') + '</button></div>' +
         '</div>';
       const back = document.activeElement;
@@ -355,7 +368,7 @@
       };
       const onKey = (e) => {
         if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); return; }
-        if (e.key === 'Tab') {   // keep focus on the two buttons
+        if (e.key === 'Tab') {   // keep focus on the buttons
           e.preventDefault();
           const bs = $$('[data-ask]', wrap);
           bs[(bs.indexOf(document.activeElement) + 1) % bs.length].focus();
@@ -363,7 +376,7 @@
       };
       wrap.addEventListener('click', (e) => {
         const b = e.target.closest('[data-ask]');
-        if (b) done(b.dataset.ask === 'yes'); else if (e.target === wrap) done(false);
+        if (b) done(b.dataset.ask === 'alt' ? 'alt' : b.dataset.ask === 'yes'); else if (e.target === wrap) done(false);
       });
       document.addEventListener('keydown', onKey, true);
       document.body.appendChild(wrap);
@@ -655,6 +668,33 @@
     return out;
   }
 
+  // Class bookings on one day, grouped into one card per class: the class, its time, spots booked of the max, and
+  // everyone booked (open the card to see them). Expired bookings aren't spots, so they're left out.
+  const dashOpenClasses = {};
+  function classCards(list, day) {
+    const groups = {};
+    list.filter((o) => o.status !== 'Expired').forEach((o) => o.items.filter((it) => it.kind === 'class').forEach((it) => {
+      const k = it.eventId || it.title;
+      const g = groups[k] = groups[k] || { key: day + '|' + k, ev: (cfg.events || []).find((e) => e.id === it.eventId), title: it.title, spots: 0, people: [] };
+      g.spots += it.qty;
+      g.people.push({ o, qty: it.qty });
+    }));
+    return Object.keys(groups).map((k) => {
+      const g = groups[k], ev = g.ev || {};
+      const max = ev.max !== '' && ev.max != null ? Number(ev.max) : 0;
+      const when = ev.start ? fmtTime(ev.start) + (ev.end ? '–' + fmtTime(ev.end) : '') : '';
+      const waiting = g.people.filter((p) => !isConfirmed(p.o)).reduce((a, p) => a + p.qty, 0);
+      return '<details class="dash-class" data-dash-class="' + esc(g.key) + '"' + (dashOpenClasses[g.key] ? ' open' : '') + '>' +
+        '<summary><strong>' + esc(ev.title || g.title) + '</strong>' +
+          '<span>' + (when ? esc(when) + ' · ' : '') + g.spots + (max ? ' of ' + max : '') + ' spot' + (g.spots === 1 && !max ? '' : 's') + ' booked' +
+          (waiting ? ' · ' + waiting + ' awaiting payment' : '') + '</span>' +
+          '<span class="dash-class-more">' + g.people.length + ' booking' + (g.people.length === 1 ? '' : 's') + '</span></summary>' +
+        '<ul>' + g.people.map((p) => '<li><button type="button" class="link-btn" data-dash-open="' + esc(p.o.number) + '">' + esc(p.o.customer.name || p.o.number) + '</button>' +
+          '<span>' + p.qty + ' spot' + (p.qty === 1 ? '' : 's') + ' · ' + esc(p.o.status) + '</span></li>').join('') + '</ul>' +
+        '</details>';
+    }).join('');
+  }
+
   function renderDashboard() {
     const box = $('#dash');
     if (!box) return;
@@ -701,15 +741,17 @@
         tile('Confirmed sales', money(tc.money), tp.orders ? '<span class="dash-pend">+' + money(tp.money) + ' estimated pending</span>' : '') +
       '</div>' +
       '<div class="dash-cal">' + days.map((d) => {
-        const list = inWeek.filter((o) => o.dateNeeded === d).sort((a, b) => Number(isPending(a)) - Number(isPending(b)));
-        return '<div class="dash-day' + (d === today ? ' today' : '') + '"><div class="dash-day-h">' + esc(dayLabel(d)) + (d === today ? ' · today' : '') + '</div>' +
+        const all = inWeek.filter((o) => o.dateNeeded === d);
+        const list = all.filter((o) => !isClass(o)).sort((a, b) => Number(isPending(a)) - Number(isPending(b)));
+        const cards = classCards(all.filter(isClass), d);
+        return '<div class="dash-day' + (d === today ? ' today' : '') + '"><div class="dash-day-h">' + esc(dayLabel(d)) + (d === today ? ' · today' : '') + '</div>' + cards +
           (list.length ? list.map((o) => {
             const what = o.items.map((it) => it.kind === 'class' ? it.qty + ' × ' + it.title : it.qty + ' ' + (it.kind === 'custom' ? 'custom' : it.kind)).join(', ');
             const how = isClass(o) ? 'Class' : o.fulfillment === 'delivery' ? 'Drop-off' : 'Pickup';
             return '<button type="button" class="dash-order' + (isPending(o) ? ' pending' : '') + '" data-dash-open="' + esc(o.number) + '" style="border-left-color:' + ((STATUS_STYLE[o.status] || '').match(/color:([^;]+)/) || [, 'var(--navy)'])[1] + '">' +
               '<strong>' + esc(o.number) + '</strong> ' + esc((o.customer.name || '').split(' ')[0]) +
               '<span>' + esc(what) + '</span><span>' + esc(how) + ' · ' + esc(o.status) + (o.allergies ? ' · Allergy' : '') + '</span></button>';
-          }).join('') : '<p class="hint" style="margin:6px 0 0">Nothing due</p>') +
+          }).join('') : cards ? '' : '<p class="hint" style="margin:6px 0 0">Nothing due</p>') +
         '</div>';
       }).join('') + '</div>' +
       '<div class="dash-cols">' +
@@ -745,10 +787,31 @@
       codes = d.codes || [];
       cfg.events = cfg.events.map((e) => { const fresh = (d.config.events || []).find((x) => x.id === e.id); return fresh ? Object.assign(e, { booked: fresh.booked, spotsLeft: fresh.spotsLeft }) : e; });
       dashRefreshed = new Date();
+      if (d.stamp && d.stamp !== stamp) othersSaved(d);
       renderOrders(); renderMessages(); renderCodes(); renderBusyDays(); renderDashboard();
       // An open order panel shows the fresh status and QuickBooks balance too (its typed text lives in rv, so it's kept).
       if (rv && orders.some((x) => x.number === rv.number)) renderReview();
     });
+  }
+
+  // Someone else saved settings (another tab, a helper, or the Sheet itself). With nothing unsaved here, this tab just
+  // shows the new settings. With unsaved edits, they stay, and the save bar says what changed; Save keeps both.
+  function othersSaved(d) {
+    const theirs = cleaned(d.config), mine = cleaned();
+    const keys = Object.keys(theirs).filter((k) => !same(theirs[k], base[k]));
+    if (!dirty) {
+      cfg = d.config;
+      base = theirs;
+      stamp = d.stamp;
+      renderSettings();
+      if (keys.length) toast('Settings updated: someone else saved changes to ' + fieldList(keys) + '.', 6000);
+      return;
+    }
+    const both = keys.filter((k) => !same(mine[k], base[k]) && !same(mine[k], theirs[k]));
+    const others = keys.filter((k) => both.indexOf(k) === -1);
+    saveWarning((others.length ? 'Someone else just saved changes to ' + fieldList(others) + '. ' : '') + (both.length
+      ? (others.length ? 'They also changed ' : 'Someone else just saved a different version of ') + fieldList(both) + ': when you save, you’ll pick which to keep.'
+      : 'Your edits are safe: saving keeps their changes too.'));
   }
 
   // Payments are marked Paid in the Sheet every 5 minutes, so an open admin reloads orders every 2 minutes, and when
@@ -1874,17 +1937,34 @@
   }
 
   /* ---------- Save, preview, discard ---------- */
-  function cleaned() {
-    const c = SN.clone(cfg);
-    c.zones = c.zones.filter((z) => /^\d{5}$/.test(z.zip));
-    c.faqs = c.faqs.filter((f) => (f.q || '').trim() || (f.a || '').trim());
-    c.events = c.events.filter((e) => (e.title || '').trim()).map((e) => { delete e.booked; delete e.spotsLeft; return e; });
-    c.gallery = c.gallery.filter((g) => (g.photo || '').trim());
+  function cleaned(from) {
+    const c = SN.clone(from || cfg);
+    c.zones = (c.zones || []).filter((z) => /^\d{5}$/.test(z.zip));
+    c.faqs = (c.faqs || []).filter((f) => (f.q || '').trim() || (f.a || '').trim());
+    c.events = (c.events || []).filter((e) => (e.title || '').trim()).map((e) => { delete e.booked; delete e.spotsLeft; return e; });
+    c.gallery = (c.gallery || []).filter((g) => (g.photo || '').trim());
     c.homeItems = (c.homeItems || []).filter((h) => (h.name || '').trim());
     c.homeSlides = (c.homeSlides || []).filter((h) => (h.photo || '').trim());
     delete c.weekCounts;   // booking counts come from orders, not settings
     delete c.images;
     return c;
+  }
+  const same = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+  // What changed in this tab since the settings were loaded or saved.
+  const changedKeys = (c) => Object.keys(Object.assign({}, c, base)).filter((k) => !same(c[k], base[k]));
+  // Plain names for settings, for "someone else changed …".
+  const SETTING_NAMES = { flavors: 'artisan flavors', blockedRanges: 'blocked dates', zones: 'drop-off zones', faqs: 'the FAQ', events: 'Special Events',
+    gallery: 'the gallery', homeItems: 'the home page list', homeSlides: 'the home page slideshow', pages: 'page photos', acceptingOrders: 'taking orders on/off',
+    maintenanceMode: 'maintenance mode', showAbout: 'showing the About page', showEvents: 'showing Special Events', showGallery: 'showing the Gallery', showFaq: 'showing the FAQ' };
+  function settingName(k) {
+    if (SETTING_NAMES[k]) return SETTING_NAMES[k];
+    const el = $('[data-path="' + k + '"]');
+    const label = el && el.id && $('label[for="' + el.id + '"]');
+    return label ? '“' + label.textContent.replace(/\s*\(.*$/, '').trim() + '”' : k.replace(/([A-Z])/g, ' $1').toLowerCase();
+  }
+  function fieldList(keys) {
+    const n = keys.map(settingName);
+    return n.length > 3 ? n.slice(0, 3).join(', ') + ' and ' + (n.length - 3) + ' more' : n.length > 1 ? n.slice(0, -1).join(', ') + ' and ' + n[n.length - 1] : n[0] || 'the settings';
   }
   async function save(force) {
     if (busy) return;
@@ -1897,26 +1977,43 @@
     }
     const badZip = cfg.zones.find((z) => z.zip && !/^\d{5}$/.test(z.zip));
     if (badZip && !(await ask({ title: 'Check that ZIP code', text: 'ZIP “' + badZip.zip + '” isn’t 5 digits, so it won’t be saved. Save everything else anyway?', yes: 'Save anyway', no: 'Fix it first' }))) return;
+    const keys = changedKeys(c);
+    if (!keys.length) { clearDirty(); toast('Nothing to save: no changes.'); return; }
+    const changes = {}, was = {};
+    keys.forEach((k) => { changes[k] = c[k] === undefined ? null : c[k]; was[k] = base[k] === undefined ? null : base[k]; });
     busy = true;
     $$('[data-save]').forEach((b) => { b.textContent = 'Saving…'; });
-    server('adminSaveSettings', c, stamp, !!force).then((r) => {
+    server('adminSaveSettings', changes, was, !!force).then(async (r) => {
       busy = false;
       $$('[data-save]').forEach((b) => { b.textContent = 'Save changes'; });
       if (r.conflict) {
-        ask({
-          title: 'The Sheet changed',
-          text: 'Someone changed the settings directly in the Google Sheet since you opened this page.',
-          points: ['Save mine: your version replaces those Sheet changes.', 'Keep editing: nothing is saved. To see the Sheet’s version, reload this page (your unsaved edits here would be lost).'],
-          yes: 'Save mine', no: 'Keep editing'
-        }).then((ok) => { if (ok) save(true); });
+        const names = fieldList(r.fields || []);
+        const pick = await ask({
+          title: 'Someone else changed this too',
+          text: 'Since you opened this page, someone else saved a different version of ' + names + '.',
+          points: ['Save mine: your version of ' + names + ' is saved instead of theirs.', 'Use theirs: their version is kept; the rest of your changes are saved.', 'Keep editing: nothing is saved yet.'],
+          yes: 'Save mine', alt: 'Use theirs', no: 'Keep editing'
+        });
+        if (pick === 'alt' && r.config) {
+          // Take their version of those settings (and anything else they changed that this tab didn't), then save the rest.
+          const theirs = cleaned(r.config), mine = cleaned();
+          Object.keys(theirs).forEach((k) => {
+            if ((r.fields || []).indexOf(k) !== -1 || same(mine[k], base[k])) { cfg[k] = SN.clone(r.config[k]); base[k] = theirs[k]; }
+          });
+          renderSettings();
+          if (changedKeys(cleaned()).length) save(false);
+          else { stamp = r.stamp; clearDirty(); toast('Kept their version. Nothing else to save.'); }
+        } else if (pick === true) save(true);
         return;
       }
+      const theirs = Object.keys(cleaned(r.config)).filter((k) => keys.indexOf(k) === -1 && !same(cleaned(r.config)[k], base[k]));
       cfg = r.config;
+      base = cleaned(cfg);
       stamp = r.stamp;
       clearDirty();
       renderSettings();
-      toast('Saved. The website shows your changes now.');
-    }).catch((err) => { $$('[data-save]').forEach((b) => { b.textContent = 'Save changes'; }); failed(err); });
+      toast('Saved. The website shows your changes now.' + (theirs.length ? ' Changes someone else saved to ' + fieldList(theirs) + ' are kept too.' : ''), theirs.length ? 6000 : 3200);
+    }).catch((err) => { busy = false; $$('[data-save]').forEach((b) => { b.textContent = 'Save changes'; }); failed(err); });
   }
   // Preview changes: save the unsaved edits to the Sheet's Draft tab, then open the website in preview mode.
   function preview() {
@@ -1955,6 +2052,10 @@
     document.addEventListener('change', (e) => {
       if (e.target.matches('#orders-body [data-order]')) onStatusChange(e);
     });
+    document.addEventListener('toggle', (e) => {
+      const k = e.target.getAttribute && e.target.getAttribute('data-dash-class');
+      if (k) dashOpenClasses[k] = e.target.open;
+    }, true);
     document.addEventListener('click', (e) => {
       const pob = e.target.closest('[data-po]');
       if (pob) { onPhoneClick(pob); return; }
@@ -2030,6 +2131,7 @@
   function load() {
     return server('adminLoad').then((d) => {
       cfg = d.config;
+      base = cleaned(cfg);
       stamp = d.stamp;
       orders = d.orders;
       sortOrders();

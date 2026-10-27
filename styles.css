@@ -399,6 +399,8 @@ td .input { padding: 8px 10px; }
 .chip button { width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
 .save-bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--navy); color: var(--white); z-index: 20; transform: translateY(100%); transition: transform .25s ease; }
 .save-bar.show { transform: translateY(0); }
+.save-bar.warn { background: #8E3A2E; }
+.save-bar.warn #save-bar-text { max-width: 640px; font-size: 14px; }
 .save-bar .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; padding-bottom: 12px; }
 .empty-row td { color: var(--muted); text-align: center; padding: 24px; }
 
@@ -591,3 +593,16 @@ html.sn-maint body > *:not(#maint) { display: none !important; }
 .legal ul { margin: 0 0 12px; padding-left: 22px; }
 .legal li { margin: 0 0 6px; }
 .legal a { color: var(--coral-dark); }
+/* Dashboard: one card per class, with the people booked inside */
+.dash-class { background: var(--white); border: 1px solid var(--line); border-left: 4px solid var(--coral); border-radius: 8px; font-size: 13px; color: var(--navy); }
+.dash-class summary { list-style: none; cursor: pointer; padding: 8px; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.dash-class summary::-webkit-details-marker { display: none; }
+.dash-class summary span { color: var(--muted); font-size: 12px; }
+.dash-class summary .dash-class-more { color: var(--coral); font-weight: 600; }
+.dash-class summary .dash-class-more::after { content: " ▾"; }
+.dash-class[open] summary .dash-class-more::after { content: " ▴"; }
+.dash-class summary:hover { background: #FFF6F2; }
+.dash-class ul { list-style: none; margin: 0; padding: 0 8px 8px; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
+.dash-class li { display: flex; flex-direction: column; }
+.dash-class li .link-btn { padding: 0; text-align: left; font-size: 13px; }
+.dash-class li span { color: var(--muted); font-size: 12px; }
