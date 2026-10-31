@@ -157,7 +157,7 @@
     { id: '2026-10-31d', title: 'Easier on your phone', items: [
       { t: 'Menu at the bottom', d: 'On your phone, Dashboard, Orders and Messages are in a bar at the bottom of the screen, with their counts. More opens everything else, plus Refresh website, Open the Sheet and View site. While you have unsaved changes, Discard and Save take its place until you save.' },
       { t: 'Orders as cards', d: 'Each order is a card you can read without scrolling sideways: who, when, what, the total, and a big Review button. “How orders work” opens the explanation when you want it.', go: 'orders' },
-      { t: 'Text boxes fit their text', d: 'Longer boxes (like the pricing and allergy notes) grow to show everything, so there’s no scrolling inside a small box. Discard is instant now too.' }
+      { t: 'Text boxes fit their text', d: 'Boxes with longer text (headings, the pricing and allergy notes, event details, FAQ questions) wrap and grow to show everything, so there’s no scrolling inside a small box. Discard is instant now too.' }
     ] },
     { id: '2026-10-31c', title: 'Past orders tidy themselves up', items: [
       { t: 'Active and Past orders', d: 'Orders now has two tabs at the top: Active (everything still in progress) and Past (completed, cancelled, declined and expired, newest date first).', go: 'orders' },
@@ -288,7 +288,7 @@
       '<p class="hint" style="margin-top:8px">New flavors show on both the Mini and Large Artisan menus. Hide a flavor to take it off the menu without deleting it.</p>' +
       '<h3 style="font-size:22px;margin:26px 0 12px">Special banner</h3>' +
       '<div class="fields">' +
-        '<div class="field" style="grid-column:1 / -1"><label class="label" for="specialText">Banner text (leave blank to hide)</label><input class="input" id="specialText" type="text" data-path="specialText"></div>' +
+        '<div class="field" style="grid-column:1 / -1"><label class="label" for="specialText">Banner text (leave blank to hide)</label><textarea class="input one-line" rows="1" id="specialText" data-path="specialText"></textarea></div>' +
         field('specialUntil', 'Show until', '<input class="input" id="specialUntil" type="date" data-path="specialUntil">') +
       '</div>');
   }
@@ -343,7 +343,7 @@
         '<div class="fields" style="margin-top:14px">' +
           field('maintenancePassword', 'Password to get in', '<input class="input" id="maintenancePassword" type="text" autocomplete="off" data-path="maintenancePassword" placeholder="e.g. sprinkles2026">',
             'On the “back soon” page, click <strong>Have a password?</strong> and enter this. That browser then sees the site until you click “Lock this browser”.') +
-          field('maintenanceTitle', 'Heading', '<input class="input" id="maintenanceTitle" type="text" data-path="maintenanceTitle">') +
+          field('maintenanceTitle', 'Heading', '<textarea class="input one-line" rows="1" id="maintenanceTitle" data-path="maintenanceTitle"></textarea>') +
           '<div class="field" style="grid-column:1 / -1"><label class="label" for="maintenanceMessage">Message</label><textarea class="input" id="maintenanceMessage" rows="2" data-path="maintenanceMessage"></textarea></div>' +
         '</div>' +
       '</div>' +
@@ -357,7 +357,7 @@
           const id = 'pg-' + key;
           if (kind === 'photo') return photoField(id, label, 'data-page="' + key + '"');
           if (kind === 'area' || kind === 'long') return field(id, label, '<textarea class="input" id="' + id + '" rows="' + (kind === 'long' ? 6 : 2) + '" data-page="' + key + '"></textarea>');
-          return field(id, label, '<input class="input" id="' + id + '" type="text" data-page="' + key + '">');
+          return field(id, label, '<textarea class="input one-line" rows="1" id="' + id + '" data-page="' + key + '"></textarea>');
         }).join('') + '</div>' + (group === 'Home page' ? homeItemsEditor() : '')).join(''));
   }
   function homeItemsEditor() {
@@ -394,7 +394,7 @@
         field('alertEmails', 'Also send website problem alerts to', '<input class="input" id="alertEmails" type="text" data-path="alertEmails" placeholder="e.g. someone@gmail.com (comma-separated)">', 'The morning health check emails you (and these) only when something needs fixing.') +
         field('pickupCity', 'Pickup area', '<input class="input" id="pickupCity" type="text" data-path="pickupCity">', 'Shown on the site') +
         field('pickupAddress', 'Pickup address', '<input class="input" id="pickupAddress" type="text" data-path="pickupAddress">', 'Only in the confirmation email') +
-        field('pickupInstructions', 'Pickup instructions', '<input class="input" id="pickupInstructions" type="text" data-path="pickupInstructions">', 'Only in the confirmation email') +
+        field('pickupInstructions', 'Pickup instructions', '<textarea class="input one-line" rows="1" id="pickupInstructions" data-path="pickupInstructions"></textarea>', 'Only in the confirmation email') +
         field('ownerPhone', 'Your cell', '<input class="input" id="ownerPhone" type="tel" data-path="ownerPhone" placeholder="(847) 555-0100">', 'Only in pickup / drop-off time emails') +
         field('instagram', 'Instagram link', '<input class="input" id="instagram" type="url" data-path="instagram">') +
         field('instagramHandle', 'Instagram handle', '<input class="input" id="instagramHandle" type="text" data-path="instagramHandle">') +
@@ -1881,7 +1881,7 @@
     $('#faq-editor').innerHTML = n ? cfg.faqs.map((f, i) =>
       '<div class="faq-edit"><div class="faq-edit-top"><span class="num">Question ' + (i + 1) + '</span>' + moveButtons('faqs', i, n, 'question ' + (i + 1)) + '</div>' +
         '<label class="sr-only" for="fq-' + i + '">Question ' + (i + 1) + '</label>' +
-        '<input class="input" id="fq-' + i + '" type="text" placeholder="Question" data-list="faqs" data-i="' + i + '" data-key="q" value="' + esc(f.q) + '" style="font-weight:600">' +
+        '<textarea class="input one-line" rows="1" id="fq-' + i + '" placeholder="Question" data-list="faqs" data-i="' + i + '" data-key="q" style="font-weight:600">' + esc(f.q) + '</textarea>' +
         '<label class="sr-only" for="fa-' + i + '">Answer ' + (i + 1) + '</label>' +
         '<textarea class="input" id="fa-' + i + '" rows="3" placeholder="Answer" data-list="faqs" data-i="' + i + '" data-key="a">' + esc(f.a) + '</textarea>' +
       '</div>').join('') : '<p class="hint">No questions yet. Add one below.</p>';
@@ -1897,19 +1897,19 @@
         '<div class="faq-edit-top"><span class="num">Event ' + (i + 1) + '</span><span class="row-gap" style="gap:6px">' +
           '<button type="button" class="switch" role="switch" aria-checked="' + (ev.show !== false) + '" data-act="toggle-show" data-list="events" data-i="' + i + '" aria-label="Show event ' + (i + 1) + ' on the page"><span class="track" aria-hidden="true"></span>' + (ev.show !== false ? 'Showing' : 'Hidden') + '</button>' +
           moveButtons('events', i, n, 'event ' + (i + 1)) + '</span></div>' +
-        field(id('title'), 'Title', '<input class="input" id="' + id('title') + '" type="text" ' + attrs('title') + ' value="' + esc(ev.title) + '" style="font-weight:600">') +
+        field(id('title'), 'Title', '<textarea class="input one-line" rows="1" id="' + id('title') + '" ' + attrs('title') + ' style="font-weight:600">' + esc(ev.title) + '</textarea>') +
         '<div class="grid-2">' +
           field(id('date'), 'Date', '<input class="input" id="' + id('date') + '" type="date" ' + attrs('date') + ' value="' + esc(ev.date) + '">') +
-          field(id('venue'), 'Location name', '<input class="input" id="' + id('venue') + '" type="text" ' + attrs('venue') + ' value="' + esc(ev.venue) + '" placeholder="e.g. Khepri Kitchen & Coffee">') +
+          field(id('venue'), 'Location name', '<textarea class="input one-line" rows="1" id="' + id('venue') + '" ' + attrs('venue') + ' placeholder="e.g. Khepri Kitchen & Coffee">' + esc(ev.venue) + '</textarea>') +
           field(id('start'), 'Start time', '<input class="input" id="' + id('start') + '" type="text" ' + attrs('start') + ' value="' + esc(ev.start) + '" placeholder="e.g. 2:00 PM">') +
           field(id('end'), 'End time', '<input class="input" id="' + id('end') + '" type="text" ' + attrs('end') + ' value="' + esc(ev.end) + '" placeholder="e.g. 4:00 PM">') +
           field(id('price'), 'Price per person', '<div class="input-wrap"><span>$</span><input id="' + id('price') + '" type="number" min="0" step="1" ' + attrs('price') + ' value="' + esc(ev.price) + '"></div>') +
           field(id('max'), 'Max attendees', '<input class="input" id="' + id('max') + '" type="number" min="1" ' + attrs('max') + ' value="' + esc(ev.max) + '" placeholder="No limit">',
             ev.button === 'Add to bag' && ev.max !== '' && ev.max != null ? (ev.booked || 0) + ' booked, ' + Math.max(0, ev.max - (ev.booked || 0)) + ' spots left' : (ev.booked ? ev.booked + ' booked' : '')) +
         '</div>' +
-        field(id('address'), 'Address', '<input class="input" id="' + id('address') + '" type="text" ' + attrs('address') + ' value="' + esc(ev.address) + '" placeholder="e.g. 106 S. Emerson St., Mount Prospect, IL">', 'Customers tap it for directions in their maps app.') +
-        field(id('when'), 'Small text above the title (optional)', '<input class="input" id="' + id('when') + '" type="text" ' + attrs('when') + ' value="' + esc(ev.when) + '" placeholder="e.g. Holiday special">', 'Leave blank to show the date and time there instead.') +
-        field(id('summary'), 'Short line on the card (optional)', '<input class="input" id="' + id('summary') + '" type="text" ' + attrs('summary') + ' value="' + esc(ev.summary) + '" placeholder="e.g. Decorate 6 fall cookies to take home. All supplies included.">', 'Leave blank to show the start of the description.') +
+        field(id('address'), 'Address', '<textarea class="input one-line" rows="1" id="' + id('address') + '" ' + attrs('address') + ' placeholder="e.g. 106 S. Emerson St., Mount Prospect, IL">' + esc(ev.address) + '</textarea>', 'Customers tap it for directions in their maps app.') +
+        field(id('when'), 'Small text above the title (optional)', '<textarea class="input one-line" rows="1" id="' + id('when') + '" ' + attrs('when') + ' placeholder="e.g. Holiday special">' + esc(ev.when) + '</textarea>', 'Leave blank to show the date and time there instead.') +
+        field(id('summary'), 'Short line on the card (optional)', '<textarea class="input one-line" rows="1" id="' + id('summary') + '" ' + attrs('summary') + ' placeholder="e.g. Decorate 6 fall cookies to take home. All supplies included.">' + esc(ev.summary) + '</textarea>', 'Leave blank to show the start of the description.') +
         field(id('desc'), 'Full description', '<textarea class="input" id="' + id('desc') + '" rows="4" ' + attrs('desc') + '>' + esc(ev.desc) + '</textarea>', 'Shows when customers tap "See details".') +
         photoField(id('photo'), 'Photo', attrs('photo') + ' value="' + esc(ev.photo) + '"') +
         photoField(id('flyer'), 'Flyer (optional)', attrs('flyer') + ' value="' + esc(ev.flyer) + '"') +
@@ -2237,7 +2237,9 @@
   let growTimer = null;
   window.addEventListener('resize', () => { clearTimeout(growTimer); growTimer = setTimeout(growAll, 150); });
   function wire() {
+    document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('one-line')) e.preventDefault(); });
     document.addEventListener('input', (e) => {
+      if (e.target.classList && e.target.classList.contains('one-line') && /[\r\n]/.test(e.target.value)) e.target.value = e.target.value.replace(/\s*[\r\n]+\s*/g, ' ');
       if (e.target.tagName === 'TEXTAREA') grow(e.target);
       if (po && e.target.closest('#review')) { onPhoneInput(e); return; }
       if (e.target.closest('#review')) { onReviewInput(e); return; }

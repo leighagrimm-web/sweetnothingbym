@@ -683,3 +683,4 @@ html.sn-maint body > *:not(#maint) { display: none !important; }
   .save-bar .row-gap .btn { flex: 1; }
 }
 textarea.input { overflow-y: hidden; min-height: 3em; }
+textarea.input.one-line { min-height: 0; resize: none; line-height: 1.4; }
