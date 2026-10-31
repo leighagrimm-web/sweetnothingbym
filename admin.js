@@ -154,7 +154,7 @@
   // "go" links to the admin tab it's about.
   const RELEASES = [
     { id: '2026-10-31d', title: 'Easier on your phone', items: [
-      { t: 'Menu at the bottom', d: 'On your phone, Dashboard, Orders and Messages are in a bar at the bottom of the screen, with their counts. More opens everything else, plus Refresh website, Open the Sheet and View site.' },
+      { t: 'Menu at the bottom', d: 'On your phone, Dashboard, Orders and Messages are in a bar at the bottom of the screen, with their counts. More opens everything else, plus Refresh website, Open the Sheet and View site. While you have unsaved changes, Discard and Save take its place until you save.' },
       { t: 'Orders as cards', d: 'Each order is a card you can read without scrolling sideways: who, when, what, the total, and a big Review button. “How orders work” opens the explanation when you want it.', go: 'orders' }
     ] },
     { id: '2026-10-31c', title: 'Past orders tidy themselves up', items: [
@@ -403,8 +403,9 @@
   }
 
   /* ---------- Helpers ---------- */
-  function markDirty() { dirty = true; $('#save-bar').classList.add('show'); }
-  function clearDirty() { dirty = false; $('#save-bar').classList.remove('show'); saveWarning(''); }
+  // On phones the save bar takes the bottom bar's place until the changes are saved or discarded (see styles.css).
+  function markDirty() { dirty = true; $('#save-bar').classList.add('show'); document.body.classList.add('has-unsaved'); }
+  function clearDirty() { dirty = false; $('#save-bar').classList.remove('show'); document.body.classList.remove('has-unsaved'); saveWarning(''); }
   // Shown in the save bar when someone else saved settings while this tab has unsaved edits.
   function saveWarning(text) {
     $('#save-bar-text').textContent = text || 'You have unsaved changes.';

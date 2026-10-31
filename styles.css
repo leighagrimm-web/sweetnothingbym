@@ -643,7 +643,8 @@ html.sn-maint body > *:not(#maint) { display: none !important; }
   .more-sheet .admin-nav-group { padding: 16px 4px 6px; margin: 0; }
   body.more-open { overflow: hidden; }
   /* The save bar and messages sit just above the bottom bar. */
-  .save-bar { bottom: calc(66px + env(safe-area-inset-bottom)); }
+  body.has-unsaved .admin-tabbar { display: none; }
+  .save-bar .wrap { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
   .toast { bottom: calc(76px + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 760px) {
@@ -675,7 +676,7 @@ html.sn-maint body > *:not(#maint) { display: none !important; }
 }
 @media (max-width: 760px) {
   /* Save bar: the message, then Discard and Save side by side (Preview is at the top of every settings page). */
-  .save-bar .wrap { gap: 8px; padding-top: 10px; padding-bottom: 10px; }
+  .save-bar .wrap { gap: 8px; padding-top: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
   .save-bar #save-bar-text { flex: 1 1 100%; font-size: 14px; }
   .save-bar .row-gap { flex: 1 1 100%; flex-wrap: nowrap; }
   .save-bar [data-preview] { display: none; }
