@@ -14,7 +14,7 @@
   let cfg = null;          // settings being edited
   let stamp = '';          // fingerprint of the Sheet's settings when loaded (to notice when someone else saves)
   let base = null;         // the settings as last loaded or saved (cleaned), so Save sends only what changed here
-  const NEEDS_CODE = '2026-10-31c';   // the Code.gs (CODE_VERSION) this page needs
+  const NEEDS_CODE = '2026-10-31d';   // the Code.gs (CODE_VERSION) this page needs
   let orders = [];
   let messages = [];
   let codes = [];
@@ -59,7 +59,7 @@
           TAB_GROUPS.map(([group, tabs]) => '<span class="admin-nav-group">' + group + '</span>' +
             tabs.map(([id, label]) => '<a href="#' + id + '" target="_self" data-tab="' + id + '">' + label + '<span class="nav-count" id="nav-count-' + id + '" hidden></span></a>').join('')).join('') +
         '</nav>' +
-        '<main class="admin-main">' +
+        '<main class="admin-main"><div id="health-banner"></div>' +
           '<div class="admin-title" id="settings-title"><div><h1>Shop settings</h1>' +
             '<p>Use <strong>Preview changes</strong> to see the site with your edits before anything goes live. Customers only see changes after you save.</p></div>' +
             '<div class="row-gap" style="gap:10px"><button type="button" class="btn ghost" data-preview>Preview changes</button><button type="button" class="btn" data-save>Save changes</button></div>' +
@@ -113,6 +113,10 @@
   // Newest first. Add an entry with each update (id = the date it went live, plus a letter for a second one that day);
   // "go" links to the admin tab it's about.
   const RELEASES = [
+    { id: '2026-10-31', title: 'A morning check-up for your website', items: [
+      { t: 'Daily health check', d: 'Every morning at 7 the site checks that QuickBooks, Square, payment checks and emails are all working. If something needs fixing, you get an email saying what and how, and a red box shows at the top of your admin until it’s fixed, then an “all clear” email. Nothing’s wrong? You won’t hear from it.', go: 'payments' },
+      { t: 'Run it yourself', d: 'Payments → “Run health check now” checks everything right away.', go: 'payments' }
+    ] },
     { id: '2026-10-27b', title: 'Classes on the dashboard, message emails, safer saving', items: [
       { t: 'One card per class on your dashboard', d: 'A class now shows as one card on its day, with the time and how many spots are booked out of the max. Click it to see everyone booked, with their spots and whether they’ve paid.', go: 'dashboard' },
       { t: '“We got your message” email', d: 'When someone sends a message from the Contact page or “Message me”, they get a short email saying you got it and will reply within 1–2 days, with a copy of what they sent. Replies come to you.', go: 'messages' },
@@ -325,6 +329,7 @@
       '<div class="fields">' +
         field('ownerEmail', 'New-order alerts go to', '<input class="input" id="ownerEmail" type="email" data-path="ownerEmail" placeholder="Blank = your Google account">') +
         field('replyToEmail', 'Customer replies go to', '<input class="input" id="replyToEmail" type="email" data-path="replyToEmail" placeholder="Blank = same as alerts">') +
+        field('alertEmails', 'Also send website problem alerts to', '<input class="input" id="alertEmails" type="text" data-path="alertEmails" placeholder="e.g. someone@gmail.com (comma-separated)">', 'The morning health check emails you (and these) only when something needs fixing.') +
         field('pickupCity', 'Pickup area', '<input class="input" id="pickupCity" type="text" data-path="pickupCity">', 'Shown on the site') +
         field('pickupAddress', 'Pickup address', '<input class="input" id="pickupAddress" type="text" data-path="pickupAddress">', 'Only in the confirmation email') +
         field('pickupInstructions', 'Pickup instructions', '<input class="input" id="pickupInstructions" type="text" data-path="pickupInstructions">', 'Only in the confirmation email') +
@@ -787,6 +792,8 @@
       orders = d.orders;
       sortOrders();
       weekCounts = d.weekCounts || {};
+      health = d.health || null;
+      renderHealth();
       messages = d.messages;
       codes = d.codes || [];
       cfg.events = cfg.events.map((e) => { const fresh = (d.config.events || []).find((x) => x.id === e.id); return fresh ? Object.assign(e, { booked: fresh.booked, spotsLeft: fresh.spotsLeft }) : e; });
@@ -1506,6 +1513,23 @@
     }
   }
 
+  /* ---------- Daily health check: red banner while something's wrong ---------- */
+  let health = null;        // the last morning check (or "Run health check now"): { at, problems: [{ id, title, fix }] }
+  const healthWhen = (iso) => new Date(iso).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  // A check more than 2 days old means the morning check itself has stopped.
+  const healthStale = () => health && Date.now() - Date.parse(health.at) > 2 * 864e5;
+  function renderHealth() {
+    const box = $('#health-banner');
+    if (!box) return;
+    const probs = (health && health.problems) || [];
+    if (!probs.length && !healthStale()) { box.innerHTML = ''; return; }
+    const list = probs.length ? probs : [{ title: 'The morning health check hasn’t run since ' + healthWhen(health.at), fix: 'Go to Payments and click Run health check now; that schedules it again.' }];
+    box.innerHTML = '<div class="health-alert" role="alert"><strong>' + (list.length === 1 ? 'Something on your website needs attention' : list.length + ' things on your website need attention') + '</strong>' +
+      '<ul>' + list.map((x) => '<li><strong>' + esc(x.title) + '.</strong> ' + esc(x.fix) + '</li>').join('') + '</ul>' +
+      '<div class="row-gap" style="gap:8px;align-items:center"><button type="button" class="btn small" data-pay="health">Check again</button>' +
+        '<span class="hint" style="margin:0">Checked ' + esc(healthWhen(health.at)) + '</span></div></div>';
+  }
+
   /* ---------- Payments: QuickBooks (cookie invoices) and Square (class checkout) ---------- */
   let payInfo = null;       // from adminPayments; loaded the first time the tab opens (it calls QuickBooks and Square)
   function sectionPayments() {
@@ -1553,6 +1577,10 @@
         '<div class="field"><h3 class="rv-h" style="margin-top:0">QuickBooks ' + (qb.keys ? env(qb.env) : '') + '</h3>' + qbBody + '</div>' +
         '<div class="field"><h3 class="rv-h" style="margin-top:0">Square ' + (sq.ready ? env(sq.env) : '') + '</h3>' + sqBody + '</div>' +
       '</div>' +
+      '<h3 class="rv-h">Daily health check</h3>' +
+      '<p>' + (p.healthTrigger ? 'Runs every morning at 7: QuickBooks, Square, the payment check, emails and Google’s daily limits. It emails you only when something needs fixing.' : '<span class="err">Not scheduled yet. Click Run health check now to schedule it.</span>') + ' ' +
+        (health ? 'Last check ' + esc(healthWhen(health.at)) + ': ' + (health.problems.length ? '<span class="err">' + health.problems.length + ' to fix (see the red box at the top).</span>' : 'all good.') : 'It hasn’t run yet.') + '</p>' +
+      '<div class="row-gap" style="gap:8px;margin-top:10px"><button type="button" class="btn ghost small" data-pay="health">Run health check now</button></div>' +
       '<h3 class="rv-h">Payment check</h3>' +
       '<p>' + (p.trigger ? 'Runs every 5 minutes.' : '<span class="err">Not scheduled. Click Check now to schedule it.</span>') + ' ' + last + '</p>' +
       '<div class="row-gap" style="gap:8px;margin-top:10px"><button type="button" class="btn ghost small" data-pay="check">Check now</button><button type="button" class="btn ghost small" data-pay="refresh">Refresh</button></div>';
@@ -1566,6 +1594,20 @@
       const w = window.open('', '_blank');
       server('adminQbConnectUrl').then((url) => { if (w) w.location.href = url; else window.open(url, '_blank'); })
         .catch((err) => { if (w) w.close(); failed(err); });
+      return;
+    }
+    if (act === 'health') {
+      if (busy) return;
+      busy = true;
+      const label = b.textContent;
+      b.classList.add('is-busy'); b.disabled = true;
+      server('adminRunHealthCheck').then((r) => {
+        busy = false; b.classList.remove('is-busy'); b.disabled = false; b.textContent = label;
+        health = r;
+        renderHealth();
+        toast(r.problems.length ? r.problems.length + ' thing' + (r.problems.length === 1 ? '' : 's') + ' to fix: see the red box at the top.' : 'All good: everything is working.', r.problems.length ? 6000 : 3200);
+        if (payInfo) loadPayments();
+      }).catch((err) => { busy = false; b.classList.remove('is-busy'); b.disabled = false; failed(err); });
       return;
     }
     if (act === 'disconnect' && !(await ask({ title: 'Disconnect QuickBooks?', text: 'Approved orders won’t get QuickBooks invoices until you connect again.', yes: 'Disconnect', no: 'Stay connected', danger: true }))) return;
@@ -2157,6 +2199,7 @@
       codes = d.codes || [];
       weekCounts = d.weekCounts || {};
       sheetUrl = d.sheetUrl;
+      health = d.health || null;
       if (!$('#save-bar')) shell();
       clearDirty();
       // Coming back from a preview? The unsaved edits are still in the Sheet's Draft tab.
@@ -2175,6 +2218,7 @@
       fillCodeForm(null);
       dashRefreshed = new Date();
       renderDashboard();
+      renderHealth();
     });
   }
   load().catch((err) => {

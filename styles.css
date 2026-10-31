@@ -607,3 +607,8 @@ html.sn-maint body > *:not(#maint) { display: none !important; }
 .dash-class li .link-btn { padding: 0; text-align: left; font-size: 13px; }
 .dash-class li span { color: var(--muted); font-size: 12px; }
 .proto-banner.code-old { background: #8E3A2E; color: #fff; font-weight: 600; }
+/* Daily health check: shown at the top of every admin tab while something needs fixing */
+.health-alert { background: #FFF1EE; border: 2px solid #C0432F; border-radius: 14px; padding: 14px 18px; margin-bottom: 18px; color: var(--navy); }
+.health-alert > strong { color: #8E3A2E; font-size: 16px; }
+.health-alert ul { margin: 8px 0 12px; padding-left: 20px; font-size: 14px; }
+.health-alert li { margin-bottom: 6px; }

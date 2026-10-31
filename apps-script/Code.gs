@@ -138,12 +138,13 @@ const SETTINGS_SPEC = [
   ['adminHelpers', '', 'text', 'PRIVATE. Google emails (comma-separated) of people who can use the admin besides the owner. Saving shares the Sheet and photos folder with them; their emails go out from the shop\'s account within 5 minutes.'],
   ['ownerEmail', '', 'text', 'PRIVATE. Where "new order" and "new message" alerts go. Blank = the Google account that runs this.'],
   ['replyToEmail', '', 'text', 'PRIVATE. Where customer replies go. Blank = ownerEmail.'],
+  ['alertEmails', '', 'text', 'PRIVATE. Extra emails (comma-separated) for "something on the website needs attention" alerts. ownerEmail always gets them.'],
   ['senderName', 'Sweet Nothings by M', 'text', 'PRIVATE. Name shown as the email sender.'],
   ['siteUrl', 'https://leighagrimm-web.github.io/sweetnothingbym/', 'text', 'PRIVATE. Website address, used for the logo and links in emails. End with /'],
   ['environment', 'UAT', 'text', 'PRIVATE. UAT or PROD. UAT adds [TEST] to email subjects.'],
   ['adminUrl', '', 'text', 'PRIVATE. Link to the admin page (the admin deployment\'s web app URL). Used in "New order to review" emails.']
 ];
-const PRIVATE_SETTINGS = ['pickupAddress', 'pickupInstructions', 'ownerPhone', 'maintenancePassword', 'adminHelpers', 'ownerEmail', 'replyToEmail', 'senderName', 'siteUrl', 'environment', 'adminUrl'];
+const PRIVATE_SETTINGS = ['pickupAddress', 'pickupInstructions', 'ownerPhone', 'maintenancePassword', 'adminHelpers', 'ownerEmail', 'replyToEmail', 'alertEmails', 'senderName', 'siteUrl', 'environment', 'adminUrl'];
 
 const STARTER_FLAVORS = [
   ['cc', 'Chocolate Chip', true, false],
@@ -304,8 +305,9 @@ function setupSheet() {
   const blank = ss.getSheetByName('Sheet1');
   if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
 
-  // Checks QuickBooks and Square for payments every 5 minutes.
+  // Checks QuickBooks and Square for payments every 5 minutes, and everything else every morning.
   ensurePaymentTrigger_();
+  ensureHealthTrigger_();
   // Where customers' photos are saved, shared with any admin helpers.
   uploadFolder_();
   shareWithHelpers_();
@@ -1024,6 +1026,7 @@ function sendSafely_(fn) {
     return mailQueued_ ? 'Queued ' + when + ' (sends from the shop’s email within 5 min)' : 'Sent ' + when;
   } catch (err) {
     console.error('Email failed', err && err.stack || err);
+    logHealth_('email', String(err && err.message || err));
     return 'FAILED: ' + String(err && err.message || err).slice(0, 200);
   }
 }
@@ -1188,7 +1191,7 @@ function adminLoad() {
   const cfg = buildConfig_(true);
   const draft = getDraft_();
   return {
-    config: cfg, stamp: settingsStamp_(cfg), draft: draft,
+    config: cfg, stamp: settingsStamp_(cfg), draft: draft, health: healthState_(),
     orders: readOrders_(), messages: readMessages_(), weekCounts: cfg.weekCounts, codes: readCodes_(),
     sheetUrl: SpreadsheetApp.getActive().getUrl(), today: todayISO_()
   };
@@ -1688,7 +1691,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-10-31c';
+const CODE_VERSION = '2026-10-31d';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
@@ -2227,6 +2230,7 @@ function checkPayments() {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) return { ok: false, error: 'A payment check is already running.' };
   const summary = { invoicesPaid: [], classesPaid: [], expired: [], remindersSent: [], payRemindersSent: [], errors: [] };
+  const started = Date.now();
   try {
     const cfg = getConfig_();
     const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
@@ -2258,6 +2262,8 @@ function checkPayments() {
           });
         } catch (e) { summary.errors.push('QuickBooks: ' + e.message); }
       }
+    } else if (qbKeysSet_()) {
+      summary.errors.push('QuickBooks isn’t connected, so invoice payments aren’t being checked.');
     }
 
     // Class bookings waiting on Square. The Square order number comes from the "Square order" column, or the
@@ -2296,9 +2302,12 @@ function checkPayments() {
     try { summary.remindersSent = sendHandoffReminders_(sh, rows); } catch (e) { summary.errors.push('Reminders: ' + e.message); }
     try { summary.payRemindersSent = sendPayReminders_(sh, rows); } catch (e) { summary.errors.push('Pay reminders: ' + e.message); }
     try { summary.emailsSent = sendOutbox_(); } catch (e) { summary.errors.push('Outbox: ' + e.message); }
+    summary.errors.forEach((e) => logHealth_('payments', e));
+    summary.ms = Date.now() - started;
     SCRIPT_PROPS().setProperty('PAYMENTS_LAST_CHECK', JSON.stringify(Object.assign({ at: new Date().toISOString() }, summary)));
     return Object.assign({ ok: true }, summary);
   } finally {
+    addRuntime_(Date.now() - started);
     lock.releaseLock();
   }
 }
@@ -2337,6 +2346,180 @@ function ensurePaymentTrigger_() {
   if (!runningAsOwner_()) return;   // a helper's trigger would run (and send email) as the helper
   const has = ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'checkPayments');
   if (!has) ScriptApp.newTrigger('checkPayments').timeBased().everyMinutes(5).create();
+  ensureHealthTrigger_();
+}
+
+/* ============================== Daily health check ============================== */
+
+/*
+ * Every morning at 7 (and from "Run health check now" on the admin's Payments tab) this checks that what the site
+ * relies on still works: QuickBooks, Square, the 5-minute payment check, emails, and Google's daily limits.
+ * Only when something's wrong does it email the owner (and alertEmails), in plain words with how to fix it: once a
+ * day at most while it stays wrong, plus one "all clear" once it's fixed. The admin shows a red banner meanwhile.
+ */
+const HEALTH_STATE = 'HEALTH_STATE';   // the last result: { at, problems: [{ id, title, fix }], alertDay, emailStatus }
+const HEALTH_LOG = 'HEALTH_LOG';       // recent trouble: [{ at, kind: 'payments' | 'email', text }], the last 2 days
+const QB_RECONNECT_WARN_DAYS = 30;
+const MAIL_LEFT_WARN = 20;
+const RUNTIME_WARN_MIN = 60;           // a regular Gmail account gets about 90 minutes of scheduled runs a day
+
+function ensureHealthTrigger_() {
+  if (!runningAsOwner_()) return;
+  const has = ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'dailyHealthCheck');
+  if (!has) ScriptApp.newTrigger('dailyHealthCheck').timeBased().everyDays(1).atHour(7).inTimezone(tz_()).create();
+}
+
+// Remember trouble for the health check. Never lets logging break the thing being logged.
+function logHealth_(kind, text) {
+  try {
+    const p = SCRIPT_PROPS();
+    const cutoff = Date.now() - 2 * 864e5;
+    const log = JSON.parse(p.getProperty(HEALTH_LOG) || '[]').filter((x) => Date.parse(x.at) > cutoff);
+    log.push({ at: new Date().toISOString(), kind, text: String(text).slice(0, 200) });
+    p.setProperty(HEALTH_LOG, JSON.stringify(log.slice(-60)));
+  } catch (e) { /* the health check just sees less */ }
+}
+
+// Scheduled-run time used by the 5-minute check, today and the day before.
+function addRuntime_(ms) {
+  try {
+    const p = SCRIPT_PROPS();
+    const today = todayISO_();
+    const t = JSON.parse(p.getProperty('RUNTIME') || '{}');
+    if (t.day !== today) { t.prevDay = t.day || ''; t.prevMs = t.ms || 0; t.day = today; t.ms = 0; }
+    t.ms += ms;
+    p.setProperty('RUNTIME', JSON.stringify(t));
+  } catch (e) { /* as above */ }
+}
+
+// Days until Intuit makes the owner sign in to QuickBooks again (every 5 years), or null if it can't tell.
+function qbDaysLeft_() {
+  try {
+    const t = qbService_().getToken();
+    const secs = Number(t && t.x_refresh_token_expires_in), from = Number(t && t.granted_time);
+    if (!secs || !from) return null;
+    return Math.floor((from + secs - Date.now() / 1000) / 86400);
+  } catch (e) { return null; }
+}
+
+// Everything that's wrong right now, as [{ id, title, fix }] in plain words.
+function healthProblems_() {
+  const p = SCRIPT_PROPS();
+  const out = [];
+  const add = (id, title, fix) => out.push({ id, title, fix });
+  const when = (iso) => Utilities.formatDate(new Date(iso), tz_(), 'EEE MMM d, h:mm a');
+
+  // QuickBooks: connected, answering, and not about to need signing in again.
+  if (qbKeysSet_()) {
+    if (!qbReady_()) {
+      add('qb-connect', 'QuickBooks isn’t connected', 'Approved cookie orders can’t get invoices, and paid invoices aren’t being marked Paid. In the admin, go to Payments, click Connect QuickBooks, sign in to Intuit and approve.');
+    } else {
+      try { qbFetch_('get', '/companyinfo/' + p.getProperty('QBO_REALM_ID')); }
+      catch (e) { add('qb-api', 'QuickBooks isn’t answering', 'QuickBooks said: “' + e.message + '”. If this keeps happening, go to Payments in the admin, click Disconnect, then Connect QuickBooks again.'); }
+      const days = qbDaysLeft_();
+      if (days !== null && days <= QB_RECONNECT_WARN_DAYS) {
+        add('qb-expiry', days <= 0 ? 'QuickBooks needs signing in again now' : 'QuickBooks needs signing in again within ' + days + ' day' + (days === 1 ? '' : 's'),
+          'For security, Intuit asks you to sign in again every 5 years. In the admin, go to Payments, click Disconnect, then Connect QuickBooks and approve. It takes a minute.');
+      }
+    }
+  }
+
+  // Square: the site's key still works.
+  if (squareReady_()) {
+    try { squareFetch_('get', '/v2/locations/' + prop_('SQUARE_LOCATION_ID')); }
+    catch (e) { add('square', 'Square isn’t accepting the website’s key', 'Class bookings can’t go to checkout. Square said: “' + e.message + '”. Check the access token in Square’s Developer site and paste it into Apps Script → Project Settings → Script Properties → SQUARE_ACCESS_TOKEN.'); }
+  }
+
+  // The 5-minute payment check is scheduled and has run lately.
+  const triggers = ScriptApp.getProjectTriggers().map((t) => t.getHandlerFunction());
+  const last = JSON.parse(p.getProperty('PAYMENTS_LAST_CHECK') || 'null');
+  if (triggers.indexOf('checkPayments') === -1) {
+    add('pay-trigger', 'The 5-minute payment check isn’t scheduled', 'Payments won’t be marked Paid and class holds won’t expire. In the admin, go to Payments and click Check now; that schedules it again.');
+  } else if (!last || Date.now() - Date.parse(last.at) > 30 * 60000) {
+    add('pay-stale', 'The payment check hasn’t run lately', 'It last ran ' + (last ? when(last.at) : 'never') + '. In the admin, go to Payments and click Check now. If it keeps stopping, open Apps Script → Triggers and look at the failed runs of checkPayments.');
+  }
+
+  // Repeated QuickBooks / Square errors, and emails that didn't send, in the last day.
+  const since = Date.now() - 864e5;
+  const log = JSON.parse(p.getProperty(HEALTH_LOG) || '[]').filter((x) => Date.parse(x.at) > since);
+  const payErrors = log.filter((x) => x.kind === 'payments');
+  if (payErrors.length >= 3 && !out.some((x) => /^qb-connect|^square/.test(x.id))) {
+    add('pay-errors', 'Payment checks hit an error ' + payErrors.length + ' times in the last day', 'The latest: “' + payErrors[payErrors.length - 1].text + '”. Click Check now on the Payments tab to see whether it still happens.');
+  }
+  const mailErrors = log.filter((x) => x.kind === 'email');
+  if (mailErrors.length) {
+    add('email-failed', mailErrors.length + ' email' + (mailErrors.length === 1 ? '' : 's') + ' didn’t send in the last day', 'The latest: “' + mailErrors[mailErrors.length - 1].text + '”. Look for FAILED in the email columns of the Orders and Messages tabs, and contact those customers yourself.');
+  }
+
+  // Google's daily limits on a regular Gmail account.
+  try {
+    const left = MailApp.getRemainingDailyQuota();
+    if (left < MAIL_LEFT_WARN) add('mail-quota', 'Only ' + left + ' emails left for today', 'Google lets the shop’s account send about 100 emails a day; past that, emails fail until tomorrow. A busy day can do it. If it happens often, ask Leigha about Google Workspace.');
+  } catch (e) { /* can't tell */ }
+  const rt = JSON.parse(p.getProperty('RUNTIME') || '{}');
+  const mins = Math.round((rt.prevMs || 0) / 60000);
+  if (mins >= RUNTIME_WARN_MIN) {
+    add('runtime', 'The payment check used ' + mins + ' minutes of Google’s daily allowance yesterday', 'Google allows about 90 minutes of scheduled runs a day; past that, the checks stop until tomorrow. Archiving old orders makes each check faster; ask Leigha.');
+  }
+  return out;
+}
+
+// Run the check, email if needed, and remember the result for the admin.
+function healthCheck_() {
+  const p = SCRIPT_PROPS();
+  const cfg = getConfig_();
+  const problems = healthProblems_();
+  const prev = JSON.parse(p.getProperty(HEALTH_STATE) || 'null') || { problems: [] };
+  const today = todayISO_();
+  const known = prev.problems.map((x) => x.id);
+  const state = { at: new Date().toISOString(), problems, alertDay: prev.alertDay || '', emailStatus: prev.emailStatus || '' };
+  if (problems.length && (prev.alertDay !== today || problems.some((x) => known.indexOf(x.id) === -1))) {
+    state.emailStatus = sendSafely_(() => sendHealthAlert_(cfg, problems));
+    state.alertDay = today;
+  } else if (!problems.length && prev.problems.length) {
+    state.emailStatus = sendSafely_(() => sendHealthAllClear_(cfg, prev.problems));
+    state.alertDay = '';
+  }
+  p.setProperty(HEALTH_STATE, JSON.stringify(state));
+  return state;
+}
+function dailyHealthCheck() { return healthCheck_(); }
+function adminRunHealthCheck() { requireOwner_(); ensurePaymentTrigger_(); return healthCheck_(); }
+function healthState_() { try { return JSON.parse(SCRIPT_PROPS().getProperty(HEALTH_STATE) || 'null'); } catch (e) { return null; } }
+
+function healthRecipients_(cfg) {
+  const list = [cfg.ownerEmail].concat(String(cfg.alertEmails || '').split(/[\s,;]+/)).map((e) => String(e || '').trim().toLowerCase()).filter((e) => /@/.test(e));
+  return list.filter((e, i) => list.indexOf(e) === i).join(',');
+}
+function sendHealthAlert_(cfg, problems) {
+  const n = problems.length;
+  const html = shell_(cfg, n === 1 ? 'Something on your website needs attention' : n + ' things on your website need attention', '',
+    p_('The morning check found ' + (n === 1 ? 'a problem' : 'these problems') + '. Customers may be affected until ' + (n === 1 ? 'it’s' : 'they’re') + ' fixed.', 15) +
+    problems.map((x) => '<div style="border-left:3px solid ' + C.coral + ';background:#FFF6F3;border-radius:0 12px 12px 0;padding:12px 16px;margin-bottom:12px">' +
+      '<div style="font-weight:700;font-size:15px;margin-bottom:4px">' + esc_(x.title) + '</div><div style="font-size:14px;color:' + C.muted + '">' + esc_(x.fix) + '</div></div>').join('') +
+    (cfg.adminUrl ? button_(cfg.adminUrl, 'Open the admin') : '') +
+    p_('You’ll get this once a day while it stays wrong, and one “all clear” email when it’s fixed.', 13));
+  sendMail_({
+    to: healthRecipients_(cfg),
+    subject: subjectPrefix_(cfg) + 'Action needed: ' + (n === 1 ? problems[0].title : n + ' things on the website need attention'),
+    htmlBody: html,
+    body: ['The morning check found ' + (n === 1 ? 'a problem' : n + ' problems') + ' on the website:', '']
+      .concat(problems.map((x) => '• ' + x.title + '\n  ' + x.fix)).concat(['', cfg.adminUrl ? 'Admin: ' + cfg.adminUrl : '']).join('\n'),
+    name: cfg.senderName
+  });
+}
+function sendHealthAllClear_(cfg, fixed) {
+  const html = shell_(cfg, 'All clear: your website is working normally', '',
+    p_('These are fixed now:', 15) +
+    '<ul style="font-size:15px;margin:0 0 18px;padding-left:20px">' + fixed.map((x) => '<li>' + esc_(x.title) + '</li>').join('') + '</ul>' +
+    p_('Nothing else to do.', 14));
+  sendMail_({
+    to: healthRecipients_(cfg),
+    subject: subjectPrefix_(cfg) + 'All clear: the website is working normally',
+    htmlBody: html,
+    body: ['All clear. These are fixed now:'].concat(fixed.map((x) => '• ' + x.title)).join('\n'),
+    name: cfg.senderName
+  });
 }
 
 /* ----- Admin: Payments tab ----- */
@@ -2352,6 +2535,7 @@ function adminPayments() {
     square: { ready: squareReady_(), env: squareEnv_(), location: '', error: '' },
     lastCheck: JSON.parse(p.getProperty('PAYMENTS_LAST_CHECK') || 'null'),
     trigger: ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'checkPayments'),
+    healthTrigger: ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'dailyHealthCheck'),
     // Columns or tabs added by an update that setupSheet hasn't added to this Sheet yet.
     setupNeeded: Object.keys(TABS).some((name) => {
       const sh = SpreadsheetApp.getActive().getSheetByName(name);
