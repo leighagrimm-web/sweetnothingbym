@@ -612,3 +612,6 @@ html.sn-maint body > *:not(#maint) { display: none !important; }
 .health-alert > strong { color: #8E3A2E; font-size: 16px; }
 .health-alert ul { margin: 8px 0 12px; padding-left: 20px; font-size: 14px; }
 .health-alert li { margin-bottom: 6px; }
+/* Orders: search box above the list */
+.orders-search { margin: 14px 0 6px; max-width: 460px; }
+.orders-search .hint { margin: 6px 0 0; min-height: 1em; }
