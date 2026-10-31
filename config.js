@@ -138,7 +138,7 @@ const SN_DEFAULTS = {
     .map((l) => ({ photo: '[' + l + ' cookie photo]', caption: l + ' cookies' }))
 };
 /* LIVE SNAPSHOT START */
-// Live settings as of 2026-10-26 (node .claude/snapshot.js). The Sheet always wins once it answers.
+// Live settings as of 2026-10-31 (node .claude/snapshot.js). The Sheet always wins once it answers.
 Object.assign(SN_DEFAULTS, {
  "acceptingOrders": true,
  "leadDays": 14,
@@ -170,22 +170,22 @@ Object.assign(SN_DEFAULTS, {
  },
  "homeItems": [
   {
-   "link": "mini",
    "name": "Mini artisan",
+   "link": "mini",
    "photo": "https://drive.google.com/file/d/1FwRES_GHzSirQCc_xtX3Kl9vWhhzeg6G/view?usp=drive_link",
    "line": ""
   },
   {
+   "photo": "https://drive.google.com/file/d/1HEZfTu1RtfmPz3D9hi2d6oMivoNZfkOe/view?usp=drive_link",
    "line": "",
    "link": "large",
-   "name": "Large artisan",
-   "photo": "https://drive.google.com/file/d/1HEZfTu1RtfmPz3D9hi2d6oMivoNZfkOe/view?usp=drive_link"
+   "name": "Large artisan"
   },
   {
-   "line": "At pop-ups and events",
    "link": "events",
+   "name": "Cookie kits",
    "photo": "https://drive.google.com/file/d/1BlHGZAJ0M8oz3b-BuSUnvp47CJ37aF7p/view?usp=sharing",
-   "name": "Cookie kits"
+   "line": "At pop-ups and events"
   }
  ],
  "homeSlides": [
@@ -378,7 +378,7 @@ Object.assign(SN_DEFAULTS, {
    "address": "106 S. Emerson St., Mount Prospect, IL",
    "price": 60,
    "max": 18,
-   "desc": "Join us for a fun, hands-on class where you'll learn basic cookie decorating techniques and create this adorable set of 6-fall-themed cookies!\n\nAll supplies included. Step-by-step instruction. No experience needed. Take home (and eat!) your creations.\n\nMust by 12 years or older to participate.",
+   "desc": "Join us for a fun, hands-on class where you'll learn basic cookie decorating techniques and create this adorable set of 6-fall-themed cookies!\n\nAll supplies included. Step-by-step instruction. No experience needed. Take home (and eat!) your creations.\n\nMust be 12 years or older to participate.",
    "photo": "https://drive.google.com/file/d/1r01WNCMsYuTcFPB9FyRbiFubL_qbehvC/view?usp=drive_link",
    "when": "",
    "button": "Add to bag",
