@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261031l';
+const SN_BUILD = '20261031m';
 
 const SN_ENV = (function () {
   const API = {
@@ -545,6 +545,16 @@ Object.assign(SN_DEFAULTS, {
 });
 /* LIVE SNAPSHOT END */
 
+// A Drive photo that doesn't load from Google's photo server gets one more try through Drive's thumbnail address.
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!img || img.tagName !== 'IMG' || img.dataset.photoRetry) return;
+  const m = String(img.src).match(/lh3\.googleusercontent\.com\/d\/([\w-]{10,})/);
+  if (!m) return;
+  img.dataset.photoRetry = '1';
+  img.src = 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1600';
+}, true);
+
 // Only the live site belongs in search results; the test site and preview addresses ask not to be indexed.
 if (!/^(www\.)?sweetnothingsbym\.com$/.test(location.hostname) && !document.querySelector('meta[name="robots"]')) {
   const m = document.createElement('meta'); m.name = 'robots'; m.content = 'noindex'; document.head.appendChild(m);
@@ -824,7 +834,9 @@ const SN = {
     const s = String(v || '').trim();
     if (!s || s[0] === '[') return '';
     const m = s.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=)([\w-]{10,})/);
-    if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1600';
+    // Straight from Google's photo server: Drive's own thumbnail address redirects there, and iPhone Safari blocks
+    // that hop inside the admin (Apps Script) page. A photo that still won't load retries Drive's address (top of file).
+    if (m) return 'https://lh3.googleusercontent.com/d/' + m[1] + '=w1600';
     return /^(https?:)?\/\//.test(s) || /^[\w./-]+\.(jpe?g|png|webp|gif|avif)$/i.test(s) ? s : '';
   },
   // The [placeholder] label for a photo cell, or ''.
