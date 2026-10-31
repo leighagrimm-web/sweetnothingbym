@@ -113,6 +113,10 @@
   // Newest first. Add an entry with each update (id = the date it went live, plus a letter for a second one that day);
   // "go" links to the admin tab it's about.
   const RELEASES = [
+    { id: '2026-10-31b', title: 'Helping Google find you', items: [
+      { t: 'Better search listings', d: 'Your pages now tell Google you’re a bakery in Rosemont, IL that delivers to the towns in your drop-off zones, with clearer titles and descriptions. Google takes a few days to a few weeks to notice. Links you text or post now show a proper preview too.' },
+      { t: 'Photo descriptions', d: 'The box next to each gallery photo (“What it shows”) is what Google and screen readers read, e.g. “Baby shower” becomes “Baby shower custom cookies by Sweet Nothings by M”. A few words is plenty.', go: 'gallery' }
+    ] },
     { id: '2026-10-31', title: 'A morning check-up for your website', items: [
       { t: 'Daily health check', d: 'Every morning at 7 the site checks that QuickBooks, Square, payment checks and emails are all working. If something needs fixing, you get an email saying what and how, and a red box shows at the top of your admin until it’s fixed, then an “all clear” email. Nothing’s wrong? You won’t hear from it.', go: 'payments' },
       { t: 'Run it yourself', d: 'Payments → “Run health check now” checks everything right away.', go: 'payments' }
@@ -1811,7 +1815,7 @@
       '<div class="flavor-row" style="flex-wrap:wrap;gap:10px' + (g.show === false ? ';opacity:.7' : '') + '">' +
         '<span class="photo-thumb" data-thumb-for="gp-' + i + '"></span>' +
         '<div style="flex:2 1 220px;min-width:0"><label class="sr-only" for="gp-' + i + '">Photo ' + (i + 1) + ' link</label><input class="input" id="gp-' + i + '" type="text" placeholder="Photo link" data-list="gallery" data-i="' + i + '" data-key="photo" value="' + esc(g.photo) + '"></div>' +
-        '<div style="flex:1 1 160px;min-width:0"><label class="sr-only" for="gc-' + i + '">Photo ' + (i + 1) + ' caption</label><input class="input" id="gc-' + i + '" type="text" placeholder="Caption (for screen readers)" data-list="gallery" data-i="' + i + '" data-key="caption" value="' + esc(g.caption) + '"></div>' +
+        '<div style="flex:1 1 160px;min-width:0"><label class="sr-only" for="gc-' + i + '">Photo ' + (i + 1) + ' caption</label><input class="input" id="gc-' + i + '" type="text" placeholder="What it shows, e.g. Baby shower (helps Google)" data-list="gallery" data-i="' + i + '" data-key="caption" value="' + esc(g.caption) + '"></div>' +
         '<div style="display:flex;align-items:center;gap:6px">' +
           '<button type="button" class="switch" role="switch" aria-checked="' + (g.show !== false) + '" data-act="toggle-show" data-list="gallery" data-i="' + i + '" aria-label="Show photo ' + (i + 1) + '"><span class="track" aria-hidden="true"></span>' + (g.show !== false ? 'Showing' : 'Hidden') + '</button>' +
           moveButtons('gallery', i, n, 'photo ' + (i + 1)) +

@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261031e';
+const SN_BUILD = '20261031f';
 
 const SN_ENV = (function () {
   const API = {
@@ -545,6 +545,11 @@ Object.assign(SN_DEFAULTS, {
 });
 /* LIVE SNAPSHOT END */
 
+// Only the live site belongs in search results; the test site and preview addresses ask not to be indexed.
+if (!/^(www\.)?sweetnothingsbym\.com$/.test(location.hostname) && !document.querySelector('meta[name="robots"]')) {
+  const m = document.createElement('meta'); m.name = 'robots'; m.content = 'noindex'; document.head.appendChild(m);
+}
+
 const SN = {
   clone(o) { return JSON.parse(JSON.stringify(o)); },
 
@@ -824,6 +829,8 @@ const SN = {
   },
   // The [placeholder] label for a photo cell, or ''.
   photoPlaceholder(v) { const s = String(v || '').trim(); return s[0] === '[' ? s : ''; },
+  // What a gallery photo shows, for Google and screen readers: "Poker" becomes "Poker custom cookies by Sweet Nothings by M".
+  photoAlt(caption) { const c = String(caption || '').trim(); return (c ? (/cookie/i.test(c) ? c : c + ' custom cookies') : 'Custom cookies') + ' by Sweet Nothings by M'; },
   // A photo cell as HTML: the image, a placeholder box, or '' when blank. style applies to either.
   photoHtml(v, alt, style) {
     const url = SN.photoUrl(v), ph = SN.photoPlaceholder(v);

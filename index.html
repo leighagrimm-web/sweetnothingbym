@@ -3,13 +3,81 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sweet Nothings by M · Custom &amp; Artisan Cookies</title>
-<meta name="description" content="Custom decorated and artisan cookies by Sweet Nothings by M. Pickup in Rosemont, IL or local drop-off.">
+<title>Sweet Nothings by M · Custom Cookies in Rosemont, Des Plaines &amp; Park Ridge, IL</title>
+<meta name="description" content="Hand-decorated custom cookies and artisan cookies by the dozen for birthdays, showers and parties. Pickup in Rosemont, IL, or drop-off to Des Plaines, Park Ridge, Mount Prospect, Arlington Heights and nearby.">
+<link rel="canonical" href="https://www.sweetnothingsbym.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sweet Nothings by M">
+<meta property="og:title" content="Sweet Nothings by M · Custom Cookies in Rosemont, Des Plaines &amp; Park Ridge, IL">
+<meta property="og:description" content="Hand-decorated custom cookies and artisan cookies by the dozen for birthdays, showers and parties. Pickup in Rosemont, IL, or drop-off to Des Plaines, Park Ridge, Mount Prospect, Arlington Heights and nearby.">
+<meta property="og:url" content="https://www.sweetnothingsbym.com/">
+<meta property="og:image" content="https://www.sweetnothingsbym.com/logo.png">
 <link rel="icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261031e">
+<link rel="stylesheet" href="styles.css?v=20261031f">
+<script type="application/ld+json" id="ld-bakery">
+{
+ "@context": "https://schema.org",
+ "@type": "Bakery",
+ "@id": "https://www.sweetnothingsbym.com/#bakery",
+ "name": "Sweet Nothings by M",
+ "url": "https://www.sweetnothingsbym.com/",
+ "logo": "https://www.sweetnothingsbym.com/logo.png",
+ "image": "https://www.sweetnothingsbym.com/logo.png",
+ "description": "Hand-decorated custom cookies and small-batch artisan cookies for birthdays, showers, weddings and parties. Pickup in Rosemont, IL, or local drop-off.",
+ "address": {
+  "@type": "PostalAddress",
+  "addressLocality": "Rosemont",
+  "addressRegion": "IL",
+  "addressCountry": "US"
+ },
+ "areaServed": [
+  {
+   "@type": "City",
+   "name": "Rosemont, IL"
+  },
+  {
+   "@type": "City",
+   "name": "Des Plaines, IL"
+  },
+  {
+   "@type": "City",
+   "name": "Park Ridge, IL"
+  },
+  {
+   "@type": "City",
+   "name": "Chicago (O’Hare), IL"
+  },
+  {
+   "@type": "City",
+   "name": "Elk Grove Village, IL"
+  },
+  {
+   "@type": "City",
+   "name": "Mount Prospect, IL"
+  },
+  {
+   "@type": "City",
+   "name": "Arlington Heights, IL"
+  },
+  {
+   "@type": "City",
+   "name": "Palatine, IL"
+  },
+  {
+   "@type": "City",
+   "name": "Glenview, IL"
+  }
+ ],
+ "servesCuisine": "Cookies",
+ "priceRange": "$",
+ "sameAs": [
+  "https://www.instagram.com/sweet_nothings_by_m/"
+ ]
+}
+</script>
 </head>
 <body data-page="home">
 <div id="site-header"></div>
@@ -19,8 +87,8 @@
     <div class="wrap landing-hero-grid">
       <div>
         <p class="eyebrow">Custom &amp; artisan cookies · <span id="pickup-city">Rosemont, IL</span></p>
-        <h1 id="home-title"></h1>
-        <p class="lead" id="home-intro"></p>
+        <h1 id="home-title">Handmade cookies for life’s sweetest moments</h1>
+        <p class="lead" id="home-intro">Hand-decorated custom sets for birthdays, showers and celebrations, plus small-batch artisan favorites by the dozen.</p>
         <div class="row-gap" style="margin-top:26px;gap:12px">
           <a class="btn btn-lg" href="order.html">Start your order</a>
           <a class="btn ghost btn-lg" href="gallery.html">See past creations</a>
@@ -93,9 +161,9 @@
 </main>
 
 <div id="site-footer"></div>
-<script src="config.js?v=20261031e"></script>
-<script src="layout.js?v=20261031e"></script>
-<script src="order.js?v=20261031e"></script>
+<script src="config.js?v=20261031f"></script>
+<script src="layout.js?v=20261031f"></script>
+<script src="order.js?v=20261031f"></script>
 <script>
 SN.ready.then(function () {
   const cfg = SN.load();
@@ -103,6 +171,11 @@ SN.ready.then(function () {
   const p = cfg.pages;
   // Wording and photos from the Sheet's Pages tab; "Recent creations" = the first 4 Gallery photos.
   document.getElementById('home-title').textContent = p.homeTitle;
+  try {
+    const ld = document.getElementById('ld-bakery'), data = JSON.parse(ld.textContent);
+    const towns = (cfg.zones || []).map((z) => String(z.area || '').split('/')).flat().map((t) => t.trim()).filter((t, i, all) => t && all.indexOf(t) === i);
+    if (towns.length) { data.areaServed = towns.map((t) => ({ '@type': 'City', name: /,\s*[A-Z]{2}$/.test(t) ? t : t + ', IL' })); ld.textContent = JSON.stringify(data); }
+  } catch (e) { /* keep the built-in list */ }
   document.getElementById('home-intro').textContent = p.homeIntro;
   const heroUrl = SN.photoUrl(p.homeHeroPhoto);
   document.getElementById('hero-photo').innerHTML = heroUrl
@@ -167,7 +240,7 @@ SN.ready.then(function () {
       ? '<button type="button" class="make-row" data-quick-message="' + SN.esc(it.name) + '">' + inner + '</button>'
       : '<a class="make-row" href="' + link[0] + '">' + inner + '</a>') + '</li>';
   }).join('');
-  document.getElementById('recent').innerHTML = (cfg.gallery || []).slice(0, 4).map((g) => SN.photoHtml(g.photo, g.caption, 'aspect-ratio:1/1;border-radius:14px')).join('');
+  document.getElementById('recent').innerHTML = (cfg.gallery || []).slice(0, 4).map((g) => SN.photoHtml(g.photo, SN.photoAlt(g.caption), 'aspect-ratio:1/1;border-radius:14px')).join('');
   document.getElementById('recent').closest('section').hidden = !(cfg.gallery || []).length;
   document.getElementById('lead-days').textContent = cfg.leadDays;
   document.getElementById('pickup-city').textContent = cfg.pickupCity;
