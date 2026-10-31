@@ -615,3 +615,8 @@ html.sn-maint body > *:not(#maint) { display: none !important; }
 /* Orders: search box above the list */
 .orders-search { margin: 14px 0 6px; max-width: 460px; }
 .orders-search .hint { margin: 6px 0 0; min-height: 1em; }
+/* Orders: Active / Past tabs inside the page */
+.order-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-top: 16px; }
+.order-tabs button { font: inherit; font-weight: 600; font-size: 15px; color: var(--muted); background: none; border: 0; border-bottom: 3px solid transparent; padding: 8px 14px; margin-bottom: -1px; cursor: pointer; }
+.order-tabs button[aria-selected="true"] { color: var(--navy); border-bottom-color: var(--coral); }
+.order-tabs button:hover { color: var(--navy); }

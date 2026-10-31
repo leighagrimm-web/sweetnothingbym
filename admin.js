@@ -22,7 +22,7 @@
   let sheetUrl = '';
   let dirty = false;
   let busy = false;
-  let ordersView = 'active';  // which Orders tab is showing: 'active' or 'past' (completed, cancelled, declined, expired)
+  let ordersView = 'active';  // which tab inside Orders: 'active' or 'past' (completed, cancelled, declined, expired)
   let orderSearch = '';
   let toastTimer = null;
 
@@ -82,7 +82,7 @@
 
   // Each tab shows one section. Orders and Messages are day-to-day; the rest are shop settings (saved together).
   const TAB_GROUPS = [
-    ['Orders &amp; messages', [['dashboard', 'Dashboard'], ['orders', 'Active orders'], ['past', 'Past orders'], ['messages', 'Messages'], ['codes', 'Promo &amp; gift codes'], ['payments', 'Payments']]],
+    ['Orders &amp; messages', [['dashboard', 'Dashboard'], ['orders', 'Orders'], ['messages', 'Messages'], ['codes', 'Promo &amp; gift codes'], ['payments', 'Payments']]],
     ['Shop settings', [['custom', 'Custom pricing'], ['artisan', 'Artisan &amp; flavors'], ['rules', 'Ordering rules'], ['zones', 'Drop-off zones'],
       ['faq', 'FAQ'], ['pages', 'Website pages'], ['events', 'Events'], ['gallery', 'Gallery'], ['settings', 'Contact &amp; pickup']]],
     ['Help', [['whatsnew', 'What’s new']]]
@@ -90,11 +90,10 @@
   const TAB_IDS = TAB_GROUPS.reduce((a, g) => a.concat(g[1].map((t) => t[0])), []);
 
   function showTab() {
+    if (location.hash === '#past') { ordersView = 'past'; history.replaceState(null, '', '#orders'); renderOrders(); }
     const id = TAB_IDS.indexOf(location.hash.slice(1)) !== -1 ? location.hash.slice(1) : 'dashboard';
-    const section = id === 'past' ? 'orders' : id;   // both Orders tabs use the one Orders section
-    $$('.admin-main > .panel-card').forEach((s) => { s.hidden = s.id !== section; });
-    if (section === 'orders' && ordersView !== (id === 'past' ? 'past' : 'active')) { ordersView = id === 'past' ? 'past' : 'active'; renderOrders(); }
-    $('#settings-title').hidden = ['dashboard', 'orders', 'past', 'messages', 'codes', 'payments', 'whatsnew'].indexOf(id) !== -1;
+    $$('.admin-main > .panel-card').forEach((s) => { s.hidden = s.id !== id; });
+    $('#settings-title').hidden = ['dashboard', 'orders', 'messages', 'codes', 'payments', 'whatsnew'].indexOf(id) !== -1;
     if (id === 'whatsnew') markReleasesSeen();
     if (id === 'payments' && !payInfo) loadPayments();
     $$('.admin-nav a').forEach((a) => { if (a.dataset.tab === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
@@ -117,7 +116,7 @@
   // "go" links to the admin tab it's about.
   const RELEASES = [
     { id: '2026-10-31c', title: 'Past orders tidy themselves up', items: [
-      { t: 'Active and Past orders', d: 'Orders now has two tabs: Active orders (everything still in progress) and Past orders (completed, cancelled, declined and expired, newest date first).', go: 'past' },
+      { t: 'Active and Past orders', d: 'Orders now has two tabs at the top: Active (everything still in progress) and Past (completed, cancelled, declined and expired, newest date first).', go: 'orders' },
       { t: 'Search orders', d: 'Type a name, email, phone number or order number in the search box to find an order fast. If it’s on the other tab, there’s a link to it.', go: 'orders' },
       { t: 'Completed on their own', d: 'The night after an order’s date, paid cookie orders and booked classes move to Completed by themselves (a booking with more than one class waits for the last one). No email goes to the customer. Unpaid orders stay open so you still see them.', go: 'orders' }
     ] },
@@ -180,9 +179,11 @@
   function sectionOrders() {
     return '<section class="panel-card" id="orders" aria-labelledby="orders-h">' +
       '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-start">' +
-        '<div><h2 id="orders-h">Active orders</h2><p class="sub" id="orders-sub"></p></div>' +
+        '<div><h2 id="orders-h">Orders</h2><p class="sub" id="orders-sub"></p></div>' +
         '<div class="row-gap" style="gap:8px"><button type="button" class="btn small" data-po="new">+ Add phone order</button></div>' +
       '</div>' +
+      '<div class="order-tabs" role="tablist" aria-label="Which orders">' +
+        '<button type="button" role="tab" data-orders-view="active"></button><button type="button" role="tab" data-orders-view="past"></button></div>' +
       '<div class="orders-search"><label class="sr-only" for="orders-search">Search orders</label>' +
         '<input class="input" id="orders-search" type="search" autocomplete="off" placeholder="Search by name, email, phone or order number">' +
         '<p class="hint" id="orders-search-note" aria-live="polite"></p></div>' +
@@ -506,7 +507,13 @@
     const pending = orders.filter((o) => o.status === 'Pending review').length;
     const past = ordersView === 'past';
     navCount('orders', pending ? pending + ' to review' : '');
-    $('#orders-h').innerHTML = past ? 'Past orders' : 'Active orders' + (pending ? ' <span class="count-pill">' + pending + ' to review</span>' : '');
+    $('#orders-h').innerHTML = 'Orders' + (pending ? ' <span class="count-pill">' + pending + ' to review</span>' : '');
+    const nActive = orders.filter(isActive).length;
+    $$('[data-orders-view]').forEach((b) => {
+      const v = b.dataset.ordersView;
+      b.textContent = (v === 'past' ? 'Past' : 'Active') + ' (' + (v === 'past' ? orders.length - nActive : nActive) + ')';
+      b.setAttribute('aria-selected', String(v === ordersView));
+    });
     $('#orders-sub').innerHTML = past
       ? 'Completed, cancelled, declined and expired orders, newest date first. Paid orders and class bookings move here on their own the night after their date.'
       : 'Cookie requests come in as <strong>Pending review</strong>. Click <strong>Review</strong> to approve as-is or with changes, decline, message the customer, or change the date. Class bookings pay in Square at checkout: <strong>Awaiting payment</strong> while they pay, then <strong>Paid</strong> (or <strong>Expired</strong> if they don’t).';
@@ -518,7 +525,7 @@
     const elsewhere = orderSearch ? found.length - list.length : 0;
     $('#orders-search-note').innerHTML = !orderSearch ? '' :
       list.length + ' match' + (list.length === 1 ? '' : 'es') + ' here' +
-      (elsewhere ? ' · <a href="#' + (past ? 'orders' : 'past') + '" target="_self">' + elsewhere + ' in ' + (past ? 'Active' : 'Past') + ' orders</a>' : '') +
+      (elsewhere ? ' · <button type="button" class="link-btn" data-orders-view="' + (past ? 'active' : 'past') + '" style="padding:0">' + elsewhere + ' in ' + (past ? 'Active' : 'Past') + '</button>' : '') +
       ' · <button type="button" class="link-btn" data-clear-search style="padding:0">Clear</button>';
     const body = $('#orders-body');
     if (!list.length) {
@@ -2178,7 +2185,10 @@
     });
     $('#accepting').addEventListener('click', () => { cfg.acceptingOrders = !cfg.acceptingOrders; fillFields(); markDirty(); });
     $('#orders-search').addEventListener('input', (e) => { orderSearch = e.target.value.trim(); renderOrders(); });
-    $('#orders').addEventListener('click', (e) => { if (e.target.closest('[data-clear-search]')) { $('#orders-search').value = ''; orderSearch = ''; renderOrders(); $('#orders-search').focus(); } });
+    $('#orders').addEventListener('click', (e) => {
+      const tab = e.target.closest('[data-orders-view]');
+      if (tab) { ordersView = tab.dataset.ordersView; renderOrders(); return; }
+      if (e.target.closest('[data-clear-search]')) { $('#orders-search').value = ''; orderSearch = ''; renderOrders(); $('#orders-search').focus(); } });
     // After editing the Sheet directly: the website stops using its saved copy, and this page reloads the Sheet too.
     $('#refresh-site').addEventListener('click', async (e) => {
       const b = e.currentTarget;
