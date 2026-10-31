@@ -606,3 +606,4 @@ html.sn-maint body > *:not(#maint) { display: none !important; }
 .dash-class li { display: flex; flex-direction: column; }
 .dash-class li .link-btn { padding: 0; text-align: left; font-size: 13px; }
 .dash-class li span { color: var(--muted); font-size: 12px; }
+.proto-banner.code-old { background: #8E3A2E; color: #fff; font-weight: 600; }

@@ -13,7 +13,8 @@
 
   let cfg = null;          // settings being edited
   let stamp = '';          // fingerprint of the Sheet's settings when loaded (to notice when someone else saves)
-  let base = null;         // the settings as last loaded or saved (cleaned), so Save sends only what changed here
+  let base = null;
+  const NEEDS_CODE = '2026-10-31';   // the Code.gs (CODE_VERSION) this page needs         // the settings as last loaded or saved (cleaned), so Save sends only what changed here
   let orders = [];
   let messages = [];
   let codes = [];
@@ -42,6 +43,9 @@
     const isProd = String(cfg.environment || '').toUpperCase() === 'PROD';
     app.innerHTML =
       (isProd ? '' : '<div class="proto-banner">Test admin: connected to the test Sheet. Emails go out with [TEST] in the subject.</div>') +
+      // The Sheet's Apps Script is older than this page needs: say so, or saving can go wrong in confusing ways.
+      (String(cfg.codeVersion || '') < NEEDS_CODE ? '<div class="proto-banner code-old" role="alert">The Sheet’s Apps Script is out of date for this admin. ' +
+        'Paste the newest Code.gs into the Sheet’s Apps Script, then Deploy → Manage deployments → Edit → New version → Deploy, and reload this page.</div>' : '') +
       '<header class="admin-header"><div class="wrap">' +
         '<span class="brand"><img src="' + esc(siteUrl) + 'logo.png" alt=""><span>Sweet Nothings · Admin</span></span>' +
         '<div class="row-gap" style="gap:8px">' +
@@ -1949,6 +1953,7 @@
     c.homeItems = (c.homeItems || []).filter((h) => (h.name || '').trim());
     c.homeSlides = (c.homeSlides || []).filter((h) => (h.photo || '').trim());
     delete c.weekCounts;   // booking counts come from orders, not settings
+    delete c.codeVersion;
     delete c.images;
     return c;
   }

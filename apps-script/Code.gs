@@ -543,6 +543,9 @@ function buildConfig_(admin) {
   // Whether class checkout goes on to Square (the site words the Book button and note to match).
   cfg.classesPayOnline = squareReady_();
 
+  // Which Code.gs this is, so the admin can say when the Sheet needs the newest one pasted in (see NEEDS_CODE in admin.js).
+  cfg.codeVersion = CODE_VERSION;
+
   return cfg;
 }
 
@@ -1205,6 +1208,7 @@ function editableSettings_(cfg) {
   const c = JSON.parse(JSON.stringify(cfg));
   delete c.weekCounts;
   delete c.images;
+  delete c.codeVersion;
   c.events = (c.events || []).map((e) => { delete e.booked; delete e.spotsLeft; return e; });
   return c;
 }
@@ -1676,6 +1680,8 @@ function sendHandoffReminders_(sh, rows) {
 // Cookie orders are paid in full a week before their date. An approved order that's still unpaid once it's under
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
+// Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
+const CODE_VERSION = '2026-10-31';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
