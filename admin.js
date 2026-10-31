@@ -792,7 +792,7 @@
       orders = d.orders;
       sortOrders();
       weekCounts = d.weekCounts || {};
-      health = d.health || null;
+      health = newerHealth(d.health);
       renderHealth();
       messages = d.messages;
       codes = d.codes || [];
@@ -1518,6 +1518,8 @@
   const healthWhen = (iso) => new Date(iso).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   // A check more than 2 days old means the morning check itself has stopped.
   const healthStale = () => health && Date.now() - Date.parse(health.at) > 2 * 864e5;
+  // A reload that started before a check finished brings back the older result; keep whichever is newest.
+  const newerHealth = (h) => (!h ? health : !health || Date.parse(h.at) >= Date.parse(health.at) ? h : health);
   function renderHealth() {
     const box = $('#health-banner');
     if (!box) return;
@@ -2199,7 +2201,7 @@
       codes = d.codes || [];
       weekCounts = d.weekCounts || {};
       sheetUrl = d.sheetUrl;
-      health = d.health || null;
+      health = newerHealth(d.health);
       if (!$('#save-bar')) shell();
       clearDirty();
       // Coming back from a preview? The unsaved edits are still in the Sheet's Draft tab.
