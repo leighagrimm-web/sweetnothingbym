@@ -14,7 +14,7 @@
   let cfg = null;          // settings being edited
   let stamp = '';          // fingerprint of the Sheet's settings when loaded (to notice when someone else saves)
   let base = null;         // the settings as last loaded or saved (cleaned), so Save sends only what changed here
-  const NEEDS_CODE = '2026-10-31b';   // the Code.gs (CODE_VERSION) this page needs
+  const NEEDS_CODE = '2026-10-31c';   // the Code.gs (CODE_VERSION) this page needs
   let orders = [];
   let messages = [];
   let codes = [];
@@ -1957,7 +1957,11 @@
     delete c.images;
     return c;
   }
-  const same = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+  // Same setting? Compared by value: the order of an item's details can differ between loads (Google doesn't keep it),
+  // and a blank detail counts the same as a missing one.
+  const sortedJson = (v) => JSON.stringify(v === undefined ? null : v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x)
+    ? Object.keys(x).sort().reduce((o, key) => { if (x[key] != null) o[key] = x[key]; return o; }, {}) : x));
+  const same = (a, b) => sortedJson(a) === sortedJson(b);
   // What changed in this tab since the settings were loaded or saved.
   const changedKeys = (c) => Object.keys(Object.assign({}, c, base)).filter((k) => !same(c[k], base[k]));
   // Plain names for settings, for "someone else changed …".

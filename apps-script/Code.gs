@@ -1214,9 +1214,15 @@ function editableSettings_(cfg) {
 }
 // Fingerprint of the editable settings, so an open admin notices when someone else saves.
 function settingsStamp_(cfg) {
-  return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(editableSettings_(cfg)), Utilities.Charset.UTF_8));
+  return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, sortedJson_(editableSettings_(cfg)), Utilities.Charset.UTF_8));
 }
-const sameSetting_ = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+// Settings compared by value: the order of an item's details can differ after a trip to and from the admin page, and a
+// blank detail counts the same as a missing one.
+function sortedJson_(v) {
+  return JSON.stringify(v === undefined ? null : v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x)
+    ? Object.keys(x).sort().reduce((o, key) => { if (x[key] != null) o[key] = x[key]; return o; }, {}) : x));
+}
+const sameSetting_ = (a, b) => sortedJson_(a) === sortedJson_(b);
 
 // Save the settings changed in one admin tab, merged onto the Sheet's latest, so two people editing different
 // things never undo each other. changes = { setting: new value }; base = the same settings as that tab loaded them.
@@ -1682,7 +1688,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-10-31b';
+const CODE_VERSION = '2026-10-31c';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
