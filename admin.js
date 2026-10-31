@@ -75,10 +75,28 @@
         '<div class="row-gap"><button type="button" class="btn ghost small" id="discard">Discard</button>' +
         '<button type="button" class="btn ghost small" data-preview>Preview changes</button>' +
         '<button type="button" class="btn small" data-save>Save changes</button></div></div></div>' +
-      '<div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-text"></span></div>';
+      '<div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-text"></span></div>' +
+      // Phones: the menu is a bar at the bottom (where thumbs are) and "More" opens everything else.
+      '<nav class="admin-tabbar" aria-label="Admin sections">' +
+        [['dashboard', 'Dashboard'], ['orders', 'Orders'], ['messages', 'Messages']].map(([id, label]) =>
+          '<a href="#' + id + '" target="_self" data-tabbar="' + id + '">' + TABBAR_ICONS[id] + '<span>' + label + '</span><b class="tabbar-count" id="tabbar-count-' + id + '" hidden></b></a>').join('') +
+        '<button type="button" data-tabbar="more" aria-expanded="false" aria-controls="more-sheet">' + TABBAR_ICONS.more + '<span>More</span><b class="tabbar-count" id="tabbar-count-more" hidden></b></button>' +
+      '</nav>' +
+      '<div class="more-sheet" id="more-sheet" role="dialog" aria-modal="true" aria-label="More" hidden>' +
+        '<div class="more-head"><strong>Menu</strong><button type="button" class="icon-del" data-more-close aria-label="Close">' + SN_ICONS.close + '</button></div>' +
+        TAB_GROUPS.map(([group, tabs]) => '<p class="admin-nav-group">' + group + '</p>' +
+          tabs.filter(([id]) => ['dashboard', 'orders', 'messages'].indexOf(id) === -1)
+            .map(([id, label]) => '<a href="#' + id + '" target="_self" data-more-link="' + id + '">' + label + '<span class="nav-count" id="more-count-' + id + '" hidden></span></a>').join('')).join('') +
+        '<p class="admin-nav-group">Website</p>' +
+        '<button type="button" class="more-item" data-more-refresh>Refresh website</button>' +
+        (sheetUrl ? '<a href="' + esc(sheetUrl) + '" target="_blank" rel="noopener">Open the Sheet</a>' : '') +
+        '<a href="' + esc(siteUrl) + 'index.html" target="_blank" rel="noopener">View site</a>' +
+      '</div>';
     wire();
     if (releaseSeen() < RELEASES[0].id) navCount('whatsnew', 'New');
   }
+
+  const TABBAR_ICONS = {"dashboard":"<svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"17\" rx=\"2\"/><path d=\"M3 9h18M8 2v4M16 2v4\"/></svg>","orders":"<svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 3h12v18l-3-2-3 2-3-2-3 2z\"/><path d=\"M9 8h6M9 12h6\"/></svg>","messages":"<svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 5h16v11H8l-4 4z\"/></svg>","more":"<svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 7h16M4 12h16M4 17h16\"/></svg>"};
 
   // Each tab shows one section. Orders and Messages are day-to-day; the rest are shop settings (saved together).
   const TAB_GROUPS = [
@@ -97,6 +115,12 @@
     if (id === 'whatsnew') markReleasesSeen();
     if (id === 'payments' && !payInfo) loadPayments();
     $$('.admin-nav a').forEach((a) => { if (a.dataset.tab === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    $$('[data-tabbar]').forEach((a) => {
+      const on = a.dataset.tabbar === id || (a.dataset.tabbar === 'more' && ['dashboard', 'orders', 'messages'].indexOf(id) === -1);
+      if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    $$('[data-more-link]').forEach((a) => { if (a.dataset.moreLink === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    if ($('#more-sheet') && !$('#more-sheet').hidden) openMore(false);
     window.scrollTo(0, 0);
   }
   // Badge on a tab, e.g. "2 to review".
@@ -105,6 +129,20 @@
     if (!el) return;
     el.textContent = text || '';
     el.hidden = !text;
+    const more = $('#more-count-' + id);
+    if (more) { more.textContent = text || ''; more.hidden = !text; }
+    const bar = $('#tabbar-count-' + id);
+    if (bar) { bar.textContent = (String(text || '').match(/^\d+/) || [text || ''])[0]; bar.hidden = !text; }
+    const anyMore = $$('[id^="more-count-"]').some((x) => !x.hidden);
+    const dot = $('#tabbar-count-more');
+    if (dot) { dot.hidden = !anyMore; dot.textContent = ''; }
+  }
+  function openMore(open) {
+    const sh = $('#more-sheet');
+    sh.hidden = !open;
+    $('[data-tabbar="more"]').setAttribute('aria-expanded', String(open));
+    document.body.classList.toggle('more-open', open);
+    if (open) $('[data-more-close]').focus();
   }
 
   const field = (id, label, input, hint) => '<div class="field"><label class="label" for="' + id + '">' + label + '</label>' + input + (hint ? '<p class="hint">' + hint + '</p>' : '') + '</div>';
@@ -115,6 +153,10 @@
   // Newest first. Add an entry with each update (id = the date it went live, plus a letter for a second one that day);
   // "go" links to the admin tab it's about.
   const RELEASES = [
+    { id: '2026-10-31d', title: 'Easier on your phone', items: [
+      { t: 'Menu at the bottom', d: 'On your phone, Dashboard, Orders and Messages are in a bar at the bottom of the screen, with their counts. More opens everything else, plus Refresh website, Open the Sheet and View site.' },
+      { t: 'Orders as cards', d: 'Each order is a card you can read without scrolling sideways: who, when, what, the total, and a big Review button. “How orders work” opens the explanation when you want it.', go: 'orders' }
+    ] },
     { id: '2026-10-31c', title: 'Past orders tidy themselves up', items: [
       { t: 'Active and Past orders', d: 'Orders now has two tabs at the top: Active (everything still in progress) and Past (completed, cancelled, declined and expired, newest date first).', go: 'orders' },
       { t: 'Search orders', d: 'Type a name, email, phone number or order number in the search box to find an order fast. If it’s on the other tab, there’s a link to it.', go: 'orders' },
@@ -179,7 +221,8 @@
   function sectionOrders() {
     return '<section class="panel-card" id="orders" aria-labelledby="orders-h">' +
       '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-start">' +
-        '<div><h2 id="orders-h">Orders</h2><p class="sub" id="orders-sub"></p></div>' +
+        '<div><h2 id="orders-h">Orders</h2><p class="sub" id="orders-sub"></p>' +
+          '<button type="button" class="link-btn orders-how" data-orders-how aria-expanded="false">How orders work</button></div>' +
         '<div class="row-gap" style="gap:8px"><button type="button" class="btn small" data-po="new">+ Add phone order</button></div>' +
       '</div>' +
       '<div class="order-tabs" role="tablist" aria-label="Which orders">' +
@@ -188,7 +231,8 @@
         '<input class="input" id="orders-search" type="search" autocomplete="off" placeholder="Search by name, email, phone or order number">' +
         '<p class="hint" id="orders-search-note" aria-live="polite"></p></div>' +
       '<div class="table-wrap"><table class="orders-table"><thead><tr><th>Order &amp; order date</th><th>Customer</th><th>Date needed</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>' +
-      '<tbody id="orders-body"></tbody></table></div></section>';
+      '<tbody id="orders-body"></tbody></table></div>' +
+      '<div class="order-cards" id="orders-cards"></div></section>';
   }
   function sectionMessages() {
     return card('messages', 'Messages', 'From the Contact page and the "Message me" buttons. Each one also landed in your email inbox, so you can reply from there too.', '<div class="stack" id="msg-list"></div>');
@@ -529,10 +573,13 @@
       ' · <button type="button" class="link-btn" data-clear-search style="padding:0">Clear</button>';
     const body = $('#orders-body');
     if (!list.length) {
-      body.innerHTML = '<tr class="empty-row"><td colspan="6">' + (orderSearch ? 'No ' + (past ? 'past' : 'active') + ' orders match “' + esc(orderSearch) + '”.'
-        : past ? 'No past orders yet.' : orders.length ? 'No open orders.' : 'No orders yet. They\'ll show up here as soon as a customer sends a request or books a class.') + '</td></tr>';
+      const none = orderSearch ? 'No ' + (past ? 'past' : 'active') + ' orders match “' + esc(orderSearch) + '”.'
+        : past ? 'No past orders yet.' : orders.length ? 'No open orders.' : 'No orders yet. They\'ll show up here as soon as a customer sends a request or books a class.';
+      body.innerHTML = '<tr class="empty-row"><td colspan="6">' + none + '</td></tr>';
+      $('#orders-cards').innerHTML = '<p class="muted" style="text-align:center;padding:20px 0">' + none + '</p>';
       return;
     }
+    const cards = [];
     // Six columns with related details stacked, so the table fits a laptop screen without scrolling sideways.
     const small = (t) => '<br><span class="muted" style="font-size:13px">' + t + '</span>';
     body.innerHTML = list.map((o) => {
@@ -549,6 +596,21 @@
       const action = '<button type="button" class="btn ' + (o.status === 'Pending review' ? '' : 'ghost ') + 'small" data-rv="open" data-n="' + esc(o.number) + '">' + (o.status === 'Pending review' ? 'Review' : 'View') + '</button>';
       const at = o.createdAt ? new Date(o.createdAt) : null;
       const received = at ? { date: at.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), time: at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) } : null;
+      const tags = (o.allergies ? '<span class="status-badge" style="background:#FBEDEA;color:#B23A2B">Allergy</span>' : '') +
+        (o.byPhone ? '<span class="status-badge" style="background:#E4E9F3;color:#1F2A44">Phone order</span>' : '');
+      const unpaid = payOverdue(o) ? '<div class="unpaid-note">Unpaid · ' + (daysUntil(o.dateNeeded) < 0 ? 'date has passed' : daysUntil(o.dateNeeded) + ' day' + (daysUntil(o.dateNeeded) === 1 ? '' : 's') + ' to go') +
+        (o.payReminderSent ? ' · Reminder sent' : '') + '</div>' : '';
+      cards.push('<div class="order-card' + (o.status === 'Pending review' ? ' pending' : payOverdue(o) ? ' unpaid' : '') + '">' +
+        '<div class="oc-top"><strong>' + esc(o.number) + '</strong>' + badge(o.status) + '</div>' +
+        '<div class="oc-who">' + esc(o.customer.name || o.customer.email) + (isClass(o) ? '' : ' <span class="muted">· ' + esc(o.eventType || 'Occasion not given') + '</span>') + '</div>' +
+        '<div class="oc-line">' + esc(o.dateNeeded ? SN.prettyDate(o.dateNeeded, { weekday: 'short', month: 'short', day: 'numeric' }) : 'No date') + ' · ' + ful + '</div>' +
+        '<div class="oc-line">' + items + '</div>' +
+        '<div class="oc-line">' + total.replace(/<br>/g, ' ') + (received ? ' <span class="muted" style="font-size:13px">· ordered ' + esc(received.date) + '</span>' : '') + '</div>' +
+        (tags ? '<div class="oc-tags">' + tags + '</div>' : '') + unpaid +
+        '<div class="oc-actions">' + (opts ? '<label class="sr-only" for="stc-' + esc(o.number) + '">Status for ' + esc(o.number) + '</label><select class="status" id="stc-' + esc(o.number) + '" data-order="' + esc(o.number) + '">' +
+            opts.map((x) => '<option' + (x === o.status ? ' selected' : '') + '>' + x + '</option>').join('') + '</select>' : '') +
+          action.replace('btn ' + (o.status === 'Pending review' ? '' : 'ghost ') + 'small', 'btn ' + (o.status === 'Pending review' ? '' : 'ghost ')) + '</div>' +
+      '</div>');
       return '<tr' + (o.status === 'Pending review' ? ' class="row-pending"' : payOverdue(o) ? ' class="row-unpaid"' : '') + '>' +
         '<td><div class="order-cell">' + action + '<div><strong>' + esc(o.number) + '</strong>' + (received ? '<br><span style="font-size:13px;white-space:nowrap">Ordered ' + esc(received.date) + '</span>' + small(esc(received.time)) : '') +
           (o.allergies ? '<br><span class="status-badge" style="background:#FBEDEA;color:#B23A2B;margin-top:4px">Allergy</span>' : '') +
@@ -560,6 +622,7 @@
         '<td>' + status + (payOverdue(o) ? '<div class="unpaid-note">Unpaid · ' + (daysUntil(o.dateNeeded) < 0 ? 'date has passed' : daysUntil(o.dateNeeded) + ' day' + (daysUntil(o.dateNeeded) === 1 ? '' : 's') + ' to go') +
           (o.payReminderSent ? '<br>Reminder sent' : '') + '</div>' : '') + '</td></tr>';
     }).join('');
+    $('#orders-cards').innerHTML = cards.join('');
   }
   // Newest first, by when the customer sent it.
   // Search: each word typed must match the order somewhere. Phone numbers match by digits ("847555" finds (847) 555-…),
@@ -2161,7 +2224,7 @@
       onInput(e);
     });
     document.addEventListener('change', (e) => {
-      if (e.target.matches('#orders-body [data-order]')) onStatusChange(e);
+      if (e.target.matches('#orders-body [data-order], #orders-cards [data-order]')) onStatusChange(e);
     });
     document.addEventListener('toggle', (e) => {
       const k = e.target.getAttribute && e.target.getAttribute('data-dash-class');
@@ -2185,6 +2248,19 @@
     });
     $('#accepting').addEventListener('click', () => { cfg.acceptingOrders = !cfg.acceptingOrders; fillFields(); markDirty(); });
     $('#orders-search').addEventListener('input', (e) => { orderSearch = e.target.value.trim(); renderOrders(); });
+    $('[data-tabbar="more"]').addEventListener('click', () => openMore($('#more-sheet').hidden));
+    $('#more-sheet').addEventListener('click', (e) => {
+      if (e.target.closest('[data-more-close]')) openMore(false);
+      else if (e.target.closest('[data-more-refresh]')) { openMore(false); $('#refresh-site').click(); }
+      else if (e.target.closest('a[target="_blank"]')) openMore(false);
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#more-sheet').hidden) openMore(false); });
+    $('[data-orders-how]').addEventListener('click', (e) => {
+      const open = !$('#orders').classList.contains('show-how');
+      $('#orders').classList.toggle('show-how', open);
+      e.currentTarget.setAttribute('aria-expanded', String(open));
+      e.currentTarget.textContent = open ? 'Hide how orders work' : 'How orders work';
+    });
     $('#orders').addEventListener('click', (e) => {
       const tab = e.target.closest('[data-orders-view]');
       if (tab) { ordersView = tab.dataset.ordersView; renderOrders(); return; }
