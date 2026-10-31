@@ -113,6 +113,9 @@
   // Newest first. Add an entry with each update (id = the date it went live, plus a letter for a second one that day);
   // "go" links to the admin tab it's about.
   const RELEASES = [
+    { id: '2026-10-31c', title: 'Past orders tidy themselves up', items: [
+      { t: 'Completed on their own', d: 'The night after an order’s date, paid cookie orders and booked classes move to Completed by themselves (a booking with more than one class waits for the last one). No email goes to the customer. Unpaid orders stay open so you still see them.', go: 'orders' }
+    ] },
     { id: '2026-10-31b', title: 'Helping Google find you', items: [
       { t: 'Better search listings', d: 'Your pages now tell Google you’re a bakery in Rosemont, IL that delivers to the towns in your drop-off zones, with clearer titles and descriptions. Google takes a few days to a few weeks to notice. Links you text or post now show a proper preview too.' },
       { t: 'Photo descriptions', d: 'The box next to each gallery photo (“What it shows”) is what Google and screen readers read, e.g. “Baby shower” becomes “Baby shower custom cookies by Sweet Nothings by M”. A few words is plenty.', go: 'gallery' }
@@ -1574,7 +1577,8 @@
     const last = lc
       ? 'Last check ' + when(lc.at) + ': ' + [lc.invoicesPaid.length ? lc.invoicesPaid.length + ' invoice' + (lc.invoicesPaid.length > 1 ? 's' : '') + ' paid' : '',
           lc.classesPaid.length ? lc.classesPaid.length + ' class booking' + (lc.classesPaid.length > 1 ? 's' : '') + ' paid' : '',
-          lc.expired.length ? lc.expired.length + ' expired' : ''].filter(Boolean).join(', ').replace(/^$/, 'nothing new') + '.' +
+          lc.expired.length ? lc.expired.length + ' expired' : '',
+          lc.completed && lc.completed.length ? lc.completed.length + ' past order' + (lc.completed.length > 1 ? 's' : '') + ' marked Completed' : ''].filter(Boolean).join(', ').replace(/^$/, 'nothing new') + '.' +
         (lc.errors.length ? ' <span class="err">' + esc(lc.errors.join(' · ')) + '</span>' : '')
       : 'No check has run yet.';
     $('#pay-box').innerHTML =
@@ -1625,7 +1629,7 @@
       busy = false;
       if (act === 'check') {
         if (!r.ok) toast(r.error);
-        else toast('Checked: ' + (r.invoicesPaid.length + r.classesPaid.length) + ' newly paid, ' + r.expired.length + ' expired' + (r.errors.length ? '. Problems: ' + r.errors.join(' · ') : ''), r.errors.length ? 8000 : 3600);
+        else toast('Checked: ' + (r.invoicesPaid.length + r.classesPaid.length) + ' newly paid, ' + r.expired.length + ' expired' + (r.completed && r.completed.length ? ', ' + r.completed.length + ' completed' : '') + (r.errors.length ? '. Problems: ' + r.errors.join(' · ') : ''), r.errors.length ? 8000 : 3600);
         refreshOrders().catch((err) => toast('Checked, but the orders list didn’t reload (' + (err && err.message ? err.message : err) + '). Click Refresh on the Dashboard.', 8000));
       }
       if (act === 'items') toast('Invoice items are ready in QuickBooks');

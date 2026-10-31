@@ -1696,6 +1696,31 @@ function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
 }
+// Once an order's date has passed, it's done: paid cookie orders and booked classes become Completed on their own (from
+// midnight after the date; for a booking with several classes, after the last one). No email goes out. Unpaid ones
+// stay open so they're still noticed: "Invoice sent" cookie orders (red in the admin), "Awaiting payment" classes
+// (they expire on their own).
+const COMPLETE_AFTER = { Cookies: ['Paid', 'Baking', 'Ready'], Class: ['Booked', 'Paid'] };
+function completePastOrders_(sh, rows, cfg) {
+  const today = todayISO_();
+  const done = [];
+  rows.forEach((r) => {
+    const type = String(r.Type || 'Cookies') === 'Class' ? 'Class' : 'Cookies';
+    let date = toISODate_(r['Date needed']);
+    if (COMPLETE_AFTER[type].indexOf(String(r.Status)) === -1 || !date || date >= today) return;
+    if (type === 'Class') {
+      // The booking's last class (the Date needed column holds its first).
+      const o = loadOrder_(String(r.Order));
+      o.items.forEach((it) => { const ev = (cfg.events || []).find((e) => e.id === it.eventId); if (ev && ev.date > date) date = ev.date; });
+      if (date >= today) return;
+    }
+    setCell_(sh, r._row, 'Status', 'Completed');
+    setCell_(sh, r._row, 'Updated', new Date());
+    done.push(String(r.Order));
+  });
+  return done;
+}
+
 function sendPayReminders_(sh, rows) {
   if (Number(Utilities.formatDate(new Date(), tz_(), 'H')) < 9) return [];
   const sent = [];
@@ -2229,7 +2254,7 @@ function confirmClass_(o, status, late) {
 function checkPayments() {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) return { ok: false, error: 'A payment check is already running.' };
-  const summary = { invoicesPaid: [], classesPaid: [], expired: [], remindersSent: [], payRemindersSent: [], errors: [] };
+  const summary = { invoicesPaid: [], classesPaid: [], expired: [], remindersSent: [], payRemindersSent: [], completed: [], errors: [] };
   const started = Date.now();
   try {
     const cfg = getConfig_();
@@ -2301,6 +2326,7 @@ function checkPayments() {
     // Emails an admin helper queued, sent now from the shop's account.
     try { summary.remindersSent = sendHandoffReminders_(sh, rows); } catch (e) { summary.errors.push('Reminders: ' + e.message); }
     try { summary.payRemindersSent = sendPayReminders_(sh, rows); } catch (e) { summary.errors.push('Pay reminders: ' + e.message); }
+    try { summary.completed = completePastOrders_(sh, rows, cfg); } catch (e) { summary.errors.push('Completing past orders: ' + e.message); }
     try { summary.emailsSent = sendOutbox_(); } catch (e) { summary.errors.push('Outbox: ' + e.message); }
     summary.errors.forEach((e) => logHealth_('payments', e));
     summary.ms = Date.now() - started;
