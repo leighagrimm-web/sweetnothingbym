@@ -66,7 +66,7 @@
             '<div class="row-gap" style="gap:10px"><button type="button" class="btn ghost" data-preview>Preview changes</button><button type="button" class="btn" data-save>Save changes</button></div>' +
           '</div>' +
           sectionDashboard() + sectionOrders() + sectionMessages() + sectionCodes() + sectionPayments() + sectionCustom() + sectionArtisan() + sectionRules() + sectionZones() + sectionFaq() +
-          sectionPages() + sectionEvents() + sectionGallery() + sectionSettings() + sectionWhatsNew() +
+          sectionPages() + sectionEvents() + sectionGallery() + sectionSettings() + sectionHelp() + sectionWhatsNew() +
         '</main>' +
       '</div>' +
       '<div class="scrim" id="scrim"></div>' +
@@ -103,7 +103,7 @@
     ['Orders &amp; messages', [['dashboard', 'Dashboard'], ['orders', 'Orders'], ['messages', 'Messages'], ['codes', 'Promo &amp; gift codes'], ['payments', 'Payments']]],
     ['Shop settings', [['custom', 'Custom pricing'], ['artisan', 'Artisan &amp; flavors'], ['rules', 'Ordering rules'], ['zones', 'Drop-off zones'],
       ['faq', 'FAQ'], ['pages', 'Website pages'], ['events', 'Events'], ['gallery', 'Gallery'], ['settings', 'Contact &amp; pickup']]],
-    ['Help', [['whatsnew', 'What’s new']]]
+    ['Help', [['help', 'How things work'], ['whatsnew', 'What’s new']]]
   ];
   const TAB_IDS = TAB_GROUPS.reduce((a, g) => a.concat(g[1].map((t) => t[0])), []);
 
@@ -111,7 +111,7 @@
     if (location.hash === '#past') { ordersView = 'past'; history.replaceState(null, '', '#orders'); renderOrders(); }
     const id = TAB_IDS.indexOf(location.hash.slice(1)) !== -1 ? location.hash.slice(1) : 'dashboard';
     $$('.admin-main > .panel-card').forEach((s) => { s.hidden = s.id !== id; });
-    $('#settings-title').hidden = ['dashboard', 'orders', 'messages', 'codes', 'payments', 'whatsnew'].indexOf(id) !== -1;
+    $('#settings-title').hidden = ['dashboard', 'orders', 'messages', 'codes', 'payments', 'help', 'whatsnew'].indexOf(id) !== -1;
     if (id === 'whatsnew') markReleasesSeen();
     if (id === 'payments' && !payInfo) loadPayments();
     $$('.admin-nav a').forEach((a) => { if (a.dataset.tab === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
@@ -150,10 +150,349 @@
   const numInput = (path, attrs, before, after, type) => '<div class="input-wrap">' + (before ? '<span>' + before + '</span>' : '') +
     '<input id="' + path + '" type="number" ' + attrs + ' data-path="' + path + '" data-type="' + (type || 'num') + '">' + (after ? '<span>' + after + '</span>' : '') + '</div>';
   const card = (id, title, sub, body) => '<section class="panel-card" id="' + id + '" aria-labelledby="' + id + '-h"><h2 id="' + id + '-h">' + title + '</h2>' + (sub ? '<p class="sub">' + sub + '</p>' : '') + body + '</section>';
+  /* ---------- How things work: the help guide ---------- */
+  // Each answer is a list: a string is a paragraph, an array is a bullet list; **word** is bold. "go" links to that page.
+  // Keep it in step with the admin when things change (the AI help chat will answer from this too).
+  const HELP = [
+    {
+      "id": "daily",
+      "title": "Your day-to-day",
+      "items": [
+        {
+          "q": "Where should I start each day?",
+          "go": "dashboard",
+          "a": [
+            "Open the **Dashboard**. It shows the week by the date orders are needed:",
+            [
+              "How many orders and cookies are confirmed, next to your weekly limits.",
+              "Each day’s orders, with one card per class (tap a class to see who’s booked).",
+              "The **bake list**: custom orders one by one, artisan cookies added up by size and flavor.",
+              "**Data checks**: anything that looks off, like an order past its date that’s still open."
+            ],
+            "A yellow note at the top means orders are waiting for your review. A red box at the top of any page means something on the website needs fixing (see “When something goes wrong”)."
+          ]
+        },
+        {
+          "q": "Using the admin on your phone",
+          "a": [
+            "The bar at the bottom has **Dashboard**, **Orders** and **Messages**, with their counts. **More** opens every other page, plus Refresh website, Open the Sheet and View site.",
+            "While you have unsaved changes, **Discard** and **Save changes** take the bar’s place until you save or discard."
+          ]
+        },
+        {
+          "q": "Finding an order",
+          "go": "orders",
+          "a": [
+            "In Orders, type in the search box: a name, an email, part of a phone number, an order number (with or without “SN-”), an occasion, a class or a ZIP code.",
+            "**Active** has everything still in progress. **Past** has completed, cancelled, declined and expired orders. If what you searched for is on the other tab, there’s a link to it."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "Cookie orders, start to finish",
+      "items": [
+        {
+          "q": "The steps an order goes through",
+          "go": "orders",
+          "a": [
+            [
+              "**Pending review**: the customer sent a request and got a “request received” email. Nothing is confirmed or charged yet.",
+              "**Invoice sent**: you approved it. They got a confirmation email with a Pay button for the QuickBooks invoice.",
+              "**Paid**: set on its own within about 5 minutes of them paying.",
+              "**Baking** and **Ready**: optional, for your own tracking. Changing to these doesn’t email anyone.",
+              "**Completed**: set on its own the night after the order’s date, once it’s paid."
+            ],
+            "Orders that never get paid stay open, so you notice them."
+          ]
+        },
+        {
+          "q": "Reviewing and approving a request",
+          "go": "orders",
+          "a": [
+            "Tap **Review** on the order to see everything they asked for, including allergies and how full that week is. You can approve it as it is, or adjust the items and prices first and add a note the customer will see.",
+            "Then tap **Approve & email confirmation**. The customer gets the final price and a Pay button, and the invoice is made in QuickBooks. Prices on the site are before tax; QuickBooks adds the sales tax."
+          ]
+        },
+        {
+          "q": "Declining a request",
+          "go": "orders",
+          "a": [
+            "In the Review panel, tap **Can’t take this order? Decline it**. Add a short note if you like. The customer gets a kind email saying you can’t take it; nothing was charged."
+          ]
+        },
+        {
+          "q": "Changing the date, or messaging the customer",
+          "go": "orders",
+          "a": [
+            "In the Review panel, **Change date** moves the order to another day. **Message the customer** emails them from the shop; their reply comes to your inbox, and the message is saved with the order."
+          ]
+        },
+        {
+          "q": "Setting the pickup or drop-off time",
+          "go": "orders",
+          "a": [
+            "Once you’ve agreed on a time with the customer, open the order and tap **Set pickup time** (or drop-off time). They get an email with the time, the address and your cell number, and a reminder the morning before. Your cell number is in Contact & pickup."
+          ]
+        },
+        {
+          "q": "Payments and reminders",
+          "go": "payments",
+          "a": [
+            "Cookie orders are paid a week before their date. Every 5 minutes the site checks QuickBooks and marks paid orders **Paid**.",
+            "If an approved order is still unpaid 7 days before its date, the customer gets one friendly reminder with the Pay button (only one). The order turns light red in Orders with “Unpaid · X days to go”. After that, follow up yourself if you need to."
+          ]
+        },
+        {
+          "q": "Adding an order taken by phone",
+          "go": "orders",
+          "a": [
+            "Orders → **+ Add phone order**. Fill in the customer and what they want. Any date works, even blocked or full weeks, and you can set the price per cookie, add a rush fee and a note.",
+            "**Create & approve** emails the confirmation and invoice in one step; the customer never gets a “request received” email. **Save without approving** keeps it as Pending review."
+          ]
+        },
+        {
+          "q": "Cancelling an order",
+          "go": "orders",
+          "a": [
+            "Change its status to **Cancelled**. Before anything happens, the site tells you exactly what will:",
+            [
+              "Its cookies stop counting toward that week (or a class booking’s spots open up again).",
+              "An unpaid QuickBooks invoice is voided so it can’t be paid.",
+              "Any gift card amount goes back on the card."
+            ],
+            "If they already paid, refund it yourself in QuickBooks (cookies) or Square (classes); the website can’t do that part. Let the customer know with Message the customer. A cancelled cookie order can’t be reopened, so they’d need to order again."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "classes",
+      "title": "Classes and events",
+      "items": [
+        {
+          "q": "How class bookings work",
+          "go": "events",
+          "a": [
+            "Customers book and pay at checkout through Square. While they pay, the booking is **Awaiting payment** and their spot is held for the time set in Events → “Hold a class spot while they pay”.",
+            [
+              "Paid in time: it becomes **Paid**, and they get a “You’re booked!” email with the class details, the location, the flyer and Add to calendar buttons.",
+              "Not paid in time: it becomes **Expired**, the spot opens up again, and they get a friendly email with a link to book again."
+            ],
+            "You get an email for each new booking."
+          ]
+        },
+        {
+          "q": "Seeing who’s coming",
+          "go": "dashboard",
+          "a": [
+            "On the Dashboard, each class is one card on its day with the time and how many spots are booked out of the max. Tap it to see everyone, with their spots and whether they’ve paid. Each event on the Events page also shows booked and spots left."
+          ]
+        },
+        {
+          "q": "Adding or changing an event",
+          "go": "events",
+          "a": [
+            "On the Events page: title, date, times, location name and address (customers tap it for directions), price, max attendees, a photo, an optional flyer, and the button customers see: **Add to bag** (book and pay), **Order now**, **Message me** or **None**. Hide an event with its Showing switch, then Save changes."
+          ]
+        },
+        {
+          "q": "Booking someone yourself, or cancelling a booking",
+          "go": "orders",
+          "a": [
+            "Use **+ Add phone order** and pick the class. To cancel a booking, set it to **Cancelled** and its spots open up again. If they paid, refund them in Square."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rules",
+      "title": "The ordering rules",
+      "items": [
+        {
+          "q": "What the website checks before a customer can order",
+          "go": "rules",
+          "a": [
+            [
+              "**Minimum notice**: how many days ahead they must order (Ordering rules).",
+              "**Blocked dates**: days you’re closed (Ordering rules). Past ones clear themselves.",
+              "**Weekly limits**: custom and artisan cookies per week, Monday to Sunday (Ordering rules). Only approved orders count. Once a week is full, customers can’t pick days in it.",
+              "**Minimum order** and **most designs** for custom cookies (Custom pricing).",
+              "**Flavors**: how many per dozen, and more for bigger orders (Artisan & flavors).",
+              "**Drop-off**: only to ZIP codes in Drop-off zones, each with its own fee. Outside them, customers are offered a meet-up spot inside your area."
+            ],
+            "Phone orders you add yourself skip all of these."
+          ]
+        },
+        {
+          "q": "Taking a break from orders",
+          "go": "rules",
+          "a": [
+            "Ordering rules → **Accepting cookie orders**: switch it off and customers can’t send cookie requests (class bookings still work). For a few days off, block the dates instead. To close the whole website, use maintenance mode on Website pages."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "site",
+      "title": "Changing the website",
+      "items": [
+        {
+          "q": "Editing, previewing and saving",
+          "a": [
+            "Change anything in the Shop settings pages, then tap **Preview changes** to see the website with your edits (only you see it), and **Save changes** to make them live. **Discard** puts everything back.",
+            "Edited the Google Sheet directly? Tap **Refresh website** afterwards (on your phone: More → Refresh website) so the site shows it right away."
+          ]
+        },
+        {
+          "q": "Adding photos",
+          "go": "gallery",
+          "a": [
+            "Photos come from Google Drive. In Drive, open the photo’s Share menu, set General access to **Anyone with the link**, copy the link, and paste it into the photo box. A small preview appears next to it.",
+            "In the Gallery, the “What it shows” box is what Google and screen readers read, like “Baby shower”. A few words is plenty."
+          ]
+        },
+        {
+          "q": "Showing or hiding pages, and maintenance mode",
+          "go": "pages",
+          "a": [
+            "On Website pages, switch About, Special Events, Gallery or FAQ off to hide them. **Maintenance mode** closes the whole site with a message; set a password so you can still get in to check it."
+          ]
+        },
+        {
+          "q": "Two people editing at once",
+          "a": [
+            "Save only saves what you changed, so you and a helper can edit different things. If someone else saves while you’re editing, the save bar turns red and says what they changed. If you both changed the same thing, Save asks which to keep."
+          ]
+        },
+        {
+          "q": "Promo and gift codes",
+          "go": "codes",
+          "a": [
+            "**Percent off** codes come off before tax. A **gift card** is a dollar amount that keeps its balance until it’s used up. Codes save right away, with no Save button needed."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "emails",
+      "title": "Emails the website sends",
+      "items": [
+        {
+          "q": "What customers get",
+          "a": [
+            [
+              "Request received (cookie orders from the website).",
+              "Order confirmed, with the Pay button (when you approve).",
+              "Sorry, we can’t take it (when you decline).",
+              "Pickup or drop-off time, and a reminder the morning before.",
+              "A payment reminder, once, a week before the date if still unpaid.",
+              "You’re booked! (classes), or a note if their booking expired unpaid.",
+              "We got your message (Contact page and Message me; once an hour at most).",
+              "Your messages from an order, and your replies to messages."
+            ],
+            "When customers reply to any of these, it comes to your inbox."
+          ]
+        },
+        {
+          "q": "What you get",
+          "go": "settings",
+          "a": [
+            [
+              "New order to review.",
+              "New class booking.",
+              "New message.",
+              "Website problem alerts from the morning check, and an “All clear” once fixed."
+            ],
+            "They go to the email in Contact & pickup → “New-order alerts go to”. Problem alerts also go to anyone in “Also send website problem alerts to”."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "problems",
+      "title": "When something goes wrong",
+      "items": [
+        {
+          "q": "A red box at the top, or an “Action needed” email",
+          "go": "payments",
+          "a": [
+            "Every morning at 7 the site checks QuickBooks, Square, the payment checks and emails. If something needs fixing, you get an email saying what and how, and a red box shows at the top of the admin. Follow the steps, then tap **Check again**. You’ll get an “All clear” email once it’s fixed."
+          ]
+        },
+        {
+          "q": "A customer says they didn’t get an email",
+          "a": [
+            "Ask them to check their spam folder first. In the Google Sheet, the order’s email columns say Sent (with the time) or FAILED. You can always send them a note from the order with Message the customer."
+          ]
+        },
+        {
+          "q": "QuickBooks or Square isn’t connected",
+          "go": "payments",
+          "a": [
+            "On the Payments page, QuickBooks shows **Connect QuickBooks** when it needs signing in again (Intuit asks every 5 years), and Square shows an error if its key stopped working. **Check now** runs the payment check right away."
+          ]
+        },
+        {
+          "q": "A red bar says the Apps Script is out of date",
+          "a": [
+            "The website was updated but the Sheet’s code wasn’t yet. Nothing is lost; let Leigha know."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test",
+      "title": "Test site and live site",
+      "items": [
+        {
+          "q": "Which one am I in?",
+          "a": [
+            "The test admin has a dark strip at the top saying “Test admin: connected to the test Sheet”, its emails have [TEST] in the subject, and its payments use test money. The live admin has no strip. Only share www.sweetnothingsbym.com with customers."
+          ]
+        }
+      ]
+    }
+  ];
+  const helpText = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  function sectionHelp() {
+    const tabName = (id) => { const t = TAB_GROUPS.reduce((a, g) => a.concat(g[1]), []).find((x) => x[0] === id); return t ? t[1] : ''; };
+    return card('help', 'How things work', 'Plain answers about running the shop from here. Tap a question to open it.',
+      '<div class="help-search"><label class="sr-only" for="help-search">Search the guide</label>' +
+        '<input class="input" id="help-search" type="search" autocomplete="off" placeholder="Search, e.g. refund, photo, pickup time"></div>' +
+      '<p class="hint" id="help-none" hidden>Nothing matches that. Try another word, or ask Leigha.</p>' +
+      HELP.map((sec) => '<div class="help-sec" data-help-sec><h3 class="rv-h">' + esc(sec.title) + '</h3>' +
+        sec.items.map((it) => '<details class="help-item" data-help-item><summary>' + esc(it.q) + '</summary><div class="help-a">' +
+          it.a.map((p) => Array.isArray(p) ? '<ul>' + p.map((li) => '<li>' + helpText(li) + '</li>').join('') + '</ul>' : '<p>' + helpText(p) + '</p>').join('') +
+          (it.go ? '<a class="link-btn" href="#' + it.go + '" target="_self">Go to ' + tabName(it.go) + ' →</a>' : '') +
+        '</div></details>').join('') + '</div>').join(''));
+  }
+  // Search: show the questions whose wording matches every word typed, opened; hide the rest.
+  function filterHelp(q) {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    let any = false;
+    $$('[data-help-sec]').forEach((sec) => {
+      let shown = 0;
+      $$('[data-help-item]', sec).forEach((d) => {
+        const hit = words.every((w) => d.textContent.toLowerCase().indexOf(w) !== -1);
+        d.hidden = !hit;
+        d.open = !!words.length && hit;
+        if (hit) shown++;
+      });
+      sec.hidden = !shown;
+      any = any || shown > 0;
+    });
+    $('#help-none').hidden = any;
+  }
+
   /* ---------- What's new: release notes for Melissa ---------- */
   // Newest first. Add an entry with each update (id = the date it went live, plus a letter for a second one that day);
   // "go" links to the admin tab it's about.
   const RELEASES = [
+    { id: '2026-11-01', title: 'A help guide', items: [
+      { t: 'How things work', d: 'Help → How things work answers everyday questions in plain words: approving and declining, phone orders, payments and reminders, classes, the ordering rules, changing the website, the emails customers get, and what to do when something goes wrong. Search it, then tap “Go to …” to jump to the right page.', go: 'help' }
+    ] },
     { id: '2026-10-31d', title: 'Easier on your phone', items: [
       { t: 'Menu at the bottom', d: 'On your phone, Dashboard, Orders and Messages are in a bar at the bottom of the screen, with their counts. More opens everything else, plus Refresh website, Open the Sheet and View site. While you have unsaved changes, Discard and Save take its place until you save.' },
       { t: 'Orders as cards', d: 'Each order is a card you can read without scrolling sideways: who, when, what, the total, and a big Review button. “How orders work” opens the explanation when you want it.', go: 'orders' },
@@ -2271,6 +2610,7 @@
     });
     $('#accepting').addEventListener('click', () => { cfg.acceptingOrders = !cfg.acceptingOrders; fillFields(); markDirty(); });
     $('#orders-search').addEventListener('input', (e) => { orderSearch = e.target.value.trim(); renderOrders(); });
+    $('#help-search').addEventListener('input', (e) => filterHelp(e.target.value.trim()));
     $('[data-tabbar="more"]').addEventListener('click', () => openMore($('#more-sheet').hidden));
     $('#more-sheet').addEventListener('click', (e) => {
       if (e.target.closest('[data-more-close]')) openMore(false);

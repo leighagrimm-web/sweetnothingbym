@@ -684,3 +684,15 @@ html.sn-maint body > *:not(#maint) { display: none !important; }
 }
 textarea.input { overflow-y: hidden; min-height: 3em; }
 textarea.input.one-line { min-height: 0; resize: none; line-height: 1.4; }
+/* Help guide */
+.help-search { margin: 8px 0 14px; max-width: 460px; }
+.help-sec .rv-h { margin-top: 22px; }
+.help-item { border-bottom: 1px solid var(--line); }
+.help-item summary { cursor: pointer; padding: 12px 4px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+.help-item summary::-webkit-details-marker { display: none; }
+.help-item summary::after { content: "+"; color: var(--coral); font-weight: 700; }
+.help-item[open] summary::after { content: "–"; }
+.help-a { padding: 0 4px 14px; color: var(--navy); font-size: 15px; }
+.help-a p { margin: 0 0 8px; }
+.help-a ul { margin: 0 0 8px; padding-left: 20px; }
+.help-a li { margin-bottom: 4px; }
