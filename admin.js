@@ -13,8 +13,8 @@
 
   let cfg = null;          // settings being edited
   let stamp = '';          // fingerprint of the Sheet's settings when loaded (to notice when someone else saves)
-  let base = null;
-  const NEEDS_CODE = '2026-10-31';   // the Code.gs (CODE_VERSION) this page needs         // the settings as last loaded or saved (cleaned), so Save sends only what changed here
+  let base = null;         // the settings as last loaded or saved (cleaned), so Save sends only what changed here
+  const NEEDS_CODE = '2026-10-31b';   // the Code.gs (CODE_VERSION) this page needs
   let orders = [];
   let messages = [];
   let codes = [];

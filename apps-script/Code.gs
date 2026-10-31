@@ -1228,18 +1228,19 @@ function adminSaveSettings(changes, base, force) {
   lock.waitLock(20000);
   try {
     const latest = buildConfig_(true);
-    let c;
+    const current = editableSettings_(latest);
     if (typeof base === 'object' && base) {
-      const current = editableSettings_(latest);
       const fields = Object.keys(changes).filter((k) => !sameSetting_(current[k], base[k]) && !sameSetting_(current[k], changes[k]));
       if (!force && fields.length) return { ok: false, conflict: true, fields: fields, config: latest, stamp: settingsStamp_(latest) };
-      c = Object.assign(current, changes);
-      writeSettings_(c, Object.keys(changes));
     } else {
       // An admin page opened before this update sends everything plus the old fingerprint.
       if (!force && base && base !== settingsStamp_(latest)) return { ok: false, conflict: true, fields: [] };
-      writeSettings_(changes);
+      changes = editableSettings_(changes);
     }
+    // Only settings that really differ from the Sheet are written; everything else stays exactly as it is, whichever
+    // admin page (new or old) is saving.
+    const keys = Object.keys(changes).filter((k) => changes[k] !== undefined && !sameSetting_(current[k], changes[k]));
+    writeSettings_(Object.assign(current, changes), keys);
     clearDraft_();
     SpreadsheetApp.flush();
     clearConfigCache_();
@@ -1681,7 +1682,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-10-31';
+const CODE_VERSION = '2026-10-31b';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
