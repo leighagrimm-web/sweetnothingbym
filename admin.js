@@ -122,6 +122,7 @@
     $$('[data-more-link]').forEach((a) => { if (a.dataset.moreLink === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     if ($('#more-sheet') && !$('#more-sheet').hidden) openMore(false);
     window.scrollTo(0, 0);
+    growAll();
   }
   // Badge on a tab, e.g. "2 to review".
   function navCount(id, text) {
@@ -155,7 +156,8 @@
   const RELEASES = [
     { id: '2026-10-31d', title: 'Easier on your phone', items: [
       { t: 'Menu at the bottom', d: 'On your phone, Dashboard, Orders and Messages are in a bar at the bottom of the screen, with their counts. More opens everything else, plus Refresh website, Open the Sheet and View site. While you have unsaved changes, Discard and Save take its place until you save.' },
-      { t: 'Orders as cards', d: 'Each order is a card you can read without scrolling sideways: who, when, what, the total, and a big Review button. “How orders work” opens the explanation when you want it.', go: 'orders' }
+      { t: 'Orders as cards', d: 'Each order is a card you can read without scrolling sideways: who, when, what, the total, and a big Review button. “How orders work” opens the explanation when you want it.', go: 'orders' },
+      { t: 'Text boxes fit their text', d: 'Longer boxes (like the pricing and allergy notes) grow to show everything, so there’s no scrolling inside a small box. Discard is instant now too.' }
     ] },
     { id: '2026-10-31c', title: 'Past orders tidy themselves up', items: [
       { t: 'Active and Past orders', d: 'Orders now has two tabs at the top: Active (everything still in progress) and Past (completed, cancelled, declined and expired, newest date first).', go: 'orders' },
@@ -2151,10 +2153,10 @@
     const changes = {}, was = {};
     keys.forEach((k) => { changes[k] = c[k] === undefined ? null : c[k]; was[k] = base[k] === undefined ? null : base[k]; });
     busy = true;
-    $$('[data-save]').forEach((b) => { b.textContent = 'Saving…'; });
+    $$('[data-save]').forEach((b) => { b.textContent = 'Saving…'; b.classList.add('is-busy'); });
     server('adminSaveSettings', changes, was, !!force).then(async (r) => {
       busy = false;
-      $$('[data-save]').forEach((b) => { b.textContent = 'Save changes'; });
+      $$('[data-save]').forEach((b) => { b.textContent = 'Save changes'; b.classList.remove('is-busy'); });
       if (r.conflict) {
         if (!r.fields || !r.fields.length || !r.config) {
           if (await ask({ title: 'The settings changed', text: 'Someone else saved changes since you opened this page.',
@@ -2188,7 +2190,7 @@
       clearDirty();
       renderSettings();
       toast('Saved. The website shows your changes now.' + (theirs.length ? ' Changes someone else saved to ' + fieldList(theirs) + ' are kept too.' : ''), theirs.length ? 6000 : 3200);
-    }).catch((err) => { busy = false; $$('[data-save]').forEach((b) => { b.textContent = 'Save changes'; }); failed(err); });
+    }).catch((err) => { busy = false; $$('[data-save]').forEach((b) => { b.textContent = 'Save changes'; b.classList.remove('is-busy'); }); failed(err); });
   }
   // Preview changes: save the unsaved edits to the Sheet's Draft tab, then open the website in preview mode.
   function preview() {
@@ -2201,9 +2203,23 @@
     }).catch((err) => { if (w) w.close(); failed(err); });
   }
   function discard() {
-    server('adminClearDraft').then(load).then(() => toast('Changes discarded')).catch(failed);
+    const spots = {};
+    (cfg.events || []).forEach((e) => { spots[e.id] = { booked: e.booked, spotsLeft: e.spotsLeft }; });
+    changedKeys(cleaned()).forEach((k) => { if (base[k] === undefined) delete cfg[k]; else cfg[k] = SN.clone(base[k]); });
+    (cfg.events || []).forEach((e) => { if (spots[e.id]) Object.assign(e, spots[e.id]); });   // class bookings aren't settings
+    clearDirty();
+    renderSettings();
+    toast('Changes discarded');
+    server('adminClearDraft').catch(() => { /* a leftover preview draft is cleared by the next Save */ });
   }
 
+  // A text box grows to fit its text. Only boxes on screen can be measured, so this runs when a tab opens too.
+  function grow(el) {
+    if (!el.offsetParent) return;
+    el.style.height = 'auto';
+    el.style.height = (el.scrollHeight + 2) + 'px';
+  }
+  const growAll = () => $$('textarea').forEach(grow);
   function renderSettings() {
     fillFields();
     renderFlavors();
@@ -2215,10 +2231,14 @@
     renderHomeItems();
     renderHomeSlides();
     renderBusyDays();
+    growAll();
   }
 
+  let growTimer = null;
+  window.addEventListener('resize', () => { clearTimeout(growTimer); growTimer = setTimeout(growAll, 150); });
   function wire() {
     document.addEventListener('input', (e) => {
+      if (e.target.tagName === 'TEXTAREA') grow(e.target);
       if (po && e.target.closest('#review')) { onPhoneInput(e); return; }
       if (e.target.closest('#review')) { onReviewInput(e); return; }
       if (e.target.dataset.msgDraft) { replyOpen[e.target.dataset.msgDraft] = e.target.value; return; }
