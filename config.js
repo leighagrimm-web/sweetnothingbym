@@ -138,7 +138,7 @@ const SN_DEFAULTS = {
     .map((l) => ({ photo: '[' + l + ' cookie photo]', caption: l + ' cookies' }))
 };
 /* LIVE SNAPSHOT START */
-// Live settings as of 2026-10-31 (node .claude/snapshot.js). The Sheet always wins once it answers.
+// Live settings as of 2026-11-01 (node .claude/snapshot.js). The Sheet always wins once it answers.
 Object.assign(SN_DEFAULTS, {
  "acceptingOrders": true,
  "leadDays": 14,
@@ -257,6 +257,12 @@ Object.assign(SN_DEFAULTS, {
   {
    "id": "fmvmst1cq",
    "name": "Banana Pudding",
+   "on": true,
+   "special": false
+  },
+  {
+   "id": "fmvwo2crq",
+   "name": "S’More",
    "on": true,
    "special": false
   }
