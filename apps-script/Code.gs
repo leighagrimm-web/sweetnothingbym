@@ -1691,7 +1691,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-10-31d';
+const CODE_VERSION = '2026-11-02';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
@@ -2047,6 +2047,8 @@ function qbAuthCallback(request) {
   if (ok) {
     SCRIPT_PROPS().setProperty('QBO_REALM_ID', String(request.parameter.realmId || ''));
     try { qbItems_(true); } catch (e) { console.error('QuickBooks items setup failed', e); }
+    // A QuickBooks warning from the morning check clears now, not tomorrow morning.
+    try { const h = healthState_(); if (h && h.problems.some((x) => /^qb-/.test(x.id))) healthCheck_(); } catch (e) { /* the next check will */ }
   }
   return HtmlService.createHtmlOutput('<div style="font-family:sans-serif;padding:32px;max-width:520px">' +
     (ok ? '<h2>QuickBooks is connected</h2><p>You can close this tab. Back in the admin, click <strong>Refresh</strong> on the Payments tab.</p>'
@@ -2067,8 +2069,11 @@ function qbFetch_(method, path, body, contentType) {
   try { data = JSON.parse(res.getContentText() || '{}'); } catch (e) { /* not JSON */ }
   if (res.getResponseCode() >= 300 || data.Fault) {
     const e = (data.Fault && data.Fault.Error && data.Fault.Error[0]) || {};
-    const err = new Error((e.Message || 'HTTP ' + res.getResponseCode()) + (e.Detail ? ': ' + e.Detail : ''));
+    // Intuit often repeats the message as the detail ("An application error…: An application error…"); say it once.
+    const msg = e.Message || 'HTTP ' + res.getResponseCode();
+    const err = new Error(msg + (e.Detail && e.Detail !== msg ? ': ' + e.Detail : ''));
     err.code = e.code;
+    err.status = res.getResponseCode();
     throw err;
   }
   return data;
@@ -2428,6 +2433,9 @@ function qbDaysLeft_() {
   } catch (e) { return null; }
 }
 
+// A failure on Intuit's servers (their 5xx, or code 10000 "An application error has occurred"), which reconnecting won't fix.
+function qbIntuitSide_(e) { return Number(e.status) >= 500 || String(e.code) === '10000'; }
+
 // Everything that's wrong right now, as [{ id, title, fix }] in plain words.
 function healthProblems_() {
   const p = SCRIPT_PROPS();
@@ -2440,8 +2448,17 @@ function healthProblems_() {
     if (!qbReady_()) {
       add('qb-connect', 'QuickBooks isn’t connected', 'Approved cookie orders can’t get invoices, and paid invoices aren’t being marked Paid. In the admin, go to Payments, click Connect QuickBooks, sign in to Intuit and approve.');
     } else {
-      try { qbFetch_('get', '/companyinfo/' + p.getProperty('QBO_REALM_ID')); }
-      catch (e) { add('qb-api', 'QuickBooks isn’t answering', 'QuickBooks said: “' + e.message + '”. If this keeps happening, go to Payments in the admin, click Disconnect, then Connect QuickBooks again.'); }
+      // QuickBooks has the odd failed request on its own side; only a request that keeps failing is a problem.
+      let qbErr = null;
+      for (let i = 0; i < 3; i++) {
+        try { qbFetch_('get', '/companyinfo/' + p.getProperty('QBO_REALM_ID')); qbErr = null; break; }
+        catch (e) { qbErr = e; if (i < 2) Utilities.sleep(i ? 10000 : 3000); }
+      }
+      if (qbErr && qbIntuitSide_(qbErr)) {
+        add('qb-api', 'QuickBooks is having trouble on its end', 'QuickBooks said: “' + qbErr.message + '”. This is a problem at Intuit, not with your connection, so there’s nothing to reconnect; it usually clears up on its own. Tap Check again in an hour. If it lasts into tomorrow, tell Leigha.');
+      } else if (qbErr) {
+        add('qb-api', 'QuickBooks isn’t answering', 'QuickBooks said: “' + qbErr.message + '”. If this keeps happening, go to Payments in the admin, click Disconnect, then Connect QuickBooks again.');
+      }
       const days = qbDaysLeft_();
       if (days !== null && days <= QB_RECONNECT_WARN_DAYS) {
         add('qb-expiry', days <= 0 ? 'QuickBooks needs signing in again now' : 'QuickBooks needs signing in again within ' + days + ' day' + (days === 1 ? '' : 's'),
