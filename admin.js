@@ -2025,6 +2025,9 @@
           lc.classesPaid.length ? lc.classesPaid.length + ' class booking' + (lc.classesPaid.length > 1 ? 's' : '') + ' paid' : '',
           lc.expired.length ? lc.expired.length + ' expired' : '',
           lc.completed && lc.completed.length ? lc.completed.length + ' past order' + (lc.completed.length > 1 ? 's' : '') + ' marked Completed' : ''].filter(Boolean).join(', ').replace(/^$/, 'nothing new') + '.' +
+        // How long it took (Google allows about 90 minutes of these a day: 288 checks, so about 18 seconds each).
+        (lc.ms ? ' <span class="hint" style="margin:0">Took ' + (lc.ms / 1000).toFixed(1) + 's' + (lc.steps ? ' (' + [['sheet', 'reading the Sheet'], ['quickbooks', 'QuickBooks'], ['square', 'Square'], ['reminders', 'reminders and emails']]
+          .filter((s) => lc.steps[s[0]] >= 100).map((s) => s[1] + ' ' + (lc.steps[s[0]] / 1000).toFixed(1) + 's').join(', ') + ')' : '') + '.</span>' : '') +
         (lc.errors.length ? ' <span class="err">' + esc(lc.errors.join(' · ')) + '</span>' : '')
       : 'No check has run yet.';
     $('#pay-box').innerHTML =

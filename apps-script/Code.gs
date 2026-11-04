@@ -2261,11 +2261,16 @@ function checkPayments() {
   if (!lock.tryLock(1000)) return { ok: false, error: 'A payment check is already running.' };
   const summary = { invoicesPaid: [], classesPaid: [], expired: [], remindersSent: [], payRemindersSent: [], completed: [], errors: [] };
   const started = Date.now();
+  // How long each part took, shown on the Payments tab, so a slow check can be traced.
+  const steps = summary.steps = {};
+  let mark = started;
+  const step = (name) => { const t = Date.now(); steps[name] = (steps[name] || 0) + t - mark; mark = t; };
   try {
     const cfg = getConfig_();
     const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
     const rows = rowObjects_(sh).map((r, i) => Object.assign(r, { _row: i + 2 }));
     const json = (s) => { try { return JSON.parse(s || 'null'); } catch (e) { return null; } };
+    step('sheet');
 
     if (qbReady_()) {
       const open = rows.filter((r) => r.Status === 'Invoice sent').map((r) => ({ r, inv: json(r.Invoice) })).filter((x) => x.inv && x.inv.qb && x.inv.qb.id);
@@ -2277,24 +2282,27 @@ function checkPayments() {
             const q = found.find((f) => f.Id === x.inv.qb.id);
             if (!q) return;
             // Total and tax too: QuickBooks may add its sales tax after the invoice is made, or Melissa may edit it there.
+            // The cell is written only when something changed: writing every open invoice every 5 minutes is slow.
+            const before = JSON.stringify(x.inv);
+            delete x.inv.qb.checkedAt;   // (older checks stamped every look, which made every look a write)
             x.inv.qb.total = Number(q.TotalAmt);
             if (q.TxnTaxDetail) x.inv.qb.tax = Number(q.TxnTaxDetail.TotalTax || 0);
             delete x.inv.qbMismatch;   // (older invoices compared against the site's own tax, which it no longer works out)
             x.inv.qb.balance = Number(q.Balance);
-            x.inv.qb.checkedAt = new Date().toISOString();
             if (x.inv.qb.balance <= 0) {
               x.inv.qb.paidAt = new Date().toISOString();
               setCell_(sh, x.r._row, 'Status', 'Paid');
               setCell_(sh, x.r._row, 'Updated', new Date());
               summary.invoicesPaid.push(x.r.Order);
             }
-            setCell_(sh, x.r._row, 'Invoice', JSON.stringify(x.inv));
+            if (JSON.stringify(x.inv) !== before) setCell_(sh, x.r._row, 'Invoice', JSON.stringify(x.inv));
           });
         } catch (e) { summary.errors.push('QuickBooks: ' + e.message); }
       }
     } else if (qbKeysSet_()) {
       summary.errors.push('QuickBooks isn’t connected, so invoice payments aren’t being checked.');
     }
+    step('quickbooks');
 
     // Class bookings waiting on Square. The Square order number comes from the "Square order" column, or the
     // booking's saved invoice details if that column is missing (a Sheet that hadn't run setupSheet since payments
@@ -2327,12 +2335,14 @@ function checkPayments() {
           } catch (e) { summary.errors.push('Square ' + r.Order + ': ' + e.message); }
         });
     }
+    step('square');
     if (summary.classesPaid.length || summary.expired.length || summary.invoicesPaid.length) clearConfigCache_();
     // Emails an admin helper queued, sent now from the shop's account.
     try { summary.remindersSent = sendHandoffReminders_(sh, rows); } catch (e) { summary.errors.push('Reminders: ' + e.message); }
     try { summary.payRemindersSent = sendPayReminders_(sh, rows); } catch (e) { summary.errors.push('Pay reminders: ' + e.message); }
     try { summary.completed = completePastOrders_(sh, rows, cfg); } catch (e) { summary.errors.push('Completing past orders: ' + e.message); }
     try { summary.emailsSent = sendOutbox_(); } catch (e) { summary.errors.push('Outbox: ' + e.message); }
+    step('reminders');
     summary.errors.forEach((e) => logHealth_('payments', e));
     summary.ms = Date.now() - started;
     SCRIPT_PROPS().setProperty('PAYMENTS_LAST_CHECK', JSON.stringify(Object.assign({ at: new Date().toISOString() }, summary)));
