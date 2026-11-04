@@ -2458,6 +2458,7 @@
     c.homeItems = (c.homeItems || []).filter((h) => (h.name || '').trim());
     c.homeSlides = (c.homeSlides || []).filter((h) => (h.photo || '').trim());
     delete c.weekCounts;   // booking counts come from orders, not settings
+    delete c.codeVersion;  // which Code.gs is running isn't a setting (a saved preview would bring back an old one)
     delete c.codeVersion;
     delete c.images;
     return c;
@@ -2705,7 +2706,7 @@
       clearDirty();
       // Coming back from a preview? The unsaved edits are still in the Sheet's Draft tab.
       if (d.draft) {
-        const merged = Object.assign(SN.clone(cfg), d.draft);
+        const merged = Object.assign(SN.clone(cfg), d.draft, { codeVersion: cfg.codeVersion });
         if (JSON.stringify(merged) !== JSON.stringify(cfg)) {
           cfg = merged;
           markDirty();
