@@ -2612,12 +2612,7 @@ function adminPayments() {
     trigger: ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'checkPayments'),
     healthTrigger: ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'dailyHealthCheck'),
     // Columns or tabs added by an update that setupSheet hasn't added to this Sheet yet.
-    setupNeeded: Object.keys(TABS).some((name) => {
-      const sh = SpreadsheetApp.getActive().getSheetByName(name);
-      if (!sh) return true;
-      const have = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0].map(String);
-      return TABS[name].headers.some((h) => have.indexOf(h) === -1);
-    }),
+    setupMissing: setupMissing_(),
     callbackUrl: 'https://script.google.com/macros/d/' + ScriptApp.getScriptId() + '/usercallback'
   };
   if (out.qb.keys && p.getProperty('QBO_REALM_ID')) {
@@ -2635,6 +2630,25 @@ function adminPayments() {
     catch (e) { out.square.error = e.message; }
   }
   return out;
+}
+
+// Tabs and columns setupSheet would add, as "Orders: Pay reminder sent" (or just "Outbox" for a missing tab).
+function setupMissing_() {
+  const ss = SpreadsheetApp.getActive();
+  const out = [];
+  Object.keys(TABS).forEach((name) => {
+    const sh = ss.getSheetByName(name);
+    if (!sh) { out.push(name); return; }
+    const have = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0].map(String);
+    TABS[name].headers.filter((h) => have.indexOf(h) === -1).forEach((h) => out.push(name + ': ' + h));
+  });
+  return out;
+}
+// Run from the Apps Script editor to see what setupSheet would still add (View → Execution log).
+function checkSetup() {
+  const m = setupMissing_();
+  console.log(m.length ? 'Missing: ' + m.join(' · ') : 'Nothing missing: every tab and column is there.');
+  return m;
 }
 
 // The Intuit sign-in page to connect QuickBooks (opened in a new tab).
