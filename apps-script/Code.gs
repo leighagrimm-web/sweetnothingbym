@@ -135,7 +135,7 @@ const SETTINGS_SPEC = [
   ['maintenanceTitle', 'Something sweet is in the oven', 'text', 'Heading on the maintenance page.'],
   ['maintenanceMessage', 'We’re mixing up a fresh batch of updates to the site. Check back soon, or follow along on Instagram in the meantime!', 'text', 'Message on the maintenance page.'],
   ['maintenancePassword', '', 'text', 'PRIVATE. Lets you (and anyone you give it to) see and test the site during maintenance.'],
-  ['adminHelpers', '', 'text', 'PRIVATE. Google emails (comma-separated) of people who can use the admin besides the owner. Saving shares the Sheet and photos folder with them; their emails go out from the shop\'s account within 5 minutes.'],
+  ['adminHelpers', '', 'text', 'PRIVATE. Google emails (comma-separated) of people who can use the admin besides the owner. Saving shares the Sheet and photos folder with them; their emails go out from the shop\'s account within 15 minutes (within the hour overnight).'],
   ['ownerEmail', '', 'text', 'PRIVATE. Where "new order" and "new message" alerts go. Blank = the Google account that runs this.'],
   ['replyToEmail', '', 'text', 'PRIVATE. Where customer replies go. Blank = ownerEmail.'],
   ['alertEmails', '', 'text', 'PRIVATE. Extra emails (comma-separated) for "something on the website needs attention" alerts. ownerEmail always gets them.'],
@@ -257,7 +257,7 @@ const TABS = {
   },
   Draft: { headers: ['Key', 'Value', 'Updated'], widths: [100, 600, 150], text: ['Key', 'Value'], datetime: ['Updated'] },
   Counters: { headers: ['Name', 'Value'], widths: [140, 100] },
-  // Emails from admin helpers, waiting for the owner's 5-minute check to send them from the shop's account.
+  // Emails from admin helpers, waiting for the owner's payment check to send them from the shop's account.
   Outbox: { headers: ['Queued', 'To', 'Subject', 'Email (data)'], widths: [150, 220, 360, 400], text: ['To', 'Subject', 'Email (data)'], datetime: ['Queued'] }
 };
 
@@ -305,7 +305,7 @@ function setupSheet() {
   const blank = ss.getSheetByName('Sheet1');
   if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
 
-  // Checks QuickBooks and Square for payments every 5 minutes, and everything else every morning.
+  // Checks QuickBooks and Square for payments every 15 minutes by day (hourly overnight), and everything else every morning.
   ensurePaymentTrigger_();
   ensureHealthTrigger_();
   // Where customers' photos are saved, shared with any admin helpers.
@@ -1033,7 +1033,7 @@ function sendSafely_(fn) {
 
 
 // Every email goes through here. Running as the shop's account it's sent now; from an admin helper it waits in
-// the Outbox tab and the owner's 5-minute check (sendOutbox_) sends it, so customers always hear from the shop.
+// the Outbox tab and the owner's payment check (sendOutbox_) sends it, so customers always hear from the shop.
 let mailQueued_ = false;
 function sendMail_(msg) {
   if (runningAsOwner_()) { MailApp.sendEmail(msg); return; }
@@ -1165,7 +1165,7 @@ function isOwner_() {
   return me === ownerEmail_() || adminHelpers_().indexOf(me) !== -1;
 }
 function requireOwner_() { if (!isOwner_()) throw new Error('Only the shop owner can do that.'); }
-// True when this code runs as the shop's account (the website, the 5-minute check, or the owner in the admin);
+// True when this code runs as the shop's account (the website, the payment check, or the owner in the admin);
 // false for a helper using the admin, whose emails go through the Outbox instead (see sendMail_).
 function runningAsOwner_() { return String(Session.getEffectiveUser().getEmail() || '').toLowerCase() === ownerEmail_(); }
 
@@ -1670,7 +1670,7 @@ function adminSetHandoff(number, date, time, notify, note) {
   return { ok: true, order: o, emailStatus };
 }
 
-// Morning-before reminders, from the 5-minute check: cookie orders with an agreed time tomorrow, sent once, after 8 AM.
+// Morning-before reminders, from the payment check: cookie orders with an agreed time tomorrow, sent once, after 8 AM.
 function sendHandoffReminders_(sh, rows) {
   const now = new Date();
   if (Number(Utilities.formatDate(now, tz_(), 'H')) < 8) return [];
@@ -1691,7 +1691,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-11-02';
+const CODE_VERSION = '2026-11-04';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
@@ -2006,7 +2006,7 @@ function driveFileId_(v) {
 /*
  * QuickBooks Online (cookie orders): approving an order creates and sends a QuickBooks invoice with a Pay button.
  * Square (classes): booking a class sends the customer to a Square checkout link; the spot is held meanwhile.
- * checkPayments() runs every 5 minutes (see setupSheet) and marks orders Paid, and releases unpaid class holds.
+ * checkPayments() runs every 15 minutes by day, hourly overnight (see setupSheet) and marks orders Paid, and releases unpaid class holds.
  *
  * Keys live in Script Properties (Project Settings), never in this file:
  *   QBO_CLIENT_ID, QBO_CLIENT_SECRET, QBO_ENV (sandbox | production)
@@ -2253,10 +2253,14 @@ function confirmClass_(o, status, late) {
   clearConfigCache_();
 }
 
-// Runs every 5 minutes (time-driven trigger), and from admin's "Check payments now".
+// Runs on a timer (every 15 minutes by day, hourly overnight: see PAY_CHECK_EVERY), and from admin's "Check now".
 //   QuickBooks: invoices with no balance left -> Paid (part-paid ones keep their balance on the order).
 //   Square: class bookings paid -> Paid (+ confirmation emails); unpaid past the hold -> Expired (spot released).
-function checkPayments() {
+function checkPayments(e) {
+  const timer = !!(e && e.triggerUid);
+  // A Sheet still on the old 5-minute timer moves itself to the new schedule.
+  if (timer && SCRIPT_PROPS().getProperty('PAY_CHECK_EVERY') !== String(PAY_CHECK_EVERY)) { try { ensurePaymentTrigger_(); } catch (err) { console.error('Rescheduling the payment check failed', err); } }
+  if (timer && payCheckQuiet_()) return { ok: true, skipped: true };
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) return { ok: false, error: 'A payment check is already running.' };
   const summary = { invoicesPaid: [], classesPaid: [], expired: [], remindersSent: [], payRemindersSent: [], completed: [], errors: [] };
@@ -2282,7 +2286,7 @@ function checkPayments() {
             const q = found.find((f) => f.Id === x.inv.qb.id);
             if (!q) return;
             // Total and tax too: QuickBooks may add its sales tax after the invoice is made, or Melissa may edit it there.
-            // The cell is written only when something changed: writing every open invoice every 5 minutes is slow.
+            // The cell is written only when something changed: writing every open invoice on every check is slow.
             const before = JSON.stringify(x.inv);
             delete x.inv.qb.checkedAt;   // (older checks stamped every look, which made every look a write)
             x.inv.qb.total = Number(q.TotalAmt);
@@ -2382,19 +2386,36 @@ function checkClassPayment_(b) {
   };
 }
 
-// Make sure the 5-minute payment check is scheduled (called from setupSheet).
+// The payment check runs every 15 minutes from 7 AM to 10 PM, and once an hour overnight. Customers coming back from
+// Square are confirmed right away (classStatus), and Check now on Payments runs it on demand, so this is the backstop.
+// It used to run every 5 minutes all day, which used most of Google's 90 minutes a day of scheduled runs.
+const PAY_CHECK_EVERY = 15;
+const PAY_DAY_HOURS = [7, 22];   // from 7:00 AM to before 10:00 PM
+
+// Make sure the payment check is scheduled, on the current schedule (called from setupSheet and the admin).
 function ensurePaymentTrigger_() {
   if (!runningAsOwner_()) return;   // a helper's trigger would run (and send email) as the helper
-  const has = ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'checkPayments');
-  if (!has) ScriptApp.newTrigger('checkPayments').timeBased().everyMinutes(5).create();
+  const p = SCRIPT_PROPS();
+  const mine = ScriptApp.getProjectTriggers().filter((t) => t.getHandlerFunction() === 'checkPayments');
+  // Apps Script can't say how often a trigger runs, so the schedule it was made with is remembered.
+  if (mine.length && p.getProperty('PAY_CHECK_EVERY') !== String(PAY_CHECK_EVERY)) { mine.forEach((t) => ScriptApp.deleteTrigger(t)); mine.length = 0; }
+  if (!mine.length) { ScriptApp.newTrigger('checkPayments').timeBased().everyMinutes(PAY_CHECK_EVERY).create(); p.setProperty('PAY_CHECK_EVERY', String(PAY_CHECK_EVERY)); }
   ensureHealthTrigger_();
+}
+
+// Overnight, a scheduled check that comes less than an hour after the last one does nothing.
+function payCheckQuiet_() {
+  const h = Number(Utilities.formatDate(new Date(), tz_(), 'H'));
+  if (h >= PAY_DAY_HOURS[0] && h < PAY_DAY_HOURS[1]) return false;
+  const last = JSON.parse(SCRIPT_PROPS().getProperty('PAYMENTS_LAST_CHECK') || 'null');
+  return !!last && Date.now() - Date.parse(last.at) < 55 * 60000;
 }
 
 /* ============================== Daily health check ============================== */
 
 /*
  * Every morning at 7 (and from "Run health check now" on the admin's Payments tab) this checks that what the site
- * relies on still works: QuickBooks, Square, the 5-minute payment check, emails, and Google's daily limits.
+ * relies on still works: QuickBooks, Square, the payment check, emails, and Google's daily limits.
  * Only when something's wrong does it email the owner (and alertEmails), in plain words with how to fix it: once a
  * day at most while it stays wrong, plus one "all clear" once it's fixed. The admin shows a red banner meanwhile.
  */
@@ -2421,7 +2442,7 @@ function logHealth_(kind, text) {
   } catch (e) { /* the health check just sees less */ }
 }
 
-// Scheduled-run time used by the 5-minute check, today and the day before.
+// Scheduled-run time used by the payment check, today and the day before.
 function addRuntime_(ms) {
   try {
     const p = SCRIPT_PROPS();
@@ -2483,12 +2504,12 @@ function healthProblems_() {
     catch (e) { add('square', 'Square isn’t accepting the website’s key', 'Class bookings can’t go to checkout. Square said: “' + e.message + '”. Check the access token in Square’s Developer site and paste it into Apps Script → Project Settings → Script Properties → SQUARE_ACCESS_TOKEN.'); }
   }
 
-  // The 5-minute payment check is scheduled and has run lately.
+  // The payment check is scheduled and has run lately (hourly at least, overnight).
   const triggers = ScriptApp.getProjectTriggers().map((t) => t.getHandlerFunction());
   const last = JSON.parse(p.getProperty('PAYMENTS_LAST_CHECK') || 'null');
   if (triggers.indexOf('checkPayments') === -1) {
-    add('pay-trigger', 'The 5-minute payment check isn’t scheduled', 'Payments won’t be marked Paid and class holds won’t expire. In the admin, go to Payments and click Check now; that schedules it again.');
-  } else if (!last || Date.now() - Date.parse(last.at) > 30 * 60000) {
+    add('pay-trigger', 'The payment check isn’t scheduled', 'Payments won’t be marked Paid and class holds won’t expire. In the admin, go to Payments and click Check now; that schedules it again.');
+  } else if (!last || Date.now() - Date.parse(last.at) > 90 * 60000) {
     add('pay-stale', 'The payment check hasn’t run lately', 'It last ran ' + (last ? when(last.at) : 'never') + '. In the admin, go to Payments and click Check now. If it keeps stopping, open Apps Script → Triggers and look at the failed runs of checkPayments.');
   }
 

@@ -56,7 +56,7 @@ Everything below is edited in the **test** admin first, so it can be checked on 
    - `maintenanceMode` = `TRUE`, and set a `maintenancePassword`
 4. [x] **Extensions → Apps Script.** Paste the latest `apps-script/Code.gs` over everything and **Save**, so the live site starts on today's code. Under **Libraries**, check that **OAuth2** is listed; if not, add `1B7FSrk5Zi6L1rSxxTDgDEUsPzlukDsi4KGuTMorsTQHhGBzBkMun4iDF`.
 5. [x] **Project Settings → Script Properties.** These are **not** copied with the Sheet, so add them fresh in step 5 and step 6.
-6. [x] Run **setupSheet** and allow everything Google asks for: Sheets, Gmail sending, Drive, outside services and triggers. It creates the uploads folder and the 5-minute payment check.
+6. [x] Run **setupSheet** and allow everything Google asks for: Sheets, Gmail sending, Drive, outside services and triggers. It creates the uploads folder and the payment check (every 15 minutes from 7 AM to 10 PM, hourly overnight).
 7. [x] **Move the website photos into Melissa's Drive.** In the Apps Script editor, pick **copyWebsitePhotos** in the function list and click **Run**. It copies every photo the site shows (Home, About, menu, Events, Gallery) from Leigha's Drive into a **"Sweet Nothings website photos"** folder in Melissa's Drive, shares each copy so the site can show it, and points the Sheet at the copies. The live site then doesn't depend on Leigha's account at all.
    - Check the message at the bottom of the editor (Execution log): "Copied N photos…". If it lists any it couldn't copy, make sure those photos are shared "anyone with the link" in Leigha's Drive, then run it again (it skips ones already done).
    - Then open the live admin's **Website pages**, **Events** and **Gallery** tabs and check the previews show.
@@ -67,8 +67,8 @@ Everything below is edited in the **test** admin first, so it can be checked on 
 10. [ ] *(Optional, any time later)* **Admin helpers.** Not needed for go-live, since Leigha signs in with Melissa's account. When someone should use the admin with their **own** Google account (for example, to help set things up):
    - Signed in as Melissa, go to the live admin → **Contact & pickup** → **Admin helpers**, enter their Gmail, and save. This shares the Sheet and the photos folder with them.
    - They open the admin link with their own Google account and allow the permissions it asks for.
-   - Any emails they send from the admin (approvals, messages) wait in a hidden **Outbox** tab and go out from **Melissa's** account at the next 5-minute check. The order shows "Queued" until then.
-   - Only Melissa's account can start the 5-minute check, which setupSheet does in item 6.
+   - Any emails they send from the admin (approvals, messages) wait in a hidden **Outbox** tab and go out from **Melissa's** account at the next payment check (within 15 minutes, or the hour overnight). The order shows "Queued" until then.
+   - Only Melissa's account can start the payment check, which setupSheet does in item 6.
 
 ## 4. Hosting and the domain (L)
 

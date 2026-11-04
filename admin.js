@@ -14,7 +14,7 @@
   let cfg = null;          // settings being edited
   let stamp = '';          // fingerprint of the Sheet's settings when loaded (to notice when someone else saves)
   let base = null;         // the settings as last loaded or saved (cleaned), so Save sends only what changed here
-  const NEEDS_CODE = '2026-10-31d';   // the Code.gs (CODE_VERSION) this page needs
+  const NEEDS_CODE = '2026-11-04';   // the Code.gs (CODE_VERSION) this page needs
   let orders = [];
   let messages = [];
   let codes = [];
@@ -200,7 +200,7 @@
             [
               "**Pending review**: the customer sent a request and got a “request received” email. Nothing is confirmed or charged yet.",
               "**Invoice sent**: you approved it. They got a confirmation email with a Pay button for the QuickBooks invoice.",
-              "**Paid**: set on its own within about 5 minutes of them paying.",
+              "**Paid**: set on its own within about 15 minutes of them paying (within the hour overnight). Waiting on one? **Check now** on Payments does it right away.",
               "**Baking** and **Ready**: optional, for your own tracking. Changing to these doesn’t email anyone.",
               "**Completed**: set on its own the night after the order’s date, once it’s paid."
             ],
@@ -240,7 +240,7 @@
           "q": "Payments and reminders",
           "go": "payments",
           "a": [
-            "Cookie orders are paid a week before their date. Every 5 minutes the site checks QuickBooks and marks paid orders **Paid**.",
+            "Cookie orders are paid a week before their date. Every 15 minutes from 7 AM to 10 PM (and once an hour overnight) the site checks QuickBooks and marks paid orders **Paid**. **Check now** on the Payments page checks right away.",
             "If an approved order is still unpaid 7 days before its date, the customer gets one friendly reminder with the Pay button (only one). The order turns light red in Orders with “Unpaid · X days to go”. After that, follow up yourself if you need to."
           ]
         },
@@ -490,6 +490,10 @@
   // Newest first. Add an entry with each update (id = the date it went live, plus a letter for a second one that day);
   // "go" links to the admin tab it's about.
   const RELEASES = [
+    { id: '2026-11-04', title: 'Payment checks, less often', items: [
+      { t: 'Every 15 minutes by day', d: 'The site now checks QuickBooks and Square every 15 minutes from 7 AM to 10 PM, and once an hour overnight (it was every 5 minutes, all day and night). That keeps it well inside Google’s daily limit. Customers paying for a class are still confirmed the moment they finish checkout. Waiting on an invoice to show Paid? Tap Check now on Payments.', go: 'payments' },
+      { t: 'How long each check takes', d: 'Payments shows how long the last check took and which part was slowest, and each check is quicker: an invoice is only saved again when QuickBooks shows a change.', go: 'payments' }
+    ] },
     { id: '2026-11-01', title: 'A help guide', items: [
       { t: 'How things work', d: 'Help → How things work answers everyday questions in plain words: approving and declining, phone orders, payments and reminders, classes, the ordering rules, changing the website, the emails customers get, and what to do when something goes wrong. Search it, then tap “Go to …” to jump to the right page.', go: 'help' }
     ] },
@@ -739,7 +743,7 @@
         field('instagramHandle', 'Instagram handle', '<input class="input" id="instagramHandle" type="text" data-path="instagramHandle">') +
         '<div class="field" style="grid-column:1 / -1"><label class="label" for="adminHelpers">Admin helpers (optional)</label>' +
           '<input class="input" id="adminHelpers" type="text" data-path="adminHelpers" placeholder="e.g. helper@gmail.com, another@gmail.com">' +
-          '<p class="hint">Google emails of people who can also use this admin. Saving shares the Sheet and customer photos with them. Emails they send (approvals, messages) go out from your account within 5 minutes.</p></div>' +
+          '<p class="hint">Google emails of people who can also use this admin. Saving shares the Sheet and customer photos with them. Emails they send (approvals, messages) go out from your account within 15 minutes (within the hour overnight).</p></div>' +
       '</div><p class="hint" style="margin-top:16px">Technical settings (website address, email sender name, test or live) are on the Sheet\'s Settings tab.</p>');
   }
 
@@ -1278,7 +1282,7 @@
       : 'Your edits are safe: saving keeps their changes too.'));
   }
 
-  // Payments are marked Paid in the Sheet every 5 minutes, so an open admin reloads orders every 2 minutes, and when
+  // Payments are marked Paid in the Sheet every 15 minutes (or on Check now), so an open admin reloads orders every 2 minutes, and when
   // Melissa comes back to the tab. Not while she's in an order panel or busy, so nothing she's typing moves.
   const AUTO_REFRESH_MS = 2 * 60000;
   // Coming back to the page (another tab, window or browser) checks within seconds, so others' saves show up then.
@@ -1988,7 +1992,7 @@
   /* ---------- Payments: QuickBooks (cookie invoices) and Square (class checkout) ---------- */
   let payInfo = null;       // from adminPayments; loaded the first time the tab opens (it calls QuickBooks and Square)
   function sectionPayments() {
-    return card('payments', 'Payments', 'Approving a cookie order creates its invoice in <strong>QuickBooks</strong>; the confirmation email has its Pay button. Class bookings pay at checkout through <strong>Square</strong>. Every 5 minutes the site checks both and marks orders <strong>Paid</strong>.',
+    return card('payments', 'Payments', 'Approving a cookie order creates its invoice in <strong>QuickBooks</strong>; the confirmation email has its Pay button. Class bookings pay at checkout through <strong>Square</strong>. Every 15 minutes from 7 AM to 10 PM (hourly overnight) the site checks both and marks orders <strong>Paid</strong>; <strong>Check now</strong> checks right away.',
       '<div id="pay-box"><p class="muted">Loading…</p></div>');
   }
   function loadPayments() {
@@ -2041,7 +2045,7 @@
         (health ? 'Last check ' + esc(healthWhen(health.at)) + ': ' + (health.problems.length ? '<span class="err">' + health.problems.length + ' to fix (see the red box at the top).</span>' : 'all good.') : 'It hasn’t run yet.') + '</p>' +
       '<div class="row-gap" style="gap:8px;margin-top:10px"><button type="button" class="btn ghost small" data-pay="health">Run health check now</button></div>' +
       '<h3 class="rv-h">Payment check</h3>' +
-      '<p>' + (p.trigger ? 'Runs every 5 minutes.' : '<span class="err">Not scheduled. Click Check now to schedule it.</span>') + ' ' + last + '</p>' +
+      '<p>' + (p.trigger ? 'Runs every 15 minutes from 7 AM to 10 PM, and once an hour overnight.' : '<span class="err">Not scheduled. Click Check now to schedule it.</span>') + ' ' + last + '</p>' +
       '<div class="row-gap" style="gap:8px;margin-top:10px"><button type="button" class="btn ghost small" data-pay="check">Check now</button><button type="button" class="btn ghost small" data-pay="refresh">Refresh</button></div>';
   }
   async function onPayClick(b) {
@@ -2421,7 +2425,7 @@
         Object.assign(m, r.message);
         delete replyOpen[m.id];
         renderMessages();
-        toast(/^Queued/.test(r.emailStatus) ? 'Reply saved. It goes out from the shop’s email within 5 minutes.' : 'Reply sent to ' + m.email);
+        toast(/^Queued/.test(r.emailStatus) ? 'Reply saved. It goes out from the shop’s email within 15 minutes.' : 'Reply sent to ' + m.email);
       }).catch(failed);
       return;
     }
