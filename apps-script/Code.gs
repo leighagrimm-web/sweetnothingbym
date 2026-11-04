@@ -418,7 +418,8 @@ const CONFIG_CACHE_KEY = 'config_v1';
 function getConfig_() {
   const cache = CacheService.getScriptCache();
   const hit = cache.get(CONFIG_CACHE_KEY);
-  if (hit) return JSON.parse(hit);
+  // The code version comes from the code running now, not the cache, so pasting in a new Code.gs shows at once.
+  if (hit) return Object.assign(JSON.parse(hit), { codeVersion: CODE_VERSION });
   const cfg = buildConfig_();
   try { cache.put(CONFIG_CACHE_KEY, JSON.stringify(cfg), 600); } catch (e) { /* too large to cache: fine */ }
   return cfg;
