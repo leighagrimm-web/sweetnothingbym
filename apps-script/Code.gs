@@ -422,7 +422,11 @@ function getConfig_() {
   const hit = cache.get(CONFIG_CACHE_KEY);
   // The code version comes from the code running now, not the cache, so pasting in a new Code.gs shows at once.
   if (hit) return Object.assign(JSON.parse(hit), { codeVersion: CODE_VERSION });
-  const cfg = buildConfig_();
+  // Not cached (it lasts 10 minutes): read the tabs it needs in one request, unless they're read already.
+  const own = !TAB_CACHE_;
+  if (own) preloadTabs_(CONFIG_TABS);
+  let cfg;
+  try { cfg = buildConfig_(); } finally { if (own) TAB_CACHE_ = null; }
   try { cache.put(CONFIG_CACHE_KEY, JSON.stringify(cfg), 600); } catch (e) { /* too large to cache: fine */ }
   return cfg;
 }
@@ -630,7 +634,8 @@ function headerRow_(sh) {
  * rowObjects_ and headerRow_ use it; the rest of the time (and for anything that saves) they read the Sheet as it is.
  */
 let TAB_CACHE_ = null;
-const ADMIN_TABS = ['Settings', 'Flavors', 'Zones', 'BlockedDates', 'FAQ', 'Pages', 'Events', 'Gallery', 'Codes', 'Orders', 'OrderItems', 'Messages', 'Draft'];
+const CONFIG_TABS = ['Settings', 'Flavors', 'Zones', 'BlockedDates', 'FAQ', 'Pages', 'Events', 'Gallery', 'Orders', 'OrderItems'];   // what buildConfig_ reads
+const ADMIN_TABS = CONFIG_TABS.concat(['Codes', 'Messages', 'Draft']);
 // Columns the site writes dates into (TABS datetime), plus date columns kept as text where an older row may still
 // hold a real date. The API sends those as day numbers; getValues() would have given Dates.
 const DATE_COLS_ = (() => {
@@ -648,6 +653,7 @@ function preloadTabs_(names) {
   const ss = SpreadsheetApp.getActive();
   try {
     if (typeof Sheets === 'undefined') throw new Error('the Google Sheets service isn’t turned on in Apps Script');
+    SpreadsheetApp.flush();   // the API only sees changes this run has already written
     const res = Sheets.Spreadsheets.Values.batchGet(ss.getId(),
       { ranges: names.map((n) => "'" + n + "'"), valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER' });
     const tabs = {};
@@ -655,10 +661,13 @@ function preloadTabs_(names) {
     TAB_CACHE_ = tabs;
     return 'one request';
   } catch (e) {
-    const tabs = {};
-    names.forEach((n) => { const sh = ss.getSheetByName(n); if (sh) tabs[n] = sh.getDataRange().getValues(); });
-    TAB_CACHE_ = tabs;
-    return 'tab by tab: ' + String(e && e.message ? e.message : e).slice(0, 120);
+    const why = 'tab by tab: ' + String(e && e.message ? e.message : e).slice(0, 120);
+    try {
+      const tabs = {};
+      names.forEach((n) => { const sh = ss.getSheetByName(n); if (sh) tabs[n] = sh.getDataRange().getValues(); });
+      TAB_CACHE_ = tabs;
+    } catch (err) { TAB_CACHE_ = null; }   // each part then reads its own tabs, as before
+    return why;
   }
 }
 
@@ -1783,7 +1792,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-11-09b';
+const CODE_VERSION = '2026-11-09c';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
@@ -2362,9 +2371,14 @@ function checkPayments(e) {
   let mark = started;
   const step = (name) => { const t = Date.now(); steps[name] = (steps[name] || 0) + t - mark; mark = t; };
   try {
-    const cfg = getConfig_();
+    // Settings and Orders in one request (see preloadTabs_); everything after this reads the Sheet as it is.
+    preloadTabs_(CONFIG_TABS);
+    let cfg, rows;
     const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
-    const rows = rowObjects_(sh).map((r, i) => Object.assign(r, { _row: i + 2 }));
+    try {
+      cfg = getConfig_();
+      rows = rowObjects_(sh).map((r, i) => Object.assign(r, { _row: i + 2 }));
+    } finally { TAB_CACHE_ = null; }
     const json = (s) => { try { return JSON.parse(s || 'null'); } catch (e) { return null; } };
     step('sheet');
 
