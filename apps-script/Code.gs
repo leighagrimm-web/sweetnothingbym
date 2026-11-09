@@ -348,8 +348,10 @@ function headerMap_(sh) {
 
 // Rows below the header as objects keyed by header name.
 function rowObjects_(sh) {
-  if (!sh || sh.getLastRow() < 2) return [];
-  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  if (!sh) return [];
+  const cached = cachedTab_(sh);
+  if (!cached && sh.getLastRow() < 2) return [];
+  const headers = headerRow_(sh).map(String);
   return rows_(sh).map((r) => { const o = {}; headers.forEach((h, i) => { if (h) o[h] = r[i]; }); return o; });
 }
 
@@ -603,15 +605,81 @@ function getDraft_() {
 function parseSetting_(v, type) {
   if (type === 'number') { const n = Number(v); return isNaN(n) ? 0 : n; }
   if (type === 'bool') return truthy_(v);
-  if (type === 'date') return toISODate_(v) || '';
+  if (type === 'date') return toISODate_(typeof v === 'number' && v > 0 ? serialToDate_(v) : v) || '';   // a number: a date read in one request
   if (type === 'json') { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch (e) { return {}; } }
   return v == null ? '' : String(v);
 }
 
 function rows_(sh) {
-  if (!sh || sh.getLastRow() < 2) return [];
+  if (!sh) return [];
+  const cached = cachedTab_(sh);
+  if (cached) return cached.slice(1).map((r) => r.slice());
+  if (sh.getLastRow() < 2) return [];
   return sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
 }
+// The header row of a tab.
+function headerRow_(sh) {
+  const cached = cachedTab_(sh);
+  if (cached) return (cached[0] || []).slice();
+  return sh.getLastColumn() < 1 ? [] : sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+}
+
+/*
+ * Reading every tab at once, for the admin page (see adminLoad). Asking the Sheet for each tab separately takes
+ * several trips to Google per tab; one Sheets API request reads them all. While TAB_CACHE_ is set, rows_,
+ * rowObjects_ and headerRow_ use it; the rest of the time (and for anything that saves) they read the Sheet as it is.
+ */
+let TAB_CACHE_ = null;
+const ADMIN_TABS = ['Settings', 'Flavors', 'Zones', 'BlockedDates', 'FAQ', 'Pages', 'Events', 'Gallery', 'Codes', 'Orders', 'OrderItems', 'Messages', 'Draft'];
+// Columns the site writes dates into (TABS datetime), plus date columns kept as text where an older row may still
+// hold a real date. The API sends those as day numbers; getValues() would have given Dates.
+const DATE_COLS_ = (() => {
+  const s = {};
+  Object.keys(TABS).forEach((t) => (TABS[t].datetime || []).forEach((h) => { s[t + '|' + h] = true; }));
+  ['BlockedDates|Start', 'BlockedDates|End', 'Events|Date', 'Events|Start time', 'Events|End time', 'Codes|Expires',
+    'Orders|Date needed', 'Orders|Event time', 'Orders|Handoff date', 'Orders|Handoff time'].forEach((k) => { s[k] = true; });
+  return s;
+})();
+
+function cachedTab_(sh) { return TAB_CACHE_ ? TAB_CACHE_[sh.getName()] || null : null; }
+
+// Fills TAB_CACHE_ and says how: "one request", or "tab by tab: why" when the Sheets service isn't on or fails.
+function preloadTabs_(names) {
+  const ss = SpreadsheetApp.getActive();
+  try {
+    if (typeof Sheets === 'undefined') throw new Error('the Google Sheets service isn’t turned on in Apps Script');
+    const res = Sheets.Spreadsheets.Values.batchGet(ss.getId(),
+      { ranges: names.map((n) => "'" + n + "'"), valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER' });
+    const tabs = {};
+    (res.valueRanges || []).forEach((vr, i) => { tabs[names[i]] = likeGetValues_(names[i], vr.values || []); });
+    TAB_CACHE_ = tabs;
+    return 'one request';
+  } catch (e) {
+    const tabs = {};
+    names.forEach((n) => { const sh = ss.getSheetByName(n); if (sh) tabs[n] = sh.getDataRange().getValues(); });
+    TAB_CACHE_ = tabs;
+    return 'tab by tab: ' + String(e && e.message ? e.message : e).slice(0, 120);
+  }
+}
+
+// The API leaves out blank cells at the ends of rows and sends dates as day numbers. Make it look like getValues().
+function likeGetValues_(tab, values) {
+  const width = values.reduce((w, r) => Math.max(w, r.length), 0);
+  const rows = values.map((r) => { const out = r.slice(); while (out.length < width) out.push(''); return out; });
+  const dateCols = (rows[0] || []).map((h, i) => (DATE_COLS_[tab + '|' + h] ? i : -1)).filter((i) => i !== -1);
+  rows.slice(1).forEach((r) => dateCols.forEach((i) => { if (typeof r[i] === 'number') r[i] = serialToDate_(r[i]); }));
+  return rows;
+}
+
+// A Sheets day number (days since Dec 30, 1899, in the Sheet's time zone) as the Date getValues() would give.
+function serialToDate_(n) {
+  const ms = Math.round((n - 25569) * 864e5);   // the Sheet's clock time, read as if it were UTC
+  const whole = Math.floor(ms / 1000) * 1000;
+  const clock = Utilities.formatDate(new Date(whole), 'UTC', 'yyyy-MM-dd HH:mm:ss');
+  return new Date(Utilities.parseDate(clock, sheetTz_(), 'yyyy-MM-dd HH:mm:ss').getTime() + (ms - whole));
+}
+let SHEET_TZ_ = '';
+function sheetTz_() { return SHEET_TZ_ || (SHEET_TZ_ = SpreadsheetApp.getActive().getSpreadsheetTimeZone() || tz_()); }
 
 
 /* ============================== Orders ============================== */
@@ -1195,24 +1263,30 @@ function adminLoad() {
   const lap = (name) => { const now = Date.now(); parts.push([name, now - last]); last = now; };
   requireOwner_();
   lap('Checking who you are');
-  const cfg = buildConfig_(true);
-  lap('Settings and booking counts');
-  const draft = getDraft_();
-  lap('Unsaved changes (Draft tab)');
-  const orders = readOrders_();
-  lap('Orders');
-  const messages = readMessages_();
-  lap('Messages');
-  const codes = readCodes_();
-  lap('Promo & gift codes');
-  const out = {
-    config: cfg, stamp: settingsStamp_(cfg), draft: draft, health: healthState_(),
-    orders: orders, messages: messages, weekCounts: cfg.weekCounts, codes: codes,
-    sheetUrl: SpreadsheetApp.getActive().getUrl(), today: todayISO_()
-  };
-  lap('Health check and the rest');
-  out.timing = { parts: parts, total: Date.now() - started, orders: orders.length, messages: messages.length };
-  return out;
+  const how = preloadTabs_(ADMIN_TABS);
+  lap('Reading the Sheet (' + how + ')');
+  try {
+    const cfg = buildConfig_(true);
+    lap('Settings and booking counts');
+    const draft = getDraft_();
+    lap('Unsaved changes (Draft tab)');
+    const orders = readOrders_();
+    lap('Orders');
+    const messages = readMessages_();
+    lap('Messages');
+    const codes = readCodes_();
+    lap('Promo & gift codes');
+    const out = {
+      config: cfg, stamp: settingsStamp_(cfg), draft: draft, health: healthState_(),
+      orders: orders, messages: messages, weekCounts: cfg.weekCounts, codes: codes,
+      sheetUrl: SpreadsheetApp.getActive().getUrl(), today: todayISO_()
+    };
+    lap('Health check and the rest');
+    out.timing = { parts: parts, total: Date.now() - started, orders: orders.length, messages: messages.length };
+    return out;
+  } finally {
+    TAB_CACHE_ = null;
+  }
 }
 
 // Cookies per upcoming week (see bookingCounts_), for the admin after an order changes.
@@ -1382,7 +1456,7 @@ function readOrders_() {
   const ss = SpreadsheetApp.getActive();
   const items = {};
   const ish = ss.getSheetByName('OrderItems');
-  const ih = ish.getRange(1, 1, 1, ish.getLastColumn()).getValues()[0];
+  const ih = headerRow_(ish);
   rows_(ish).forEach((r) => {
     const g = (h) => r[ih.indexOf(h)];
     const num = String(g('Order')).trim();
@@ -1410,7 +1484,7 @@ function readOrders_() {
     }, pics));
   });
   const sh = ss.getSheetByName('Orders');
-  const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  const h = headerRow_(sh);
   return rows_(sh).map((r) => orderFromRow_(h, r, items)).filter((o) => o.number).reverse();   // newest first
 }
 
@@ -1709,7 +1783,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-11-09';
+const CODE_VERSION = '2026-11-09b';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
@@ -1820,7 +1894,7 @@ function adminDeleteCode(code) {
 
 function readMessages_() {
   const sh = SpreadsheetApp.getActive().getSheetByName('Messages');
-  const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  const h = headerRow_(sh);
   return rows_(sh).map((r) => {
     const g = (k) => r[h.indexOf(k)];
     const when = g('Received');
