@@ -696,3 +696,18 @@ textarea.input.one-line { min-height: 0; resize: none; line-height: 1.4; }
 .help-a p { margin: 0 0 8px; }
 .help-a ul { margin: 0 0 8px; padding-left: 20px; }
 .help-a li { margin-bottom: 4px; }
+
+/* ---------- Admin: Performance (how long things take) ---------- */
+.perf-total { font-family: var(--serif); font-size: 34px; font-weight: 600; line-height: 1.1; margin: 4px 0 2px; }
+.perf-bars { list-style: none; margin: 12px 0 6px; padding: 0; display: grid; gap: 8px; max-width: 640px; }
+.perf-row { display: grid; grid-template-columns: minmax(130px, 210px) 1fr 52px; gap: 10px; align-items: center; font-size: 14px; }
+.perf-track { background: var(--oat); border-radius: 999px; height: 12px; overflow: hidden; }
+.perf-fill { background: var(--navy-2); height: 100%; border-radius: 999px; min-width: 3px; }
+.perf-row.slowest .perf-fill { background: var(--coral); }
+.perf-row .perf-s { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.perf-row.slowest .perf-s { color: var(--navy); font-weight: 700; }
+.perf-meter { position: relative; background: var(--oat); border-radius: 999px; height: 14px; max-width: 640px; margin: 10px 0 4px; overflow: hidden; }
+.perf-meter .perf-fill { position: absolute; left: 0; top: 0; }
+.perf-meter .perf-fill.warn { background: var(--error); }
+.perf-meter .perf-mark { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--error); opacity: .5; }
+@media (max-width: 600px) { .perf-row { grid-template-columns: 1fr 52px; } .perf-row .perf-track { grid-column: 1 / -1; grid-row: 2; } }

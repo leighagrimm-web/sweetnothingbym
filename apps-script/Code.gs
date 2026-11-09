@@ -1186,16 +1186,33 @@ function shareWithHelpers_() {
   } catch (err) { console.error('Folder share failed', err); }
 }
 
-// Everything the admin page shows.
+// Everything the admin page shows. timing.parts says how long each part took ([name, ms], in order), for the
+// admin's Performance section.
 function adminLoad() {
+  const started = Date.now();
+  let last = started;
+  const parts = [];
+  const lap = (name) => { const now = Date.now(); parts.push([name, now - last]); last = now; };
   requireOwner_();
+  lap('Checking who you are');
   const cfg = buildConfig_(true);
+  lap('Settings and booking counts');
   const draft = getDraft_();
-  return {
+  lap('Unsaved changes (Draft tab)');
+  const orders = readOrders_();
+  lap('Orders');
+  const messages = readMessages_();
+  lap('Messages');
+  const codes = readCodes_();
+  lap('Promo & gift codes');
+  const out = {
     config: cfg, stamp: settingsStamp_(cfg), draft: draft, health: healthState_(),
-    orders: readOrders_(), messages: readMessages_(), weekCounts: cfg.weekCounts, codes: readCodes_(),
+    orders: orders, messages: messages, weekCounts: cfg.weekCounts, codes: codes,
     sheetUrl: SpreadsheetApp.getActive().getUrl(), today: todayISO_()
   };
+  lap('Health check and the rest');
+  out.timing = { parts: parts, total: Date.now() - started, orders: orders.length, messages: messages.length };
+  return out;
 }
 
 // Cookies per upcoming week (see bookingCounts_), for the admin after an order changes.
@@ -1692,7 +1709,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-11-04';
+const CODE_VERSION = '2026-11-09';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
@@ -2595,6 +2612,21 @@ function sendHealthAllClear_(cfg, fixed) {
     body: ['All clear. These are fixed now:'].concat(fixed.map((x) => '• ' + x.title)).join('\n'),
     name: cfg.senderName
   });
+}
+
+/* ----- Admin: Performance tab ----- */
+
+// The background numbers for the Performance tab. Quick: no QuickBooks or Square calls.
+function adminPerformance() {
+  requireOwner_();
+  const p = SCRIPT_PROPS();
+  const rt = JSON.parse(p.getProperty('RUNTIME') || '{}');
+  return {
+    lastCheck: JSON.parse(p.getProperty('PAYMENTS_LAST_CHECK') || 'null'),
+    runtime: { today: rt.day === todayISO_() ? rt.ms || 0 : 0, yesterday: rt.day === todayISO_() ? rt.prevMs || 0 : rt.ms || 0,
+      warnMin: RUNTIME_WARN_MIN, limitMin: 90 },
+    payEvery: PAY_CHECK_EVERY, payDayHours: PAY_DAY_HOURS
+  };
 }
 
 /* ----- Admin: Payments tab ----- */

@@ -66,7 +66,7 @@
             '<div class="row-gap" style="gap:10px"><button type="button" class="btn ghost" data-preview>Preview changes</button><button type="button" class="btn" data-save>Save changes</button></div>' +
           '</div>' +
           sectionDashboard() + sectionOrders() + sectionMessages() + sectionCodes() + sectionPayments() + sectionCustom() + sectionArtisan() + sectionRules() + sectionZones() + sectionFaq() +
-          sectionPages() + sectionEvents() + sectionGallery() + sectionSettings() + sectionHelp() + sectionWhatsNew() +
+          sectionPages() + sectionEvents() + sectionGallery() + sectionSettings() + sectionHelp() + sectionWhatsNew() + sectionPerformance() +
         '</main>' +
       '</div>' +
       '<div class="scrim" id="scrim"></div>' +
@@ -103,7 +103,8 @@
     ['Orders &amp; messages', [['dashboard', 'Dashboard'], ['orders', 'Orders'], ['messages', 'Messages'], ['codes', 'Promo &amp; gift codes'], ['payments', 'Payments']]],
     ['Shop settings', [['custom', 'Custom pricing'], ['artisan', 'Artisan &amp; flavors'], ['rules', 'Ordering rules'], ['zones', 'Drop-off zones'],
       ['faq', 'FAQ'], ['pages', 'Website pages'], ['events', 'Events'], ['gallery', 'Gallery'], ['settings', 'Contact &amp; pickup']]],
-    ['Help', [['help', 'How things work'], ['whatsnew', 'What’s new']]]
+    ['Help', [['help', 'How things work'], ['whatsnew', 'What’s new']]],
+    ['Behind the scenes', [['performance', 'Performance']]]
   ];
   const TAB_IDS = TAB_GROUPS.reduce((a, g) => a.concat(g[1].map((t) => t[0])), []);
 
@@ -111,9 +112,10 @@
     if (location.hash === '#past') { ordersView = 'past'; history.replaceState(null, '', '#orders'); renderOrders(); }
     const id = TAB_IDS.indexOf(location.hash.slice(1)) !== -1 ? location.hash.slice(1) : 'dashboard';
     $$('.admin-main > .panel-card').forEach((s) => { s.hidden = s.id !== id; });
-    $('#settings-title').hidden = ['dashboard', 'orders', 'messages', 'codes', 'payments', 'help', 'whatsnew'].indexOf(id) !== -1;
+    $('#settings-title').hidden = ['dashboard', 'orders', 'messages', 'codes', 'payments', 'help', 'whatsnew', 'performance'].indexOf(id) !== -1;
     if (id === 'whatsnew') markReleasesSeen();
     if (id === 'payments' && !payInfo) loadPayments();
+    if (id === 'performance') loadPerformance();
     $$('.admin-nav a').forEach((a) => { if (a.dataset.tab === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     $$('[data-tabbar]').forEach((a) => {
       const on = a.dataset.tabbar === id || (a.dataset.tabbar === 'more' && ['dashboard', 'orders', 'messages'].indexOf(id) === -1);
@@ -439,6 +441,14 @@
           "a": [
             "The website was updated but the Sheet’s code wasn’t yet. Nothing is lost; let Leigha know."
           ]
+        },
+        {
+          "q": "The admin feels slow",
+          "a": [
+            "**Performance** (under Behind the scenes) shows how long the admin took to open and which part took longest, how long the last payment check took, and how much of Google’s free daily time the checks used.",
+            "The first open after an update is always slower. If it stays slow, take a screenshot of Performance and send it to Leigha."
+          ],
+          "go": "performance"
         }
       ]
     },
@@ -490,6 +500,9 @@
   // Newest first. Add an entry with each update (id = the date it went live, plus a letter for a second one that day);
   // "go" links to the admin tab it's about.
   const RELEASES = [
+    { id: '2026-11-09', title: 'See what’s slow', items: [
+      { t: 'Performance', d: 'A new Performance tab (under Behind the scenes) shows how long the admin took to open, broken down by part with the slowest in color, plus how long the last payment check took and how much of Google’s free daily time the checks used. If the admin ever feels slow, a screenshot of it tells Leigha why.', go: 'performance' }
+    ] },
     { id: '2026-11-04', title: 'Payment checks, less often', items: [
       { t: 'Every 15 minutes by day', d: 'The site now checks QuickBooks and Square every 15 minutes from 7 AM to 10 PM, and once an hour overnight (it was every 5 minutes, all day and night). That keeps it well inside Google’s daily limit. Customers paying for a class are still confirmed the moment they finish checkout. Waiting on an invoice to show Paid? Tap Check now on Payments.', go: 'payments' },
       { t: 'How long each check takes', d: 'Payments shows how long the last check took and which part was slowest, and each check is quicker: an invoice is only saved again when QuickBooks shows a change.', go: 'payments' }
@@ -1245,7 +1258,9 @@
 
   // Reload orders (not settings, so unsaved setting edits stay) and redraw.
   function refreshOrders() {
+    const t0 = Date.now();
     return server('adminLoad').then((d) => {
+      const ms = Date.now() - t0;
       orders = d.orders;
       sortOrders();
       weekCounts = d.weekCounts || {};
@@ -1259,6 +1274,8 @@
       renderOrders(); renderMessages(); renderCodes(); renderBusyDays(); renderDashboard();
       // An open order panel shows the fresh status and QuickBooks balance too (its typed text lives in rv, so it's kept).
       if (rv && orders.some((x) => x.number === rv.number)) renderReview();
+      loadTimes.latest = { at: new Date(), ms: ms, timing: d.timing, drawMs: Date.now() - t0 - ms };
+      renderPerformance();
     });
   }
 
@@ -1989,6 +2006,80 @@
         '<span class="hint" style="margin:0">Checked ' + esc(healthWhen(health.at)) + '</span></div></div>';
   }
 
+  /* ---------- Performance: how long things take behind the scenes ---------- */
+  // How long this admin took to open (first) and to refresh its orders (latest), measured here in the browser.
+  // timing comes from the server's adminLoad; Code.gs older than 2026-11-09 sends none.
+  const loadTimes = { first: null, latest: null };
+  let perfInfo = null;      // from adminPerformance: the last payment check and Google's daily time
+  function sectionPerformance() {
+    return card('performance', 'Performance', 'How long things take behind the scenes, so it’s easy to see what’s slow and why. The first open after an update is always slower.',
+      '<div id="perf-box"><p class="muted">Loading…</p></div>');
+  }
+  function loadPerformance() {
+    renderPerformance();
+    return server('adminPerformance').then((d) => { perfInfo = d; }, (err) => { perfInfo = { error: String(err && err.message ? err.message : err) }; })
+      .then(renderPerformance);
+  }
+  const secs = (ms) => (ms < 100 ? '<0.1s' : (ms / 1000).toFixed(1) + 's');
+  // Horizontal bars, slowest first (the slowest in coral). rows = [[label, ms], ...]; parts under 0.05s are left out.
+  function perfBars(rows) {
+    const shown = rows.filter((r) => r[1] >= 50).sort((a, b) => b[1] - a[1]);
+    const max = Math.max.apply(null, shown.map((r) => r[1]).concat(1));
+    return '<ul class="perf-bars">' + shown.map((r, i) => '<li class="perf-row' + (i === 0 ? ' slowest' : '') + '"><span>' + esc(r[0]) + '</span>' +
+      '<span class="perf-track" aria-hidden="true"><span class="perf-fill" style="display:block;width:' + (r[1] / max * 100).toFixed(1) + '%"></span></span>' +
+      '<span class="perf-s">' + secs(r[1]) + '</span></li>').join('') + '</ul>';
+  }
+  // One admin open or refresh: the browser's own start-up, each part on the server, Google's start-up and the trip
+  // there and back (the call's time minus the server's), and drawing the screen.
+  function loadRows(t) {
+    const rows = [];
+    if (t.pageMs) rows.push(['Loading the admin page', t.pageMs]);
+    if (t.timing) {
+      t.timing.parts.forEach((p) => rows.push([p[0], p[1]]));
+      rows.push(['Google start-up and network', Math.max(0, t.ms - t.timing.total)]);
+    } else rows.push(['Google (the breakdown needs the newest Code.gs)', t.ms]);
+    if (t.drawMs) rows.push(['Drawing the screen', t.drawMs]);
+    return rows;
+  }
+  const loadTotal = (t) => loadRows(t).reduce((n, r) => n + r[1], 0);
+  function renderPerformance() {
+    const box = $('#perf-box');
+    if (!box) return;
+    const at = (d) => new Date(d).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const f = loadTimes.first, l = loadTimes.latest;
+    let html = '<h3 class="rv-h" style="margin-top:0">Opening the admin</h3>';
+    html += f
+      ? '<p class="perf-total">' + secs(loadTotal(f)) + '</p><p class="hint" style="margin:0">This visit, opened ' + esc(at(f.at)) +
+          (f.timing ? ' · ' + f.timing.orders + ' orders and ' + f.timing.messages + ' messages in the Sheet' : '') + '</p>' + perfBars(loadRows(f))
+      : '<p class="muted">Still opening…</p>';
+    if (l) html += '<p style="margin:14px 0 0"><strong>Latest refresh: ' + secs(loadTotal(l)) + '</strong> <span class="hint" style="margin:0">' + esc(at(l.at)) +
+      '. The admin fetches new orders and messages every 2 minutes and when you come back to it.</span></p>' + perfBars(loadRows(l));
+    const p = perfInfo;
+    if (!p) html += '<p class="muted" style="margin-top:18px">Loading the payment check…</p>';
+    else if (p.error) {
+      html += '<p class="hint" style="margin-top:18px">' + (/adminPerformance/.test(p.error)
+        ? 'The payment check and Google’s daily time show here once the newest Code.gs is in the Sheet.'
+        : 'Couldn’t get the payment check numbers: ' + esc(p.error)) + '</p>';
+    } else {
+      const lc = p.lastCheck;
+      html += '<h3 class="rv-h">Payment check</h3>';
+      html += lc && lc.ms
+        ? '<p class="perf-total">' + secs(lc.ms) + '</p><p class="hint" style="margin:0">The last check, ' + esc(at(lc.at)) + '. It runs every ' + p.payEvery + ' minutes from 7 AM to 10 PM and once an hour overnight.</p>' +
+          (lc.steps ? perfBars([['Reading the Sheet', lc.steps.sheet], ['QuickBooks invoices', lc.steps.quickbooks], ['Square class payments', lc.steps.square], ['Reminders and emails', lc.steps.reminders]]) : '')
+        : '<p class="muted">No timed check yet. Payments → Check now runs one.</p>';
+      const rt = p.runtime, mins = (ms) => Math.round(ms / 60000);
+      const meter = (ms) => '<div class="perf-meter" role="img" aria-label="' + mins(ms) + ' of ' + rt.limitMin + ' minutes">' +
+        '<span class="perf-fill' + (mins(ms) >= rt.warnMin ? ' warn' : '') + '" style="display:block;width:' + Math.min(100, ms / 60000 / rt.limitMin * 100).toFixed(1) + '%"></span>' +
+        '<span class="perf-mark" style="left:' + (rt.warnMin / rt.limitMin * 100) + '%"></span></div>';
+      html += '<h3 class="rv-h">Google’s free daily time</h3>' +
+        '<p>Google gives a free account about ' + rt.limitMin + ' minutes a day for scheduled jobs like the payment check. The health check warns you at ' + rt.warnMin + ' minutes (the line).</p>' +
+        '<p style="margin:10px 0 0"><strong>Yesterday: ' + mins(rt.yesterday) + ' min</strong></p>' + meter(rt.yesterday) +
+        '<p style="margin:10px 0 0"><strong>Today so far: ' + mins(rt.today) + ' min</strong></p>' + meter(rt.today);
+    }
+    html += '<div class="row-gap" style="gap:8px;margin-top:16px"><button type="button" class="btn ghost small" data-perf="refresh">Measure again</button></div>';
+    box.innerHTML = html;
+  }
+
   /* ---------- Payments: QuickBooks (cookie invoices) and Square (class checkout) ---------- */
   let payInfo = null;       // from adminPayments; loaded the first time the tab opens (it calls QuickBooks and Square)
   function sectionPayments() {
@@ -2029,9 +2120,8 @@
           lc.classesPaid.length ? lc.classesPaid.length + ' class booking' + (lc.classesPaid.length > 1 ? 's' : '') + ' paid' : '',
           lc.expired.length ? lc.expired.length + ' expired' : '',
           lc.completed && lc.completed.length ? lc.completed.length + ' past order' + (lc.completed.length > 1 ? 's' : '') + ' marked Completed' : ''].filter(Boolean).join(', ').replace(/^$/, 'nothing new') + '.' +
-        // How long it took (Google allows about 90 minutes of these a day: 288 checks, so about 18 seconds each).
-        (lc.ms ? ' <span class="hint" style="margin:0">Took ' + (lc.ms / 1000).toFixed(1) + 's' + (lc.steps ? ' (' + [['sheet', 'reading the Sheet'], ['quickbooks', 'QuickBooks'], ['square', 'Square'], ['reminders', 'reminders and emails']]
-          .filter((s) => lc.steps[s[0]] >= 100).map((s) => s[1] + ' ' + (lc.steps[s[0]] / 1000).toFixed(1) + 's').join(', ') + ')' : '') + '.</span>' : '') +
+        // How long it took is on the Performance tab.
+        (lc.ms ? ' <a class="link-btn" href="#performance" target="_self" style="padding:0">How long it took</a>' : '') +
         (lc.errors.length ? ' <span class="err">' + esc(lc.errors.join(' · ')) + '</span>' : '')
       : 'No check has run yet.';
     $('#pay-box').innerHTML =
@@ -2610,6 +2700,7 @@
       if (db) { onDashClick(db); return; }
       const pb = e.target.closest('[data-pay]');
       if (pb) { onPayClick(pb); return; }
+      if (e.target.closest('[data-perf]')) { refreshOrders().then(loadPerformance, failed); return; }
       const mb = e.target.closest('[data-msg]');
       if (mb) { onMessageClick(mb); return; }
       const ab = e.target.closest('[data-act]');
@@ -2692,7 +2783,10 @@
 
   /* ---------- Start ---------- */
   function load() {
+    const pageMs = Math.round(performance.now());
+    const t0 = Date.now();
     return server('adminLoad').then((d) => {
+      const ms = Date.now() - t0;
       cfg = d.config;
       base = cleaned(cfg);
       stamp = d.stamp;
@@ -2722,6 +2816,8 @@
       dashRefreshed = new Date();
       renderDashboard();
       renderHealth();
+      loadTimes.first = { at: new Date(), pageMs: pageMs, ms: ms, timing: d.timing, drawMs: Date.now() - t0 - ms };
+      renderPerformance();
     });
   }
   load().catch((err) => {
