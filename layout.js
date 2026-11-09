@@ -73,7 +73,7 @@
     if (footer) {
       footer.innerHTML =
         '<footer class="site-footer"><div class="wrap">' +
-          '<span>© Sweet Nothings by M · Pickup in ' + SN.esc(cfg.pickupCity) + '</span>' +
+          '<span>© Sweet Nothings by M · Pickup in ' + SN.esc(cfg.pickupCity) + ' · Built by <a class="site-credit" href="https://plumperfectstudio.com" target="_blank" rel="noopener">Plum Perfect Web Studio</a></span>' +
           '<nav aria-label="Footer">' +
             '<a href="' + SN.esc(cfg.instagram) + '" target="_blank" rel="noopener">Instagram ' + SN.esc(cfg.instagramHandle) + '</a>' +
             (shown(cfg, 'faq') ? '<a href="faq.html">FAQ</a>' : '') +
@@ -82,7 +82,6 @@
             '<a href="terms.html">Terms</a>' +
             '<a href="admin.html">Owner admin</a>' +
           '</nav>' +
-          '<p class="site-credit">Built by <a href="https://plumperfectstudio.com" target="_blank" rel="noopener">Plum Perfect Web Studio</a></p>' +
         '</div></footer>';
     }
   }

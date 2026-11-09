@@ -296,10 +296,9 @@ body.locked .toast { z-index: 60; }
 
 /* ---------- Footer ---------- */
 .site-footer { background: var(--white); border-top: 1px solid #EADFD8; }
-.site-footer .wrap { padding-top: 28px; padding-bottom: 28px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--muted); }
+.site-footer .wrap { padding-top: 18px; padding-bottom: 18px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--muted); }
 .site-footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
-.site-credit { flex-basis: 100%; margin: 4px 0 0; font-size: 12.5px; }
-.site-credit a { color: inherit; }
+.site-credit { color: inherit; }
 
 /* ---------- Admin ---------- */
 .admin-header { background: var(--navy); color: var(--white); }
