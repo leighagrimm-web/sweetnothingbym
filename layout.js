@@ -82,6 +82,7 @@
             '<a href="terms.html">Terms</a>' +
             '<a href="admin.html">Owner admin</a>' +
           '</nav>' +
+          '<p class="site-credit">Built by <a href="https://plumperfectstudio.com" target="_blank" rel="noopener">Plum Perfect Web Studio</a></p>' +
         '</div></footer>';
     }
   }
