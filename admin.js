@@ -2057,7 +2057,7 @@
     const p = perfInfo;
     if (!p) html += '<p class="muted" style="margin-top:18px">Loading the payment check…</p>';
     else if (p.error) {
-      html += '<p class="hint" style="margin-top:18px">' + (/adminPerformance/.test(p.error)
+      html += '<p class="hint" style="margin-top:18px">' + (/adminPerformance|reading 'apply'|not a function/.test(p.error)
         ? 'The payment check and Google’s daily time show here once the newest Code.gs is in the Sheet.'
         : 'Couldn’t get the payment check numbers: ' + esc(p.error)) + '</p>';
     } else {
