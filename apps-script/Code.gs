@@ -198,6 +198,8 @@ const STARTER_PAGES = [
   ['aboutGoodToKnow', '[Allergen note, e.g. "Cookies are made in a kitchen that also handles nuts, dairy, eggs and wheat."]\n\n[Storage tips: how long cookies stay fresh and how to keep them.]', 'About page: second section text'],
   ['eventsTitle', 'Decorating classes, private parties & pop-ups', 'Events & Parties page: big heading'],
   ['eventsIntro', 'Join a decorating class, book a private cookie party for a birthday, shower or girls’ night, or find me at a pop-up. Follow along on Instagram for the latest dates.', 'Events & Parties page: text under the heading'],
+  ['nextClassTitle', 'Next cookie decorating class', 'Events & Parties page: heading of the "coming soon" card that replaces a class once its date has passed (until the next class is added)'],
+  ['nextClassText', 'New dates coming soon! Message me to hear first when the next class is scheduled.', 'Events & Parties page: text on that "coming soon" card'],
   ['galleryTitle', 'Past creations', 'Gallery page: big heading'],
   ['galleryIntro', 'A peek at cookies made for birthdays, showers, weddings and more. See the newest work on Instagram.', 'Gallery page: text under the heading']
 ];
@@ -1794,7 +1796,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-11-21b';
+const CODE_VERSION = '2026-11-21c';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);

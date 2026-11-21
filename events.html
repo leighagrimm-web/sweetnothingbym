@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261121b">
+<link rel="stylesheet" href="styles.css?v=20261121c">
 </head>
 <body data-page="events">
 <div id="site-header"></div>
@@ -31,9 +31,9 @@
   </section>
 </main>
 <div id="site-footer"></div>
-<script src="config.js?v=20261121b"></script>
-<script src="layout.js?v=20261121b"></script>
-<script src="order.js?v=20261121b"></script>
+<script src="config.js?v=20261121c"></script>
+<script src="layout.js?v=20261121c"></script>
+<script src="order.js?v=20261121c"></script>
 <script>
 // Heading from the Sheet's Pages tab; one card per row on the Events tab. Anything left blank doesn't show.
 // Classes ("Add to bag") show spots left and go in the bag, booked and paid at checkout with no approval needed.
@@ -99,8 +99,19 @@ SN.ready.then(function () {
     '</article>';
   }
 
+  // Once a class's date has passed and no other class is coming up, its card becomes a "next class coming soon"
+  // card (same photo, wording from the Pages tab) until Melissa adds the next one. Other past classes are hidden.
+  const isPast = (ev) => isClass(ev) && ev.date && ev.date < today;
+  const events = cfg.events || [];
+  const latestPast = events.some((ev) => isClass(ev) && !isPast(ev)) ? null
+    : events.filter(isPast).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  const shownEvents = events.filter((ev) => !isPast(ev) || ev === latestPast).map((ev) => (ev !== latestPast ? ev : {
+    id: ev.id + '-next', title: cfg.pages.nextClassTitle || 'Next cookie decorating class', when: 'Coming soon', photo: ev.photo,
+    summary: cfg.pages.nextClassText || 'New dates coming soon! Message me to hear first when the next class is scheduled.', desc: '', button: 'Message me'
+  }));
+
   const list = document.getElementById('events');
-  list.innerHTML = (cfg.events || []).map(card).join('') || '<p class="muted">No events right now. Follow along on Instagram for the next one.</p>';
+  list.innerHTML = shownEvents.map(card).join('') || '<p class="muted">No events right now. Follow along on Instagram for the next one.</p>';
 
   // Details panel (slides in like the bag) and the full-size flyer view.
   document.body.insertAdjacentHTML('beforeend',

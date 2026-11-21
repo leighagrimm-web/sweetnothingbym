@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261121b';
+const SN_BUILD = '20261121c';
 
 const SN_ENV = (function () {
   const API = {
@@ -123,6 +123,8 @@ const SN_DEFAULTS = {
     aboutGoodToKnowHeading: 'Good to know',
     aboutGoodToKnow: '[Allergen note, e.g. "Cookies are made in a kitchen that also handles nuts, dairy, eggs and wheat."]\n\n[Storage tips: how long cookies stay fresh and how to keep them.]',
     eventsTitle: 'Decorating classes, private parties & pop-ups',
+    nextClassTitle: 'Next cookie decorating class',
+    nextClassText: 'New dates coming soon! Message me to hear first when the next class is scheduled.',
     eventsIntro: 'Join a decorating class, book a private cookie party for a birthday, shower or girls’ night, or find me at a pop-up. Follow along on Instagram for the latest dates.',
     galleryTitle: 'Past creations',
     galleryIntro: 'A peek at cookies made for birthdays, showers, weddings and more. See the newest work on Instagram.'

@@ -683,7 +683,8 @@
     ['Menu photos (Home and Order pages)', [['photoCustom', 'Custom Cookies photo', 'photo'], ['photoMini', 'Mini Artisan photo', 'photo'], ['photoLarge', 'Large Artisan photo', 'photo']]],
     ['About page', [['aboutTitle', 'Big heading'], ['aboutIntro', 'Text under the heading', 'area'], ['aboutPhoto', 'Photo', 'photo'],
       ['aboutStoryHeading', 'First section heading'], ['aboutStory', 'First section text', 'long'], ['aboutGoodToKnowHeading', 'Second section heading'], ['aboutGoodToKnow', 'Second section text', 'long']]],
-    ['Events & Parties page', [['eventsTitle', 'Big heading'], ['eventsIntro', 'Text under the heading', 'area']]],
+    ['Events & Parties page', [['eventsTitle', 'Big heading'], ['eventsIntro', 'Text under the heading', 'area'],
+      ['nextClassTitle', '“Coming soon” card heading (shows after a class’s date, until the next class is added)'], ['nextClassText', '“Coming soon” card text', 'area']]],
     ['Gallery page', [['galleryTitle', 'Big heading'], ['galleryIntro', 'Text under the heading', 'area']]]
   ];
   // Pages that can be taken out of the website's menu (Settings: showAbout etc.).
