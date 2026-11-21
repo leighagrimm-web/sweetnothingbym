@@ -359,7 +359,7 @@
           "q": "Showing or hiding pages, and maintenance mode",
           "go": "pages",
           "a": [
-            "On Website pages, switch About, Classes & Parties, Gallery or FAQ off to hide them. **Maintenance mode** closes the whole site with a message; set a password so you can still get in to check it."
+            "On Website pages, switch About, Events & Parties, Gallery or FAQ off to hide them. **Maintenance mode** closes the whole site with a message; set a password so you can still get in to check it."
           ]
         },
         {
@@ -679,17 +679,17 @@
   // Website wording (Pages tab), grouped by page.
   const PAGE_FIELDS = [
     ['Home page', [['homeTitle', 'Big heading'], ['homeIntro', 'Text under the heading', 'area'], ['homeHeroPhoto', 'Main photo', 'photo'],
-      ['homeMakeIntro', 'Line under "What I make"', 'area'], ['homeEventsLine', 'Classes, parties and pop-ups line (links to Classes & Parties)', 'area']]],
+      ['homeMakeIntro', 'Line under "What I make"', 'area'], ['homeEventsLine', 'Classes, parties and pop-ups line (links to Events & Parties)', 'area']]],
     ['Menu photos (Home and Order pages)', [['photoCustom', 'Custom Cookies photo', 'photo'], ['photoMini', 'Mini Artisan photo', 'photo'], ['photoLarge', 'Large Artisan photo', 'photo']]],
     ['About page', [['aboutTitle', 'Big heading'], ['aboutIntro', 'Text under the heading', 'area'], ['aboutPhoto', 'Photo', 'photo'],
       ['aboutStoryHeading', 'First section heading'], ['aboutStory', 'First section text', 'long'], ['aboutGoodToKnowHeading', 'Second section heading'], ['aboutGoodToKnow', 'Second section text', 'long']]],
-    ['Classes & Parties page', [['eventsTitle', 'Big heading'], ['eventsIntro', 'Text under the heading', 'area']]],
+    ['Events & Parties page', [['eventsTitle', 'Big heading'], ['eventsIntro', 'Text under the heading', 'area']]],
     ['Gallery page', [['galleryTitle', 'Big heading'], ['galleryIntro', 'Text under the heading', 'area']]]
   ];
   // Pages that can be taken out of the website's menu (Settings: showAbout etc.).
-  const PAGE_SWITCHES = [['showAbout', 'About'], ['showEvents', 'Classes & Parties'], ['showGallery', 'Gallery'], ['showFaq', 'FAQ']];
+  const PAGE_SWITCHES = [['showAbout', 'About'], ['showEvents', 'Events & Parties'], ['showGallery', 'Gallery'], ['showFaq', 'FAQ']];
   function sectionPages() {
-    return card('pages', 'Website pages', 'Headings, text and photos on the Home, About, Classes & Parties and Gallery pages. In longer text, leave a blank line to start a new paragraph.',
+    return card('pages', 'Website pages', 'Headings, text and photos on the Home, About, Events & Parties and Gallery pages. In longer text, leave a blank line to start a new paragraph.',
       '<div class="maint-admin">' +
         '<div class="row-gap" style="gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">' +
           '<div><h3 style="font-size:22px;margin:0 0 4px" id="maint-label">Maintenance mode</h3>' +
@@ -731,7 +731,7 @@
       '<p class="hint">' + PHOTO_HINT + '</p></div>';
   }
   function sectionEvents() {
-    return card('events', 'Classes & Parties', 'One card per class, party or event on the Classes & Parties page, in this order. Anything left blank doesn\'t show. For a class people book and pay for at checkout, set the button to <strong>Add to bag</strong> and fill in a price; add <strong>Max attendees</strong> to show spots left. Hide a card to take it off the page without deleting it.',
+    return card('events', 'Events & Parties', 'One card per class, party or event on the Events & Parties page, in this order. Anything left blank doesn\'t show. For a class people book and pay for at checkout, set the button to <strong>Add to bag</strong> and fill in a price; add <strong>Max attendees</strong> to show spots left. Hide a card to take it off the page without deleting it.',
       '<div class="fields" style="margin-bottom:18px">' +
         field('classHoldMinutes', 'Hold a class spot while they pay', numInput('classHoldMinutes', 'min="10" max="240" step="5"', '', 'minutes', 'int'), 'With Square connected, unpaid bookings expire after this and the spot opens up again.') +
       '</div>' +
@@ -2373,7 +2373,7 @@
   }
 
   const HOME_LINKS = [['mini', 'Mini Artisan (Order)'], ['large', 'Large Artisan (Order)'], ['custom', 'Custom Cookies (Order)'], ['order', 'Order page'],
-    ['events', 'Classes & Parties'], ['contact', 'Contact page'], ['message', '"Message me" pop-up']];
+    ['events', 'Events & Parties'], ['contact', 'Contact page'], ['message', '"Message me" pop-up']];
   function renderHomeItems() {
     if (!Array.isArray(cfg.homeItems)) cfg.homeItems = [];
     const n = cfg.homeItems.length;
@@ -2562,9 +2562,9 @@
   // What changed in this tab since the settings were loaded or saved.
   const changedKeys = (c) => Object.keys(Object.assign({}, c, base)).filter((k) => !same(c[k], base[k]));
   // Plain names for settings, for "someone else changed …".
-  const SETTING_NAMES = { flavors: 'artisan flavors', blockedRanges: 'blocked dates', zones: 'drop-off zones', faqs: 'the FAQ', events: 'Classes & Parties',
+  const SETTING_NAMES = { flavors: 'artisan flavors', blockedRanges: 'blocked dates', zones: 'drop-off zones', faqs: 'the FAQ', events: 'Events & Parties',
     gallery: 'the gallery', homeItems: 'the home page list', homeSlides: 'the home page slideshow', pages: 'page photos', acceptingOrders: 'taking orders on/off',
-    maintenanceMode: 'maintenance mode', showAbout: 'showing the About page', showEvents: 'showing Classes & Parties', showGallery: 'showing the Gallery', showFaq: 'showing the FAQ' };
+    maintenanceMode: 'maintenance mode', showAbout: 'showing the About page', showEvents: 'showing Events & Parties', showGallery: 'showing the Gallery', showFaq: 'showing the FAQ' };
   function settingName(k) {
     if (SETTING_NAMES[k]) return SETTING_NAMES[k];
     const el = $('[data-path="' + k + '"]');

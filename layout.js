@@ -4,7 +4,7 @@
   const links = [
     ['order', 'order.html', 'Order'],
     ['about', 'about.html', 'About'],
-    ['events', 'events.html', 'Classes & Parties'],
+    ['events', 'events.html', 'Events & Parties'],
     ['gallery', 'gallery.html', 'Gallery'],
     ['faq', 'faq.html', 'FAQ'],
     ['contact', 'contact.html', 'Contact']

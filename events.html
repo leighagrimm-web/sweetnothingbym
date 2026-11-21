@@ -16,13 +16,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261121a">
+<link rel="stylesheet" href="styles.css?v=20261121b">
 </head>
 <body data-page="events">
 <div id="site-header"></div>
 <main>
   <section class="hero wrap">
-    <p class="eyebrow">Classes &amp; parties</p>
+    <p class="eyebrow">Special events</p>
     <h1 id="events-title"></h1>
     <p class="lead" id="events-intro"></p>
   </section>
@@ -31,9 +31,9 @@
   </section>
 </main>
 <div id="site-footer"></div>
-<script src="config.js?v=20261121a"></script>
-<script src="layout.js?v=20261121a"></script>
-<script src="order.js?v=20261121a"></script>
+<script src="config.js?v=20261121b"></script>
+<script src="layout.js?v=20261121b"></script>
+<script src="order.js?v=20261121b"></script>
 <script>
 // Heading from the Sheet's Pages tab; one card per row on the Events tab. Anything left blank doesn't show.
 // Classes ("Add to bag") show spots left and go in the bag, booked and paid at checkout with no approval needed.
@@ -74,7 +74,7 @@ SN.ready.then(function () {
   };
   const otherButtons = (ev) =>
     (ev.button === 'Order now' ? '<a class="btn" href="order.html">Order now</a>' : '') +
-    (ev.button === 'Message me' ? '<button type="button" class="btn ghost" data-quick-message="Classes, parties or events">Message me</button>' : '');
+    (ev.button === 'Message me' ? '<button type="button" class="btn ghost" data-quick-message="Events, classes or parties">Message me</button>' : '');
   // Details is worth opening when there's more than the card shows: the full description, an address or a flyer.
   const hasDetails = (ev) => !!(ev.flyer || ev.address || (ev.desc && (ev.summary || ev.desc.length > 140)));
   const mapLink = (ev) => (ev.address ? '<a href="' + esc(SN.mapsUrl(ev)) + '" target="_blank" rel="noopener">' + esc(ev.address) + '</a>' : '');
