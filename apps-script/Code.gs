@@ -118,7 +118,7 @@ const SETTINGS_SPEC = [
   ['specialText', 'Pumpkin Spice is back in the artisan lineup through the end of the month.', 'text', 'Monthly special message (leave blank for none).'],
   ['specialUntil', '2026-10-31', 'date', 'Last day to show the special (YYYY-MM-DD).'],
   ['showAbout', true, 'bool', 'Show the About page in the menu. FALSE hides it (visits go to the home page).'],
-  ['showEvents', true, 'bool', 'Show the Special Events page in the menu.'],
+  ['showEvents', true, 'bool', 'Show the Classes & Parties page in the menu.'],
   ['showGallery', true, 'bool', 'Show the Gallery page in the menu.'],
   ['showFaq', true, 'bool', 'Show the FAQ page in the menu.'],
   ['pickupCity', 'Rosemont, IL', 'text', 'Shown on the website.'],
@@ -185,7 +185,7 @@ const STARTER_PAGES = [
   ['homeIntro', 'Hand-decorated custom sets for birthdays, showers and celebrations, plus small-batch artisan favorites by the dozen.', 'Home page: text under the heading'],
   ['homeHeroPhoto', '[Hero photo of her cookies]', 'Home page: main photo (photo link)'],
   ['homeMakeIntro', 'Hand-decorated custom sets, small-batch artisan favorites, and kits to decorate at home.', 'Home page: line under "What I make"'],
-  ['homeEventsLine', 'Decorating classes and pop-ups around the northwest suburbs', 'Home page: the classes and pop-ups line under "What I make" (links to Special Events)'],
+  ['homeEventsLine', 'Decorating classes, private parties and pop-ups around the northwest suburbs', 'Home page: the classes, parties and pop-ups line under "What I make" (links to Classes & Parties)'],
   ['photoCustom', '', 'Custom Cookies photo on the Home and Order pages (photo link)'],
   ['photoMini', '', 'Mini Artisan photo on the Home and Order pages (photo link)'],
   ['photoLarge', '', 'Large Artisan photo on the Home and Order pages (photo link)'],
@@ -196,8 +196,8 @@ const STARTER_PAGES = [
   ['aboutStory', '[A few sentences in M\'s own words: how she started baking, what she loves about making cookies for people, and what makes Sweet Nothings special.]\n\n[What customers can expect: how custom orders work, how far ahead to book, and pickup in Rosemont or local drop-off.]', 'About page: first section text'],
   ['aboutGoodToKnowHeading', 'Good to know', 'About page: second section heading'],
   ['aboutGoodToKnow', '[Allergen note, e.g. "Cookies are made in a kitchen that also handles nuts, dairy, eggs and wheat."]\n\n[Storage tips: how long cookies stay fresh and how to keep them.]', 'About page: second section text'],
-  ['eventsTitle', 'Classes, pop-ups & seasonal specials', 'Special Events page: big heading'],
-  ['eventsIntro', 'Limited-time cookies and cookie decorating classes. Follow along on Instagram for the latest dates.', 'Special Events page: text under the heading'],
+  ['eventsTitle', 'Decorating classes, private parties & pop-ups', 'Classes & Parties page: big heading'],
+  ['eventsIntro', 'Join a decorating class, book a private cookie party for a birthday, shower or girls’ night, or find me at a pop-up. Follow along on Instagram for the latest dates.', 'Classes & Parties page: text under the heading'],
   ['galleryTitle', 'Past creations', 'Gallery page: big heading'],
   ['galleryIntro', 'A peek at cookies made for birthdays, showers, weddings and more. See the newest work on Instagram.', 'Gallery page: text under the heading']
 ];
@@ -207,6 +207,7 @@ const EVENT_BUTTONS = ['Add to bag', 'Order now', 'Message me', 'None'];
 const STARTER_EVENTS = [
   { id: 'e1', show: true, title: '[Cookie decorating class]', date: '', start: '', end: '', address: '', price: '', max: '', desc: '[What attendees will make and what\'s included.]', photo: '[Class photo]', when: '', button: 'Add to bag' },
   { id: 'e2', show: true, title: '[Seasonal special]', date: '', start: '', end: '', address: '', price: '', max: '', desc: '[Holiday or seasonal box description. Specials can also be added to the artisan menu from the admin page.]', photo: '[Seasonal cookie photo]', when: '[Available dates]', button: 'Order now' },
+  { id: 'e4', show: true, title: 'Host a cookie decorating party', date: '', start: '', end: '', address: '', price: '', max: '', summary: 'Birthdays, showers, team outings or a night in with friends.', desc: 'I bring the cookies, icing and supplies, and teach everyone as we go. Tell me your date, how many guests and any theme, and I’ll put together a quote.', photo: '', when: '', button: 'Message me' },
   { id: 'e3', show: true, title: 'Planning something bigger?', date: '', start: '', end: '', address: '', price: '', max: '', desc: 'For weddings, corporate gifts or large events, start an order and describe what you have in mind, or send me a message.', photo: '[Event photo]', when: '', button: 'Message me' }
 ];
 // Events tab column for each field above.
@@ -1145,7 +1146,8 @@ function sendOutbox_() {
  * Saves to the Messages tab and emails the owner with reply-to set to the customer.
  */
 
-const MESSAGE_TOPICS = ['General question', 'Custom design idea', 'Allergies or dietary needs', 'Rush order', 'An existing order', 'Special events or classes', 'Other', 'Quick message'];
+const MESSAGE_TOPICS = ['General question', 'Custom design idea', 'Allergies or dietary needs', 'Rush order', 'An existing order', 'Classes, parties or events', 'Other', 'Quick message',
+  'Special events or classes'];   // (the old name, from pages a visitor's browser still has)
 
 function sendMessage_(b) {
   // A retry of a message that already went through (the reply got lost on the way back) gets the same answer
@@ -1169,7 +1171,7 @@ function sendMessageOnce_(b) {
     photos: [], photoNames: [],
     source: b.source === 'quick' ? 'Message me' : 'Contact page'
   };
-  // The "Message me" button can set its own topic (e.g. "Special events or classes"); anything unexpected becomes "Other".
+  // The "Message me" button can set its own topic (e.g. "Classes, parties or events"); anything unexpected becomes "Other".
   if (MESSAGE_TOPICS.indexOf(m.topic) === -1) m.topic = m.topic ? 'Other' : 'Quick message';
 
   const errors = [];
@@ -1792,7 +1794,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-11-09c';
+const CODE_VERSION = '2026-11-21';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);

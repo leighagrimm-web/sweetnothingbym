@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261109d';
+const SN_BUILD = '20261121a';
 
 const SN_ENV = (function () {
   const API = {
@@ -114,7 +114,7 @@ const SN_DEFAULTS = {
     homeIntro: 'Hand-decorated custom sets for birthdays, showers and celebrations, plus small-batch artisan favorites by the dozen.',
     homeHeroPhoto: '[Hero photo of her cookies]',
     homeMakeIntro: 'Hand-decorated custom sets, small-batch artisan favorites, and kits to decorate at home.',
-    homeEventsLine: 'Decorating classes and pop-ups around the northwest suburbs',
+    homeEventsLine: 'Decorating classes, private parties and pop-ups around the northwest suburbs',
     aboutTitle: 'Hi, I\'m Melissa',
     aboutIntro: 'Sweet Nothings by M bakes custom decorated and artisan cookies for the moments worth celebrating.',
     aboutPhoto: '[Photo of M in the kitchen]',
@@ -122,8 +122,8 @@ const SN_DEFAULTS = {
     aboutStory: '[A few sentences in M\'s own words: how she started baking, what she loves about making cookies for people, and what makes Sweet Nothings special.]\n\n[What customers can expect: how custom orders work, how far ahead to book, and pickup in Rosemont or local drop-off.]',
     aboutGoodToKnowHeading: 'Good to know',
     aboutGoodToKnow: '[Allergen note, e.g. "Cookies are made in a kitchen that also handles nuts, dairy, eggs and wheat."]\n\n[Storage tips: how long cookies stay fresh and how to keep them.]',
-    eventsTitle: 'Classes, pop-ups & seasonal specials',
-    eventsIntro: 'Limited-time cookies and cookie decorating classes. Follow along on Instagram for the latest dates.',
+    eventsTitle: 'Decorating classes, private parties & pop-ups',
+    eventsIntro: 'Join a decorating class, book a private cookie party for a birthday, shower or girls’ night, or find me at a pop-up. Follow along on Instagram for the latest dates.',
     galleryTitle: 'Past creations',
     galleryIntro: 'A peek at cookies made for birthdays, showers, weddings and more. See the newest work on Instagram.'
   },
@@ -132,6 +132,7 @@ const SN_DEFAULTS = {
   events: [
     { id: 'e1', title: '[Cookie decorating class]', date: '', start: '', end: '', address: '', price: '', max: '', desc: '[What attendees will make and what\'s included.]', photo: '[Class photo]', when: '', button: 'Add to bag' },
     { id: 'e2', title: '[Seasonal special]', date: '', start: '', end: '', address: '', price: '', max: '', desc: '[Holiday or seasonal box description. Specials can also be added to the artisan menu from the admin page.]', photo: '[Seasonal cookie photo]', when: '[Available dates]', button: 'Order now' },
+    { id: 'e4', title: 'Host a cookie decorating party', date: '', start: '', end: '', address: '', price: '', max: '', summary: 'Birthdays, showers, team outings or a night in with friends.', desc: 'I bring the cookies, icing and supplies, and teach everyone as we go. Tell me your date, how many guests and any theme, and I’ll put together a quote.', photo: '', when: '', button: 'Message me' },
     { id: 'e3', title: 'Planning something bigger?', date: '', start: '', end: '', address: '', price: '', max: '', desc: 'For weddings, corporate gifts or large events, start an order and describe what you have in mind, or send me a message.', photo: '[Event photo]', when: '', button: 'Message me' }
   ],
   gallery: ['Birthday', 'Baby shower', 'Wedding shower', 'Anniversary', 'Holiday', 'Party', 'Artisan box', 'Custom set']
