@@ -398,23 +398,6 @@ Object.assign(SN_DEFAULTS, {
    "flyer": "https://drive.google.com/file/d/1kp9mdYHQpO5teBcrMWsZNA0mjXNNNBld/view?usp=drive_link"
   },
   {
-   "id": "e2",
-   "title": "Arlington Heights Farmers Market",
-   "date": "",
-   "start": "",
-   "end": "",
-   "address": "",
-   "price": "",
-   "max": "",
-   "desc": "Find me at the Downtown Arlington Heights Farmer's Market on Saturdays!",
-   "photo": "https://drive.google.com/file/d/1t63ARqrHbJhECsrEj5XOsbl8xr2W7ZYT/view?usp=drive_link",
-   "when": "See you next year! Thanks to everyone who came to buy cookies!",
-   "button": "None",
-   "venue": "Season has ended.",
-   "summary": "",
-   "flyer": ""
-  },
-  {
    "id": "e4",
    "title": "Host a cookie decorating party",
    "date": "",
@@ -424,7 +407,7 @@ Object.assign(SN_DEFAULTS, {
    "price": "",
    "max": "",
    "desc": "I bring the cookies, icing and supplies, and teach everyone as we go. Tell me your date, how many guests and any theme, and I’ll put together a quote.",
-   "photo": "",
+   "photo": "https://drive.google.com/file/d/1DlGHkymiPp7CkcYRvMsVWU5dymoYVRga/view?usp=drive_link",
    "when": "",
    "button": "Message me",
    "venue": "",
@@ -445,6 +428,23 @@ Object.assign(SN_DEFAULTS, {
    "when": "",
    "button": "Message me",
    "venue": "",
+   "summary": "",
+   "flyer": ""
+  },
+  {
+   "id": "e2",
+   "title": "Arlington Heights Farmers Market",
+   "date": "",
+   "start": "",
+   "end": "",
+   "address": "",
+   "price": "",
+   "max": "",
+   "desc": "Find me at the Downtown Arlington Heights Farmer's Market on Saturdays!",
+   "photo": "https://drive.google.com/file/d/1t63ARqrHbJhECsrEj5XOsbl8xr2W7ZYT/view?usp=drive_link",
+   "when": "See you next year! Thanks to everyone who came to buy cookies!",
+   "button": "None",
+   "venue": "Season has ended.",
    "summary": "",
    "flyer": ""
   }
