@@ -882,6 +882,8 @@
       list[Number(el.dataset.i)][el.dataset.key] = v;
       if (el.dataset.key === 'photo' || el.dataset.key === 'flyer') thumb(el);
       if (el.dataset.list === 'events' && el.dataset.key === 'button') renderEvents();
+      // A changed date can start or end the "Coming soon" card: redo the notes without redrawing the fields being typed in.
+      if (el.dataset.list === 'events' && el.dataset.key === 'date') $$('[data-past-note]').forEach((d) => { d.innerHTML = pastClassNote(cfg.events[Number(d.dataset.pastNote)]); });
       if (el.dataset.list === 'homeItems' && el.dataset.key === 'link') { const l = $('#hl-' + el.dataset.i); if (l) l.placeholder = /^(mini|large|custom)$/.test(v) ? 'Blank = shows the price' : 'Short line'; }
       markDirty();
     }
@@ -2326,6 +2328,18 @@
   }
 
   /* ---------- Events and gallery ---------- */
+  // Past classes, worked out the same way as the Events & Parties page: when no class is coming up, the most recent
+  // past one shows there as a "Coming soon" card; any other past class is hidden.
+  function pastClassNote(ev) {
+    const today = SN.isoDate(new Date());
+    const isClass = (e) => e.show !== false && e.button === 'Add to bag';
+    const isPast = (e) => isClass(e) && e.date && e.date < today;
+    if (!isPast(ev)) return '';
+    const latest = cfg.events.some((e) => isClass(e) && !isPast(e)) ? null : cfg.events.filter(isPast).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+    return '<p class="ev-past-note">' + (ev === latest
+      ? 'This class’s date has passed, so the website shows a <strong>Coming soon</strong> card here until the next class is added. Change the date (and details) here, or add a new class. The card’s wording is under Website pages.'
+      : 'This class’s date has passed, so it’s hidden on the website.') + '</p>';
+  }
   function renderEvents() {
     const n = cfg.events.length;
     $('#events-editor').innerHTML = n ? cfg.events.map((ev, i) => {
@@ -2335,6 +2349,7 @@
         '<div class="faq-edit-top"><span class="num">Event ' + (i + 1) + '</span><span class="row-gap" style="gap:6px">' +
           '<button type="button" class="switch" role="switch" aria-checked="' + (ev.show !== false) + '" data-act="toggle-show" data-list="events" data-i="' + i + '" aria-label="Show event ' + (i + 1) + ' on the page"><span class="track" aria-hidden="true"></span>' + (ev.show !== false ? 'Showing' : 'Hidden') + '</button>' +
           moveButtons('events', i, n, 'event ' + (i + 1)) + '</span></div>' +
+        '<div data-past-note="' + i + '">' + pastClassNote(ev) + '</div>' +
         field(id('title'), 'Title', '<textarea class="input one-line" rows="1" id="' + id('title') + '" ' + attrs('title') + ' style="font-weight:600">' + esc(ev.title) + '</textarea>') +
         '<div class="grid-2">' +
           field(id('date'), 'Date', '<input class="input" id="' + id('date') + '" type="date" ' + attrs('date') + ' value="' + esc(ev.date) + '">') +
