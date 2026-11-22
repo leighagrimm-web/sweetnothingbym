@@ -141,7 +141,7 @@ const SN_DEFAULTS = {
     .map((l) => ({ photo: '[' + l + ' cookie photo]', caption: l + ' cookies' }))
 };
 /* LIVE SNAPSHOT START */
-// Live settings as of 2026-11-09 (node .claude/snapshot.js). The Sheet always wins once it answers.
+// Live settings as of 2026-11-22 (node .claude/snapshot.js). The Sheet always wins once it answers.
 Object.assign(SN_DEFAULTS, {
  "acceptingOrders": true,
  "leadDays": 14,
@@ -361,7 +361,7 @@ Object.assign(SN_DEFAULTS, {
   "homeIntro": "Hand-decorated custom sets for birthdays, showers and celebrations, plus small-batch artisan favorites by the dozen.",
   "homeHeroPhoto": "https://drive.google.com/file/d/18rIL8mi96GNpsKh0XivYNDhKISk-AejT/view?usp=drive_link",
   "homeMakeIntro": "Hand-decorated custom sets, small-batch artisan favorites, and kits to decorate at home.",
-  "homeEventsLine": "Decorating classes and pop-ups around the northwest suburbs",
+  "homeEventsLine": "Decorating classes, private parties and pop-ups around the northwest suburbs",
   "photoCustom": "https://drive.google.com/file/d/1Y_muW7U8fjlWHTmlAUtLkz6d2zizJKaM/view?usp=drive_link",
   "photoMini": "https://drive.google.com/file/d/1oMg8CgGeHU2J70Co8hTl23JtIjU73oua/view?usp=drive_link",
   "photoLarge": "https://drive.google.com/file/d/1fVEvptw39Sxuikk8194DzSi2cyhli1HP/view?usp=drive_link",
@@ -372,8 +372,10 @@ Object.assign(SN_DEFAULTS, {
   "aboutStory": "Sweet Nothings by M started with one cookie that quickly became a fan favorite!\n\nI’ve loved baking since I was young, and I’ve always enjoyed bringing sweet treats to share with family and friends, and to spoil the nurses and doctors I work with every day. I’ve been a PICU nurse for 20 years, and Sweet Nothings is how I turned my passion for baking into a small, home-based cottage bakery.\n\nI love being part of people’s lives and their special moments, and cookies give me the chance to do that every day.",
   "aboutGoodToKnowHeading": "Good to know",
   "aboutGoodToKnow": "How ordering works:\nPlease order at least 14 days before you need your cookies. When you send your order, it’s a request, not a final order. I’ll review the details and email you a confirmation with your final price and an invoice. Your date is reserved once the invoice is paid.\n\nAllergies and dietary needs: \nNeed allergy-friendly swaps, like gluten-free or dairy-free? Happy to help! Ingredient changes for allergies or dietary needs add an extra cost, which I’ll include in your final price. Please note my kitchen is not allergen-free, so I can’t guarantee against cross-contact for severe allergies.",
-  "eventsTitle": "Classes, pop-ups & seasonal specials",
-  "eventsIntro": "Limited-time cookies and cookie decorating classes. Follow along on Instagram for the latest dates.",
+  "eventsTitle": "Decorating classes, private parties & pop-ups",
+  "eventsIntro": "Join a decorating class, book a private cookie party for a birthday, shower or girls’ night, or find me at a pop-up. Follow along on Instagram for the latest dates.",
+  "nextClassTitle": "Next cookie decorating class",
+  "nextClassText": "New dates coming soon! Message me to hear first when the next class is scheduled.",
   "galleryTitle": "Past creations",
   "galleryIntro": "A peek at cookies made for birthdays, showers, weddings and more. See the newest work on Instagram."
  },
@@ -410,6 +412,23 @@ Object.assign(SN_DEFAULTS, {
    "button": "None",
    "venue": "Season has ended.",
    "summary": "",
+   "flyer": ""
+  },
+  {
+   "id": "e4",
+   "title": "Host a cookie decorating party",
+   "date": "",
+   "start": "",
+   "end": "",
+   "address": "",
+   "price": "",
+   "max": "",
+   "desc": "I bring the cookies, icing and supplies, and teach everyone as we go. Tell me your date, how many guests and any theme, and I’ll put together a quote.",
+   "photo": "",
+   "when": "",
+   "button": "Message me",
+   "venue": "",
+   "summary": "Birthdays, showers, team outings or a night in with friends.",
    "flyer": ""
   },
   {
