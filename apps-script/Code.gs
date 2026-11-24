@@ -1827,7 +1827,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-11-23c';
+const CODE_VERSION = '2026-11-23d';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
@@ -3130,6 +3130,27 @@ function classIcs_(cfg, ev) {
     'DESCRIPTION:' + esc(calDetails_(cfg, ev)),
     'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
 }
+/* ---------- Calendar buttons in emails ---------- */
+// Each project's website deployment (config.js SN_ENV.API), so an Apple button can open the calendar file directly:
+// iPhones and Macs show "Add to Calendar" for it straight away. Outlook and other calendars go through calendar.html,
+// which gives the file a name they recognize (Apps Script can't). Unknown project: no Apple-only button.
+const WEBSITE_API = {
+  '11QnCWpV8pTwdRbZkVIWciDBncwccoRrHLW9VvYQsKj8IF_i2z8-L-IZ1': 'https://script.google.com/macros/s/AKfycbxevgGnDBQn2XUOqY3J9Ou873czPs7xWOH3sj7nPriq3K_vPAxeNw1acPVDgPCJhalw/exec',
+  '1-4GqLmUDcGQRmUsXNFZWcVvtevXX_Ef0XA1JodYlYhT6cVSvXns6QqHD': 'https://script.google.com/macros/s/AKfycbzqgowHt3FceXrzwWhDqSrAdAcazOru_uqEVz14YPvw5hX2krA2PPR0Z-7TL8Nut0kVVA/exec'
+};
+function websiteApi_() { try { return WEBSITE_API[ScriptApp.getScriptId()] || ''; } catch (e) { return ''; } }
+// The buttons (html) and lines (text) for one calendar entry. query: the ics query ("event=e1" or "order=SN-1&k=...").
+function calButtons_(gcal, page, query) {
+  const api = websiteApi_();
+  const apple = api && query ? api + '?action=ics&' + query : '';
+  const btn = (href, label) => '<a href="' + esc_(href) + '" style="display:inline-block;margin:0 8px 8px 0;padding:10px 16px;border-radius:999px;border:1px solid ' + C.navy + ';color:' + C.navy + ';text-decoration:none;font-weight:600;font-size:14px">' + label + '</a>';
+  const other = apple ? 'Add to Outlook / other calendar' : 'Add to Apple / Outlook calendar';
+  return {
+    html: (gcal ? btn(gcal, 'Add to Google Calendar') : '') + (apple ? btn(apple, 'Add to Apple Calendar') : '') + (page ? btn(page, other) : ''),
+    text: [gcal ? 'Add to Google Calendar: ' + gcal : '', apple ? 'Add to Apple Calendar: ' + apple : '', page ? other + ': ' + page : ''].filter(Boolean).join('\n')
+  };
+}
+
 /* ---------- "Add to calendar" for an order: a cookie pickup / drop-off time, or a pre-order's pickup ---------- */
 // Order links carry a short key made from the order number, so the calendar page can't be used to look up other
 // people's orders by guessing numbers. The secret is made once and kept in Script Properties.
@@ -3164,12 +3185,8 @@ function orderCalPage_(cfg, o) { return cfg.siteUrl ? cfg.siteUrl + 'calendar.ht
 function orderCalButtons_(cfg, o) {
   const ev = orderCalEvent_(cfg, o);
   if (!ev || !classTimes_(ev)) return { html: '', text: '' };
-  const gcal = googleCalUrl_(cfg, ev), page = orderCalPage_(cfg, o);
-  const btn = (href, label) => '<a href="' + esc_(href) + '" style="display:inline-block;margin:0 8px 8px 0;padding:10px 16px;border-radius:999px;border:1px solid ' + C.navy + ';color:' + C.navy + ';text-decoration:none;font-weight:600;font-size:14px">' + label + '</a>';
-  return {
-    html: '<div style="margin:0 0 18px">' + btn(gcal, 'Add to Google Calendar') + (page ? btn(page, 'Add to Apple / Outlook calendar') : '') + '</div>',
-    text: 'Add to Google Calendar: ' + gcal + (page ? '\nAdd to Apple / Outlook calendar: ' + page : '')
-  };
+  const b = calButtons_(googleCalUrl_(cfg, ev), orderCalPage_(cfg, o), 'order=' + encodeURIComponent(o.number) + '&k=' + calKey_(o.number));
+  return { html: '<div style="margin:0 0 18px">' + b.html + '</div>', text: b.text };
 }
 // For the calendar page: the order's event, if the key matches.
 function orderCalLookup_(p) {
@@ -3201,7 +3218,7 @@ function classInfoBlock_(cfg, o) {
     const flyer = photoUrl_(ev.flyer);
     const gcal = kit ? '' : googleCalUrl_(cfg, ev);
     const ics = !kit && cfg.siteUrl && classTimes_(ev) ? cfg.siteUrl + 'calendar.html?event=' + encodeURIComponent(ev.id) : '';
-    const btn = (href, label) => '<a href="' + esc_(href) + '" style="display:inline-block;margin:0 8px 8px 0;padding:10px 16px;border-radius:999px;border:1px solid ' + C.navy + ';color:' + C.navy + ';text-decoration:none;font-weight:600;font-size:14px">' + label + '</a>';
+    const cal = calButtons_(gcal, ics, gcal || ics ? 'event=' + encodeURIComponent(ev.id) : '');
     return '<div style="border-top:1px solid ' + C.line + ';padding-top:14px;margin-bottom:18px">' + h2_(esc_(ev.title)) +
       '<div style="font-size:15px;font-weight:600;margin-bottom:8px">' + esc_((kit && ev.date ? 'Pickup ' : '') + [prettyDate_(ev.date), [ev.start, ev.end].filter(Boolean).join('–')].filter(Boolean).join(' · ')) + '</div>' +
       (place ? '<div style="margin-bottom:12px;font-size:15px"><div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em">' + (kit ? 'Pickup at' : 'Where') + '</div>' +
@@ -3210,7 +3227,7 @@ function classInfoBlock_(cfg, o) {
       (ev.desc ? '<div style="font-size:15px;white-space:pre-wrap;margin-bottom:12px">' + esc_(ev.desc) + '</div>' : '') +
       (flyer ? '<a href="' + esc_(flyer) + '"><img src="' + esc_(flyer) + '" alt="Flyer for ' + esc_(ev.title) + '" width="520" style="display:block;width:100%;max-width:520px;height:auto;border-radius:12px;border:1px solid ' + C.line + ';margin-bottom:6px"></a>' +
         '<div style="color:' + C.muted + ';font-size:13px;margin-bottom:12px">Tap the flyer to see it full size.</div>' : '') +
-      (gcal || ics ? '<div style="margin-top:4px">' + (gcal ? btn(gcal, 'Add to Google Calendar') : '') + (ics ? btn(ics, 'Add to Apple / Outlook calendar') : '') + '</div>' : '') +
+      (cal.html ? '<div style="margin-top:4px">' + cal.html + '</div>' : '') +
     '</div>';
   }).join('');
 }
@@ -3218,8 +3235,7 @@ function classInfoText_(cfg, o) {
   return classInfoEvents_(cfg, o).map(({ ev, kit }) =>
     [ev.title, (kit && ev.date ? 'Pickup ' : '') + [prettyDate_(ev.date), [ev.start, ev.end].filter(Boolean).join('–')].filter(Boolean).join(' · '),
       classPlace_(ev) ? (kit ? 'Pickup at: ' : 'Where: ') + classPlace_(ev) : '', ev.desc || '', photoUrl_(ev.flyer) ? 'Flyer: ' + photoUrl_(ev.flyer) : '',
-      !kit && googleCalUrl_(cfg, ev) ? 'Add to Google Calendar: ' + googleCalUrl_(cfg, ev) : '',
-      !kit && cfg.siteUrl && classTimes_(ev) ? 'Add to Apple / Outlook calendar: ' + cfg.siteUrl + 'calendar.html?event=' + encodeURIComponent(ev.id) : ''].filter(Boolean).join('\n')).join('\n\n');
+      kit ? '' : calButtons_(googleCalUrl_(cfg, ev), cfg.siteUrl && classTimes_(ev) ? cfg.siteUrl + 'calendar.html?event=' + encodeURIComponent(ev.id) : '', classTimes_(ev) ? 'event=' + encodeURIComponent(ev.id) : '').text].filter(Boolean).join('\n')).join('\n\n');
 }
 // "2 spots × $60.00" for a class, "2 × $25.00" for a kit.
 function paidQty_(it) { return it.kind === 'kit' ? it.qty + ' × ' + money_(it.unit) : it.qty + ' spot' + (it.qty > 1 ? 's' : '') + ' × ' + money_(it.unit); }
