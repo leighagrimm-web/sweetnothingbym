@@ -1827,7 +1827,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-11-23d';
+const CODE_VERSION = '2026-11-23e';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
@@ -3143,10 +3143,12 @@ function websiteApi_() { try { return WEBSITE_API[ScriptApp.getScriptId()] || ''
 function calButtons_(gcal, page, query) {
   const api = websiteApi_();
   const apple = api && query ? api + '?action=ics&' + query : '';
-  const btn = (href, label) => '<a href="' + esc_(href) + '" style="display:inline-block;margin:0 8px 8px 0;padding:10px 16px;border-radius:999px;border:1px solid ' + C.navy + ';color:' + C.navy + ';text-decoration:none;font-weight:600;font-size:14px">' + label + '</a>';
+  // Small blush chips on one row under an "Add to calendar" label.
+  const chip = (href, label) => '<a href="' + esc_(href) + '" style="display:inline-block;margin:0 6px 6px 0;padding:6px 12px;border-radius:999px;background:' + C.blush + ';color:' + C.navy + ';text-decoration:none;font-weight:600;font-size:13px">' + label + '</a>';
   const other = apple ? 'Add to Outlook / other calendar' : 'Add to Apple / Outlook calendar';
+  const chips = (gcal ? chip(gcal, 'Google') : '') + (apple ? chip(apple, 'Apple') : '') + (page ? chip(page, apple ? 'Outlook / other' : 'Apple / Outlook') : '');
   return {
-    html: (gcal ? btn(gcal, 'Add to Google Calendar') : '') + (apple ? btn(apple, 'Add to Apple Calendar') : '') + (page ? btn(page, other) : ''),
+    html: chips ? '<div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Add to calendar</div>' + chips : '',
     text: [gcal ? 'Add to Google Calendar: ' + gcal : '', apple ? 'Add to Apple Calendar: ' + apple : '', page ? other + ': ' + page : ''].filter(Boolean).join('\n')
   };
 }
