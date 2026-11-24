@@ -1827,7 +1827,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-11-23b';
+const CODE_VERSION = '2026-11-23c';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
@@ -3013,7 +3013,7 @@ function sendClassBookingEmail_(cfg, o) {
   const html = shell_(cfg, head + (first ? ', ' + esc_(first) : '') + '!', o.number,
     '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">' + saved + ' ' + classPayLine_(o) + '</div>' +
     classDetails_(o) + totalsBlock_(o, paid ? 'Paid' : 'Total') + classInfoBlock_(cfg, o) + cal.html +
-    p_('Questions or need to change your booking? Just reply to this email and mention your order number.', 14));
+    p_('Questions? Just reply to this email.', 14));
   sendMail_({
     to: o.customer.email,
     subject: subjectPrefix_(cfg) + head + '! – Sweet Nothings ' + o.number,
