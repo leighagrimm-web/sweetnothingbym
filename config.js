@@ -212,7 +212,7 @@ Object.assign(SN_DEFAULTS, {
    "photo": "https://drive.google.com/file/d/1zSis-DU2QpFcp5V_3uNzLf6oZD-ww1-9/view?usp=drive_link"
   }
  ],
- "classHoldMinutes": 15,
+ "classHoldMinutes": 10,
  "maintenanceTitle": "Something sweet is in the oven",
  "maintenanceMessage": "We’re mixing up a fresh batch of updates to the site. Check back soon, or follow along on Instagram in the meantime!",
  "flavors": [
@@ -403,16 +403,16 @@ Object.assign(SN_DEFAULTS, {
    "id": "emwte4ktp",
    "title": "Santa cookies DIY COOKIE KIT - pre order",
    "date": "2026-12-22",
-   "start": "",
-   "end": "",
-   "address": "",
+   "start": "2:00PM",
+   "end": "5:00PM",
+   "address": "104 W Northwest Hwy, Mt Prospect, IL 60056",
    "price": 25,
-   "max": "",
-   "cutoff": "",
+   "max": 25,
+   "cutoff": 4,
    "desc": "Holiday-inspired cookie kit. Kit will include 6 cookies, royal icing and sprinkles! Everything you need to decorate those Santa cookies 🎅🏻\n\nEach kit will be $25 pre order and pay ahead. Pick up location will be at Lumi in Mt Prospect December 22nd.",
    "photo": "",
    "when": "Holiday Pop up",
-   "button": "Add to bag",
+   "button": "Pre-order",
    "venue": "Lumi",
    "summary": "",
    "flyer": ""
