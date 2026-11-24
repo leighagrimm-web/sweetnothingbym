@@ -141,7 +141,7 @@ const SN_DEFAULTS = {
     .map((l) => ({ photo: '[' + l + ' cookie photo]', caption: l + ' cookies' }))
 };
 /* LIVE SNAPSHOT START */
-// Live settings as of 2026-11-22 (node .claude/snapshot.js). The Sheet always wins once it answers.
+// Live settings as of 2026-11-24 (node .claude/snapshot.js). The Sheet always wins once it answers.
 Object.assign(SN_DEFAULTS, {
  "acceptingOrders": true,
  "leadDays": 14,
@@ -381,21 +381,38 @@ Object.assign(SN_DEFAULTS, {
  },
  "events": [
   {
-   "id": "e1",
+   "id": "emwu5c3q0",
    "title": "Cookie Decorating Class",
-   "date": "2026-11-19",
-   "start": "6:00pm",
-   "end": "8:00pm",
+   "date": "2026-12-18",
+   "start": "6:00PM",
+   "end": "8:00PM",
    "address": "106 S. Emerson St., Mount Prospect, IL",
    "price": 60,
    "max": 18,
-   "desc": "Join us for a fun, hands-on class where you'll learn basic cookie decorating techniques and create this adorable set of 6-fall-themed cookies!\n\nAll supplies included. Step-by-step instruction. No experience needed. Take home (and eat!) your creations.\n\nMust be 12 years or older to participate.",
-   "photo": "https://drive.google.com/file/d/1r01WNCMsYuTcFPB9FyRbiFubL_qbehvC/view?usp=drive_link",
+   "desc": "Join us for a fun, hands-on class where you'll learn basic cookie decorating techniques and create this adorable set of 6-Christmas-themed cookies!\n\nAll supplies included. Step-by-step instruction. No experience needed. Take home (and eat!) your creations.",
+   "photo": "",
    "when": "",
    "button": "Add to bag",
    "venue": "Khepri Kitchen & Coffee",
-   "summary": "Decorate 6 fall themed cookies to take home. All supplies included.",
-   "flyer": "https://drive.google.com/file/d/1kp9mdYHQpO5teBcrMWsZNA0mjXNNNBld/view?usp=drive_link"
+   "summary": "Decorate 6 Christmas themed cookies to take home. All supplies included",
+   "flyer": ""
+  },
+  {
+   "id": "emwte4ktp",
+   "title": "Santa cookies DIY COOKIE KIT - pre order",
+   "date": "2026-12-22",
+   "start": "",
+   "end": "",
+   "address": "",
+   "price": 25,
+   "max": "",
+   "desc": "Holiday-inspired cookie kit. Kit will include 6 cookies, royal icing and sprinkles! Everything you need to decorate those Santa cookies 🎅🏻\n\nEach kit will be $25 pre order and pay ahead. Pick up location will be at Lumi in Mt Prospect December 22nd.",
+   "photo": "",
+   "when": "Holiday Pop up",
+   "button": "Add to bag",
+   "venue": "Lumi",
+   "summary": "",
+   "flyer": ""
   },
   {
    "id": "e4",
