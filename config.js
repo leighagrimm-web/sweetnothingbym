@@ -20,7 +20,7 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'Mac
 
 // This copy of the site's code. Bumped on every publish together with the ?v= on the pages and version.json, so a
 // tab left open can tell a newer version is out (see layout.js).
-const SN_BUILD = '20261123a';
+const SN_BUILD = '20261123b';
 
 const SN_ENV = (function () {
   const API = {
@@ -129,7 +129,8 @@ const SN_DEFAULTS = {
     galleryTitle: 'Past creations',
     galleryIntro: 'A peek at cookies made for birthdays, showers, weddings and more. See the newest work on Instagram.'
   },
-  // button: 'Add to bag' (a class: needs a price; booked and paid at checkout) | 'Order now' | 'Message me' | 'None'.
+  // button: 'Add to bag' (a class: needs a price; booked and paid at checkout) | 'Pre-order' (a kit: same checkout,
+  // sold by the each; cutoff = how many days before the date pre-orders close) | 'Order now' | 'Message me' | 'None'.
   // Blank fields don't show. spotsLeft comes from the Sheet when max (attendees) is set.
   events: [
     { id: 'e1', title: '[Cookie decorating class]', date: '', start: '', end: '', address: '', price: '', max: '', desc: '[What attendees will make and what\'s included.]', photo: '[Class photo]', when: '', button: 'Add to bag' },
@@ -984,10 +985,20 @@ const SN = {
     return { qty, used, max, err };
   },
 
-  // A class in the bag: today's price from the Events settings (or the price when it was added).
+  // Classes and pre-order kits are paid at checkout through Square; everything else is a cookie request.
+  paidNow(it) { return it.kind === 'class' || it.kind === 'kit'; },
+  // A pre-order kit's last order day: its pickup date minus the card's "closes ... days before" ('' = no date set).
+  preorderBy(ev) {
+    if (!ev.date) return '';
+    const d = new Date(ev.date + 'T12:00');
+    d.setDate(d.getDate() - (Number(ev.cutoff) || 0));
+    return SN.isoDate(d);
+  },
+  preorderOpen(ev) { const by = SN.preorderBy(ev); return !by || SN.isoDate(new Date()) <= by; },
+  // A class or kit in the bag: today's price from the Events settings (or the price when it was added).
   classEvent(cfg, it) { return (cfg.events || []).find((e) => e.id === it.eventId) || null; },
   itemTotal(cfg, it) {
-    if (it.kind === 'class') { const ev = SN.classEvent(cfg, it); return it.qty * (ev ? Number(ev.price) || 0 : Number(it.price) || 0); }
+    if (SN.paidNow(it)) { const ev = SN.classEvent(cfg, it); return it.qty * (ev ? Number(ev.price) || 0 : Number(it.price) || 0); }
     if (it.kind === 'custom') return it.qty * SN.customPrice(cfg);
     return SN.artisanCheck(cfg, it.fq).qty * SN.perCookie(cfg, it.kind);
   },
@@ -1043,12 +1054,16 @@ const SN = {
     return SN.isoDate(new Date()) <= cfg.specialUntil;
   },
 
-  itemLabel(kind) { return kind === 'custom' ? 'Custom Cookies' : kind === 'mini' ? 'Mini Artisan' : kind === 'class' ? 'Class' : 'Large Artisan'; },
-  // "24 Custom Cookies", or for a class "2 spots · Holiday decorating"
-  itemHeading(it) { return it.kind === 'class' ? it.qty + ' spot' + (it.qty > 1 ? 's' : '') + ' · ' + it.title : it.qty + ' ' + SN.itemLabel(it.kind); },
+  itemLabel(kind) { return kind === 'custom' ? 'Custom Cookies' : kind === 'mini' ? 'Mini Artisan' : kind === 'class' ? 'Class' : kind === 'kit' ? 'Pre-order' : 'Large Artisan'; },
+  // "24 Custom Cookies", a class "2 spots · Holiday decorating", a pre-order kit "2 × Santa cookie kit"
+  itemHeading(it) {
+    if (it.kind === 'class') return it.qty + ' spot' + (it.qty > 1 ? 's' : '') + ' · ' + it.title;
+    if (it.kind === 'kit') return it.qty + ' × ' + it.title;
+    return it.qty + ' ' + SN.itemLabel(it.kind);
+  },
 
   describeItem(cfg, it) {
-    if (it.kind === 'class') { const ev = SN.classEvent(cfg, it) || it; return [it.summary || SN.classWhen(ev), SN.eventPlace(ev)].filter(Boolean).join(' · '); }
+    if (SN.paidNow(it)) { const ev = SN.classEvent(cfg, it) || it; return [it.summary || SN.classWhen(ev), SN.eventPlace(ev)].filter(Boolean).join(' · '); }
     if (it.kind === 'custom') {
       return it.designs + ' design' + (it.designs > 1 ? 's' : '') + ' · estimated at ' + SN.money(SN.customPrice(cfg)) + ' each' + (it.photoName ? ' · photo attached' : '');
     }
@@ -1068,8 +1083,8 @@ const SN = {
     const lines = o.items.map((it) => {
       // Orders from the Sheet carry the unit price they were quoted at; otherwise use today's prices.
       const unit = it.unit != null ? it.unit : it.kind === 'custom' ? SN.customPrice(cfg) : SN.perCookie(cfg, it.kind);
-      const desc = it.kind === 'class'
-        ? 'Class: ' + it.title + (it.summary ? ' (' + it.summary + ')' : '')
+      const desc = SN.paidNow(it)
+        ? (it.kind === 'kit' ? 'Pre-order: ' : 'Class: ') + it.title + (it.summary ? ' (' + it.summary + ')' : '')
         : it.qty + ' ' + SN.itemLabel(it.kind) + (it.summary ? ' (' + it.summary.replace(/ · estimated at .*?each/, '') + ')' : '');
       return { desc, qty: it.qty, unit: Math.round(unit * 100) / 100 };
     });

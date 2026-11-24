@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261123a">
+<link rel="stylesheet" href="styles.css?v=20261123b">
 </head>
 <body data-page="events">
 <div id="site-header"></div>
@@ -31,12 +31,13 @@
   </section>
 </main>
 <div id="site-footer"></div>
-<script src="config.js?v=20261123a"></script>
-<script src="layout.js?v=20261123a"></script>
-<script src="order.js?v=20261123a"></script>
+<script src="config.js?v=20261123b"></script>
+<script src="layout.js?v=20261123b"></script>
+<script src="order.js?v=20261123b"></script>
 <script>
 // Heading from the Sheet's Pages tab; one card per row on the Events tab. Anything left blank doesn't show.
 // Classes ("Add to bag") show spots left and go in the bag, booked and paid at checkout with no approval needed.
+// Pre-order kits ("Pre-order") go through the same checkout, priced each, until their cutoff before the pickup date.
 SN.ready.then(function () {
   const cfg = SN.load();
   const esc = SN.esc;
@@ -44,15 +45,19 @@ SN.ready.then(function () {
   document.getElementById('events-title').textContent = cfg.pages.eventsTitle;
   document.getElementById('events-intro').textContent = cfg.pages.eventsIntro;
 
-  const inBag = (id) => SN.getBag().filter((it) => it.kind === 'class' && it.eventId === id).reduce((a, it) => a + it.qty, 0);
+  const inBag = (id) => SN.getBag().filter((it) => SN.paidNow(it) && it.eventId === id).reduce((a, it) => a + it.qty, 0);
   const isClass = (ev) => ev.button === 'Add to bag';
-  const canBook = (ev) => isClass(ev) && Number(ev.price) > 0 && !(ev.date && ev.date < today);
+  const isKit = (ev) => ev.button === 'Pre-order';
+  const closed = (ev) => (isKit(ev) ? !SN.preorderOpen(ev) : !!(ev.date && ev.date < today));
+  const canBook = (ev) => (isClass(ev) || isKit(ev)) && Number(ev.price) > 0 && !closed(ev);
+  // A kit's date is when it's picked up.
+  const whenText = (ev) => { const w = SN.classWhen(ev); return w && isKit(ev) ? 'Pickup ' + w : w; };
 
   // where: 'card' or 'panel', so the card and the open Details panel each get their own spots picker.
   function bookArea(ev, where) {
-    if (!isClass(ev)) return '';
-    if (ev.date && ev.date < today) return '<p class="hint">This class has already happened.</p>';
-    if (!(Number(ev.price) > 0)) return '<a class="btn ghost" href="#" aria-disabled="true">Booking opens soon</a>';
+    if (!isClass(ev) && !isKit(ev)) return '';
+    if (closed(ev)) return '<p class="hint">' + (isKit(ev) ? 'Pre-orders are closed.' : 'This class has already happened.') + '</p>';
+    if (!(Number(ev.price) > 0)) return '<a class="btn ghost" href="#" aria-disabled="true">' + (isKit(ev) ? 'Pre-orders open soon' : 'Booking opens soon') + '</a>';
     const left = ev.spotsLeft === undefined ? 10 : ev.spotsLeft - inBag(ev.id);
     if (ev.spotsLeft === 0) return '<a class="btn ghost" href="#" aria-disabled="true">Sold out</a>';
     const have = inBag(ev.id);
@@ -60,17 +65,23 @@ SN.ready.then(function () {
     const opts = Array.from({ length: Math.max(0, Math.min(10, left)) }, (_, i) => '<option>' + (i + 1) + '</option>').join('');
     return (opts
       ? '<div class="row-gap" style="gap:8px;align-items:center">' +
-          '<label class="sr-only" for="' + sel + '">Spots for ' + esc(ev.title) + '</label>' +
+          '<label class="sr-only" for="' + sel + '">' + (isKit(ev) ? 'How many of ' : 'Spots for ') + esc(ev.title) + '</label>' +
           '<select class="input" id="' + sel + '" style="width:auto;min-height:44px">' + opts + '</select>' +
-          '<button type="button" class="btn" data-add-class="' + esc(ev.id) + '" data-spots="' + sel + '">Add to bag</button></div>'
+          '<button type="button" class="btn" data-add-class="' + esc(ev.id) + '" data-spots="' + sel + '">' + (isKit(ev) ? 'Pre-order' : 'Add to bag') + '</button></div>'
       : '') +
       (have ? '<p class="hint" style="margin-top:8px">' + have + ' in your bag · <a href="order.html?bag=1" data-open-bag>View bag</a></p>' : '');
   }
-  const priceText = (ev) => (ev.price === '' || ev.price == null ? '' : isNaN(Number(ev.price)) ? String(ev.price) : SN.money(ev.price) + (isClass(ev) ? ' per person' : ''));
-  const spotsText = (ev) => (isClass(ev) && ev.spotsLeft !== undefined && canBook(ev) ? (ev.spotsLeft ? ev.spotsLeft + ' of ' + ev.max + ' spots left' : 'Sold out') : '');
+  const priceText = (ev) => (ev.price === '' || ev.price == null ? '' : isNaN(Number(ev.price)) ? String(ev.price) : SN.money(ev.price) + (isClass(ev) ? ' per person' : isKit(ev) ? ' each' : ''));
+  const spotsText = (ev) => {
+    if (!canBook(ev) || ev.spotsLeft === undefined) return '';
+    if (!ev.spotsLeft) return 'Sold out';
+    return isKit(ev) ? ev.spotsLeft + ' left' : ev.spotsLeft + ' of ' + ev.max + ' spots left';
+  };
+  // "Order by Fri, Dec 19" while a kit's pre-orders are open.
+  const orderByText = (ev) => (isKit(ev) && canBook(ev) && SN.preorderBy(ev) ? 'Order by ' + SN.prettyDate(SN.preorderBy(ev), { weekday: 'short', month: 'short', day: 'numeric' }) : '');
   const priceLine = (ev) => {
-    const price = priceText(ev), spots = spotsText(ev);
-    return price || spots ? '<p class="price">' + esc(price) + (spots ? ' <span>· ' + esc(spots) + '</span>' : '') + '</p>' : '';
+    const price = priceText(ev), extra = [spotsText(ev), orderByText(ev)].filter(Boolean).join(' · ');
+    return price || extra ? '<p class="price">' + esc(price) + (extra ? ' <span>' + (price ? '· ' : '') + esc(extra) + '</span>' : '') + '</p>' : '';
   };
   const otherButtons = (ev) =>
     (ev.button === 'Order now' ? '<a class="btn" href="order.html">Order now</a>' : '') +
@@ -81,7 +92,7 @@ SN.ready.then(function () {
 
   // Short card: the full description, address and flyer live in the Details panel.
   function card(ev) {
-    const when = SN.classWhen(ev);
+    const when = whenText(ev);
     const line = ev.summary || ev.desc;
     return '<article class="card ev-card">' +
       SN.photoHtml(ev.photo, ev.title, 'height:200px;border-radius:0') +
@@ -123,9 +134,9 @@ SN.ready.then(function () {
   let opener = null, openId = null;
   function openDetails(ev, from) {
     opener = from; openId = ev.id;
-    const when = SN.classWhen(ev);
+    const when = whenText(ev);
     const flyerUrl = SN.photoUrl(ev.flyer);
-    const hasFoot = isClass(ev) || ev.button === 'Order now' || ev.button === 'Message me';
+    const hasFoot = isClass(ev) || isKit(ev) || ev.button === 'Order now' || ev.button === 'Message me';
     panel.innerHTML =
       '<div class="panel-head"><div><h2 id="ev-panel-title">' + esc(ev.title) + '</h2>' + (ev.when || when ? '<p>' + esc([ev.when, when].filter(Boolean).join(' · ')) + '</p>' : '') + '</div>' +
         '<button type="button" class="x-btn" data-ev-close aria-label="Close">' + SN_ICONS.close + '</button></div>' +
@@ -176,9 +187,10 @@ SN.ready.then(function () {
     const ev = cfg.events.find((x) => x.id === b.dataset.addClass);
     const qty = Number(document.getElementById(b.dataset.spots).value) || 1;
     const bag = SN.getBag();
-    const existing = bag.find((it) => it.kind === 'class' && it.eventId === ev.id);
+    const kind = isKit(ev) ? 'kit' : 'class';
+    const existing = bag.find((it) => it.kind === kind && it.eventId === ev.id);
     if (existing) existing.qty += qty;
-    else bag.push({ id: Date.now(), kind: 'class', eventId: ev.id, qty, title: ev.title, price: Number(ev.price), summary: SN.classWhen(ev) });
+    else bag.push({ id: Date.now(), kind, eventId: ev.id, qty, title: ev.title, price: Number(ev.price), summary: whenText(ev) });
     SN.setBag(bag);
     document.dispatchEvent(new CustomEvent('sn:bag'));   // the bag (order.js) picks up the change
     document.querySelectorAll('.bag-count').forEach((c) => { c.textContent = bag.reduce((a, it) => a + it.qty, 0); });

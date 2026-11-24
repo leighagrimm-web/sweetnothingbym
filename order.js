@@ -316,9 +316,15 @@ SN.ready.then(function () {
     add.setAttribute('aria-disabled', String(!!st.err));
   }
 
-  // A bag can hold cookies (sent to Sweet Nothings for review) and classes (booked right away).
-  const hasCookies = () => bag.some((it) => it.kind !== 'class');
-  const hasClasses = () => bag.some((it) => it.kind === 'class');
+  // A bag can hold cookies (sent to Sweet Nothings for review) and classes or pre-order kits (paid at checkout).
+  const hasCookies = () => bag.some((it) => !SN.paidNow(it));
+  const hasClasses = () => bag.some(SN.paidNow);
+  // What the paid-now part is called: 'class', 'pre-order' or 'booking' (both), and what's held while paying.
+  const paidWord = (items) => {
+    const kit = items.some((it) => it.kind === 'kit'), cls = items.some((it) => it.kind === 'class');
+    return kit && cls ? 'booking' : kit ? 'pre-order' : 'class';
+  };
+  const heldWord = (items) => ({ class: 'Your spot is', 'pre-order': 'Your pre-order is', booking: 'Your booking is' })[paidWord(items)];
   const round2 = (n) => Math.round(n * 100) / 100;
 
   function renderBag() {
@@ -365,8 +371,11 @@ SN.ready.then(function () {
   function submitLabel() {
     if (sending) return 'Sending…';
     const pay = cfg.classesPayOnline !== false;
-    return hasCookies() && hasClasses() ? (pay ? 'Send order, book & pay for class' : 'Send order & book class')
-      : hasCookies() ? 'Send order request' : pay ? 'Book class & pay' : 'Book class';
+    if (!hasClasses()) return 'Send order request';
+    const w = paidWord(bag);
+    const verb = w === 'pre-order' ? 'pre-order' : w === 'booking' ? 'book & pre-order' : 'book class';
+    if (hasCookies()) return pay ? 'Send order, ' + verb + ' & pay' : 'Send order & ' + verb;
+    return (w === 'pre-order' ? 'Pre-order' : w === 'booking' ? 'Book & pre-order' : 'Book class') + (pay ? ' & pay' : '');
   }
 
   // Checkout takes the whole screen; the send button comes after every section, so it's reached by scrolling through them.
@@ -423,9 +432,9 @@ SN.ready.then(function () {
     if (hasCookies()) notes.push('No payment for cookies today. Sweet Nothings will review your request, confirm the final price, and email you an invoice to pay.');
     if (hasClasses()) {
       notes.push(cfg.classesPayOnline !== false
-        ? 'Next you’ll pay for your class securely through Square. Your spot is held for ' +
+        ? 'Next you’ll pay for your ' + paidWord(bag) + ' securely through Square. ' + heldWord(bag) + ' held for ' +
           (Number(cfg.classHoldMinutes) || 30) + ' minutes while you pay, and your confirmation email comes as soon as payment goes through.'
-        : 'Classes are booked as soon as you send this. Sweet Nothings will be in touch about payment.');
+        : (paidWord(bag) === 'class' ? 'Classes are booked' : 'Your ' + paidWord(bag) + ' is saved') + ' as soon as you send this. Sweet Nothings will be in touch about payment.');
     }
     return fullHead('Checkout', true) +
       '<div class="panel-body"><div class="checkout-col">' +
@@ -474,8 +483,8 @@ SN.ready.then(function () {
   // Same math as validateOrder_ in Code.gs: a percent code comes off first, and a gift card comes off last
   // (classes first, since they're paid now). Sales tax isn't included: QuickBooks adds it to the invoice.
   function quote() {
-    const cookieSub = round2(bag.filter((it) => it.kind !== 'class').reduce((a, it) => a + SN.itemTotal(cfg, it), 0));
-    const classSub = round2(bag.filter((it) => it.kind === 'class').reduce((a, it) => a + SN.itemTotal(cfg, it), 0));
+    const cookieSub = round2(bag.filter((it) => !SN.paidNow(it)).reduce((a, it) => a + SN.itemTotal(cfg, it), 0));
+    const classSub = round2(bag.filter(SN.paidNow).reduce((a, it) => a + SN.itemTotal(cfg, it), 0));
     const pct = appliedCode && appliedCode.type === 'percent' ? appliedCode.amount : 0;
     const cookieDisc = round2(cookieSub * pct / 100), classDisc = round2(classSub * pct / 100);
     const tax = 0;
@@ -497,7 +506,7 @@ SN.ready.then(function () {
   // Cookies in the bag would push the chosen week past its cap: "that week only has room for 10 more custom cookies".
   function weekProblem(date) {
     const room = SN.weekRoom(cfg, date);
-    const qty = (custom) => bag.filter((it) => it.kind !== 'class' && (it.kind === 'custom') === custom).reduce((a, it) => a + it.qty, 0);
+    const qty = (custom) => bag.filter((it) => !SN.paidNow(it) && (it.kind === 'custom') === custom).reduce((a, it) => a + it.qty, 0);
     const msgs = [];
     [['custom', true], ['artisan', false]].forEach(([type, custom]) => {
       const n = qty(custom);
@@ -507,12 +516,14 @@ SN.ready.then(function () {
     return msgs.join(' and ');
   }
 
-  // Classes in the bag that have since filled up or been removed.
+  // Classes and kits in the bag that have since filled up, closed or been removed.
   function classProblems() {
-    return bag.filter((it) => it.kind === 'class').map((it) => {
+    return bag.filter(SN.paidNow).map((it) => {
       const ev = SN.classEvent(cfg, it);
-      if (!ev || ev.button !== 'Add to bag') return it.title + ' is no longer available (please remove it)';
-      if (ev.spotsLeft !== undefined && it.qty > ev.spotsLeft) return ev.spotsLeft ? 'only ' + ev.spotsLeft + ' spots left in ' + ev.title : ev.title + ' is sold out (please remove it)';
+      const kit = it.kind === 'kit';
+      if (!ev || ev.button !== (kit ? 'Pre-order' : 'Add to bag')) return it.title + ' is no longer available (please remove it)';
+      if (kit && !SN.preorderOpen(ev)) return 'pre-orders for ' + ev.title + ' have closed (please remove it)';
+      if (ev.spotsLeft !== undefined && it.qty > ev.spotsLeft) return ev.spotsLeft ? 'only ' + ev.spotsLeft + (kit ? ' left of ' : ' spots left in ') + ev.title : ev.title + ' is sold out (please remove it)';
       return '';
     }).filter(Boolean);
   }
@@ -521,7 +532,7 @@ SN.ready.then(function () {
     const m = classProblems();
     if (hasCookies()) {
       const minISO = SN.isoDate(SN.minDate(cfg));
-      if (!cfg.acceptingOrders) m.push('cookie orders are paused right now (remove the cookies to book a class)');
+      if (!cfg.acceptingOrders) m.push('cookie orders are paused right now (remove the cookies to book a class or pre-order)');
       if (!checkout.eventType) { if (needsOccasion()) m.push('event type'); }
       else if (checkout.eventType === 'Other' && !checkout.eventOther.trim()) m.push('the occasion');
       if (!checkout.date) m.push('date needed');
@@ -636,20 +647,21 @@ SN.ready.then(function () {
 
   function renderDone() {
     const cookieOrder = lastOrders.find((o) => o.type === 'Cookies');
-    const classOrder = lastOrders.find((o) => o.type === 'Class');
+    const classOrder = lastOrders.find((o) => o.type === 'Class' || o.type === 'Pre-order');
     const email = (cookieOrder || classOrder).customer.email;
     const toPay = classOrder && classOrder.payUrl;
+    const w = classOrder ? paidWord(classOrder.items) : 'class';
     const classHtml = !classOrder ? '' : toPay
       // Square checkout: class-only bookings go straight there (see orderSent); a mixed bag gets this button.
-      ? '<h3>' + (cookieOrder ? 'One more step: pay for your class' : 'Taking you to secure checkout…') + '</h3>' +
+      ? '<h3>' + (cookieOrder ? 'One more step: pay for your ' + w : 'Taking you to secure checkout…') + '</h3>' +
         '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(classOrder.number) + '</strong></p>' +
-        '<p class="muted" style="margin:12px 0 0">Your spot is held for ' + (Number(cfg.classHoldMinutes) || 30) + ' minutes while you pay. We’ll email ' + esc(email) + ' as soon as your payment goes through.</p>' +
-        '<div class="stack" style="margin-top:16px;align-items:center"><a class="btn" href="' + esc(classOrder.payUrl) + '">Pay ' + money(classOrder.total) + ' for your class</a></div>'
-      : '<h3>' + (cookieOrder ? 'Your class is booked!' : 'You’re booked!') + '</h3>' +
+        '<p class="muted" style="margin:12px 0 0">' + heldWord(classOrder.items) + ' held for ' + (Number(cfg.classHoldMinutes) || 30) + ' minutes while you pay. We’ll email ' + esc(email) + ' as soon as your payment goes through.</p>' +
+        '<div class="stack" style="margin-top:16px;align-items:center"><a class="btn" href="' + esc(classOrder.payUrl) + '">Pay ' + money(classOrder.total) + ' for your ' + w + '</a></div>'
+      : '<h3>' + (w === 'pre-order' ? 'Your pre-order is in!' : cookieOrder ? 'Your class is booked!' : 'You’re booked!') + '</h3>' +
         '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(classOrder.number) + '</strong></p>' +
-        '<p class="muted" style="margin:12px 0 0">Your spot is saved. We sent the details to ' + esc(email) + '.' + (classOrder.total > 0 ? ' Sweet Nothings will be in touch about payment.' : '') + '</p>' +
+        '<p class="muted" style="margin:12px 0 0">' + heldWord(classOrder.items) + ' saved. We sent the details to ' + esc(email) + '.' + (classOrder.total > 0 ? ' Sweet Nothings will be in touch about payment.' : '') + '</p>' +
         '<p style="margin:16px 0 0;font-family:var(--serif);font-size:26px;font-weight:600">Total ' + money(classOrder.total) + '</p>';
-    return fullHead(cookieOrder ? 'Request sent' : toPay ? 'Almost booked' : 'You’re booked', false) +
+    return fullHead(cookieOrder ? 'Request sent' : toPay ? 'Almost done' : w === 'pre-order' ? 'Pre-order placed' : 'You’re booked', false) +
       '<div class="panel-body"><div class="checkout-col done">' +
         '<div class="check">' + SN_ICONS.check + '</div>' +
         classHtml +
@@ -790,8 +802,8 @@ SN.ready.then(function () {
     if (!submissionId) submissionId = SN.newSubmissionId();
     // Prices aren't sent: the Sheet re-prices every line and re-checks every rule.
     SN.post('submitOrder', {
-      items: bag.map((it) => (it.kind === 'class'
-        ? { kind: 'class', eventId: it.eventId, qty: it.qty }
+      items: bag.map((it) => (SN.paidNow(it)
+        ? { kind: it.kind, eventId: it.eventId, qty: it.qty }
         : { kind: it.kind, qty: it.qty, designs: it.designs, desc: it.desc, photos: it.photos || [], fq: it.fq })),
       eventType: checkout.eventType,
       eventOther: checkout.eventOther.trim(),
@@ -842,7 +854,7 @@ SN.ready.then(function () {
     const c = $('[data-act="close"]', panel);
     if (c) c.focus();
     // Class only: straight on to Square's checkout. Square sends them back to order.html?paid=SN-x.
-    const cls = orders.find((o) => o.type === 'Class');
+    const cls = orders.find((o) => o.type === 'Class' || o.type === 'Pre-order');
     if (cls && cls.payUrl && orders.length === 1) setTimeout(() => { location.href = cls.payUrl; }, 1200);
   }
 
@@ -855,23 +867,24 @@ SN.ready.then(function () {
     if (!p) body = '<h3>Checking your payment…</h3><p class="muted" style="margin:12px 0 0">This only takes a moment.</p>';
     else if (p.error) body = '<h3>We couldn’t check your booking</h3><p class="muted" style="margin:12px 0 0">' + esc(p.error) + ' If you paid, you’ll get a confirmation email shortly.</p>';
     else if (p.status === 'Paid' || p.status === 'Booked' || p.status === 'Completed') {
-      body = '<div class="check">' + SN_ICONS.check + '</div><h3>You’re booked!</h3>' +
+      body = '<div class="check">' + SN_ICONS.check + '</div><h3>' + (paidWord(p.classes) === 'pre-order' ? 'Your pre-order is in!' : 'You’re booked!') + '</h3>' +
         '<p style="margin:10px 0 0;font-size:17px">Order number <strong>' + esc(p.number) + '</strong></p>' +
-        p.classes.map((c) => '<p style="margin:12px 0 0"><strong>' + esc(c.title) + '</strong><br><span class="muted">' + esc(c.summary || '') + ' · ' + c.qty + ' spot' + (c.qty > 1 ? 's' : '') + '</span></p>' +
-          (c.eventId ? '<div class="row-gap" style="justify-content:center;gap:8px;margin-top:10px">' +
+        p.classes.map((c) => '<p style="margin:12px 0 0"><strong>' + esc(c.title) + '</strong><br><span class="muted">' + esc(c.summary || '') + ' · ' +
+            (c.kind === 'kit' ? c.qty + ' × ' + money(c.unit || 0) : c.qty + ' spot' + (c.qty > 1 ? 's' : '')) + '</span></p>' +
+          (c.eventId && c.kind !== 'kit' ? '<div class="row-gap" style="justify-content:center;gap:8px;margin-top:10px">' +
             '<a class="btn ghost small" href="calendar.html?event=' + encodeURIComponent(c.eventId) + '&to=google" target="_blank" rel="noopener">Add to Google Calendar</a>' +
             '<a class="btn ghost small" href="calendar.html?event=' + encodeURIComponent(c.eventId) + '">Add to Apple / Outlook</a></div>' : '')).join('') +
         '<p class="muted" style="margin:12px 0 0">' + (p.status === 'Paid' ? 'Your payment went through. ' : '') + 'A confirmation email is on its way.</p>';
     } else if (p.status === 'Awaiting payment') {
       body = paidTries < 6
         ? '<h3>Checking your payment…</h3><p class="muted" style="margin:12px 0 0">Square can take a few seconds to let us know.</p>'
-        : '<h3>We haven’t seen your payment yet</h3><p class="muted" style="margin:12px 0 0">If you finished paying, you’ll get a confirmation email within a few minutes. If not, your spot is held for ' + p.holdMinutes + ' minutes from when you booked.</p>' +
+        : '<h3>We haven’t seen your payment yet</h3><p class="muted" style="margin:12px 0 0">If you finished paying, you’ll get a confirmation email within a few minutes. If not, ' + heldWord(p.classes).toLowerCase() + ' held for ' + p.holdMinutes + ' minutes from when you ordered.</p>' +
           (p.payUrl ? '<div class="stack" style="margin-top:16px;align-items:center"><a class="btn" href="' + esc(p.payUrl) + '">Finish paying ' + money(p.total) + '</a></div>' : '');
     } else {
       body = '<h3>This booking has ' + (p.status === 'Expired' ? 'expired' : 'been cancelled') + '</h3><p class="muted" style="margin:12px 0 0">' +
-        (p.status === 'Expired' ? 'The ' + p.holdMinutes + '-minute hold ran out before the payment came through, so the spot was released. If you were charged, reply to any of our emails and we’ll sort it out, or book again from the Classes page.' : 'Questions? Send us a message.') + '</p>';
+        (p.status === 'Expired' ? 'The ' + p.holdMinutes + '-minute hold ran out before the payment came through, so it was released. If you were charged, reply to any of our emails and we’ll sort it out, or order again from the Events & Parties page.' : 'Questions? Send us a message.') + '</p>';
     }
-    return fullHead('Your class booking', false) + '<div class="panel-body"><div class="checkout-col done">' + body +
+    return fullHead(p && p.classes && paidWord(p.classes) === 'pre-order' ? 'Your pre-order' : 'Your booking', false) + '<div class="panel-body"><div class="checkout-col done">' + body +
       '<div class="stack" style="margin-top:24px;align-items:center"><button type="button" class="btn ghost" data-act="close">Back to the menu</button></div></div></div>';
   }
   function checkPaid(number) {

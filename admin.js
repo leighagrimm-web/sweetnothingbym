@@ -14,7 +14,7 @@
   let cfg = null;          // settings being edited
   let stamp = '';          // fingerprint of the Sheet's settings when loaded (to notice when someone else saves)
   let base = null;         // the settings as last loaded or saved (cleaned), so Save sends only what changed here
-  const NEEDS_CODE = '2026-11-04';   // the Code.gs (CODE_VERSION) this page needs
+  const NEEDS_CODE = '2026-11-23';   // the Code.gs (CODE_VERSION) this page needs
   let orders = [];
   let messages = [];
   let codes = [];
@@ -296,7 +296,8 @@
           "q": "Adding or changing an event",
           "go": "events",
           "a": [
-            "On the Events page: title, date, times, location name and address (customers tap it for directions), price, max attendees, a photo, an optional flyer, and the button customers see: **Add to bag** (book and pay), **Order now**, **Message me** or **None**. Hide an event with its Showing switch, then Save changes."
+            "On the Events page: title, date, times, location name and address (customers tap it for directions), price, max attendees, a photo, an optional flyer, and the button customers see: **Add to bag** (book and pay for a class), **Pre-order** (pay ahead for a kit or other item), **Order now**, **Message me** or **None**. Hide an event with its Showing switch, then Save changes.",
+            "**Pre-order** is for kits and other items people pay for ahead and pick up: set the **Pickup date** and time, **Price each**, **How many you can make** (leave blank for no limit) and how many days before pickup **Pre-orders close**. The card shows \"Order by\" that day and stops taking orders after it. Customers pay through Square at checkout, like a class, with no sales tax added. Their order shows as **Pre-order** in Orders and on the dashboard."
           ]
         },
         {
@@ -500,6 +501,11 @@
   // Newest first. Add an entry with each update (id = the date it went live, plus a letter for a second one that day);
   // "go" links to the admin tab it's about.
   const RELEASES = [
+    { id: '2026-11-23', title: 'Pre-orders for kits', items: [
+      { t: 'A Pre-order button', d: 'Events & Parties cards can now use a Pre-order button for kits (like the Santa cookie kit) and other items people pay for ahead. Customers pay through Square at checkout like a class, but the card says “$25 each” and “Order by …”, with no spots or calendar invites.', go: 'events' },
+      { t: 'Pre-orders close on their own', d: 'Pick how many days before the pickup date pre-orders close; after that the card says pre-orders are closed. Set “How many you can make” to stop at a number.', go: 'events' },
+      { t: 'Shorter card text', d: 'The short line on a card is now up to 100 characters, with a count as you type. Longer text goes in the full description, under “See details”.', go: 'events' }
+    ] },
     { id: '2026-11-09', title: 'See what’s slow', items: [
       { t: 'Performance', d: 'A new Performance tab (under Behind the scenes) shows how long the admin took to open, broken down by part with the slowest in color, plus how long the last payment check took and how much of Google’s free daily time the checks used. If the admin ever feels slow, a screenshot of it tells Leigha why.', go: 'performance' }
     ] },
@@ -884,6 +890,7 @@
       if (el.dataset.list === 'events' && el.dataset.key === 'button') renderEvents();
       // A changed date can start or end the "Coming soon" card: redo the notes without redrawing the fields being typed in.
       if (el.dataset.list === 'events' && (el.dataset.key === 'summary' || el.dataset.key === 'desc')) { const h = $('[data-card-line="' + el.dataset.i + '"]'); if (h) h.textContent = cardLineHint(list[Number(el.dataset.i)]); }
+      if (el.dataset.list === 'events' && (el.dataset.key === 'cutoff' || el.dataset.key === 'date')) { const h = document.querySelector('[data-cutoff-hint="' + el.dataset.i + '"]'); if (h) h.textContent = cutoffHint(list[Number(el.dataset.i)]); }
       if (el.dataset.list === 'events' && el.dataset.key === 'date') $$('[data-past-note]').forEach((d) => { d.innerHTML = pastClassNote(cfg.events[Number(d.dataset.pastNote)]); });
       if (el.dataset.list === 'homeItems' && el.dataset.key === 'link') { const l = $('#hl-' + el.dataset.i); if (l) l.placeholder = /^(mini|large|custom)$/.test(v) ? 'Blank = shows the price' : 'Short line'; }
       markDirty();
@@ -902,7 +909,8 @@
   // in the list while a booking is in them. Picking Booked or Paid from there confirms it and sends the emails.
   const AFTER_INVOICE = ['Invoice sent', 'Paid', 'Baking', 'Ready', 'Completed', 'Cancelled'];
   const CLASS_STATUSES = ['Booked', 'Paid', 'Completed', 'Cancelled'];
-  const isClass = (o) => o.type === 'Class';
+  // Classes and pre-orders are paid at checkout and use the class statuses; o.type says which ("Class" / "Pre-order").
+  const isClass = (o) => o.type === 'Class' || o.type === 'Pre-order';
   const pickable = (o) => (isClass(o) ? (CLASS_STATUSES.indexOf(o.status) === -1 ? [o.status] : []).concat(CLASS_STATUSES) : AFTER_INVOICE.indexOf(o.status) !== -1 ? AFTER_INVOICE : null);
   const badge = (st) => '<span class="status-badge" style="' + (STATUS_STYLE[st] || '') + '">' + esc(st) + '</span>';
   const isActive = (o) => ['Completed', 'Declined', 'Cancelled', 'Expired'].indexOf(o.status) === -1;
@@ -946,8 +954,8 @@
     // Six columns with related details stacked, so the table fits a laptop screen without scrolling sideways.
     const small = (t) => '<br><span class="muted" style="font-size:13px">' + t + '</span>';
     body.innerHTML = list.map((o) => {
-      const items = o.items.map((it) => esc(it.kind === 'class' ? it.qty + ' × ' + it.title : it.qty + ' ' + SN.itemLabel(it.kind))).join('<br>');
-      const ful = isClass(o) ? 'Class' : o.fulfillment === 'delivery' && o.address ? 'Drop-off · ' + esc(o.address.zip) : 'Pickup';
+      const items = o.items.map((it) => esc(SN.paidNow(it) ? it.qty + ' × ' + it.title : it.qty + ' ' + SN.itemLabel(it.kind))).join('<br>');
+      const ful = isClass(o) ? o.type : o.fulfillment === 'delivery' && o.address ? 'Drop-off · ' + esc(o.address.zip) : 'Pickup';
       const total = o.invoice
         ? '<strong>' + money(o.invoice.total) + '</strong>' + (o.invoice.changed ? small('was est. ' + money(o.total)) : '')
         : money(o.total) + small(isClass(o) ? '' : 'estimate');
@@ -978,7 +986,7 @@
         '<td><div class="order-cell">' + action + '<div><strong>' + esc(o.number) + '</strong>' + (received ? '<br><span style="font-size:13px;white-space:nowrap">Ordered ' + esc(received.date) + '</span>' + small(esc(received.time)) : '') +
           (o.allergies ? '<br><span class="status-badge" style="background:#FBEDEA;color:#B23A2B;margin-top:4px">Allergy</span>' : '') +
           (o.byPhone ? '<br><span class="status-badge" style="background:#E4E9F3;color:#1F2A44;margin-top:4px">Phone order</span>' : '') + '</div></div></td>' +
-        '<td class="wrap-any">' + esc(o.customer.name) + small(esc(o.customer.email)) + small(esc(isClass(o) ? 'Class' : o.eventType || 'Occasion not given')) + '</td>' +
+        '<td class="wrap-any">' + esc(o.customer.name) + small(esc(o.customer.email)) + small(esc(isClass(o) ? o.type : o.eventType || 'Occasion not given')) + '</td>' +
         '<td class="nowrap">' + esc(o.dateNeeded ? SN.prettyDate(o.dateNeeded, { weekday: 'short', month: 'short', day: 'numeric' }) : '—') + small(ful) + '</td>' +
         '<td>' + items + '</td>' +
         '<td class="nowrap">' + total + '</td>' +
@@ -1074,9 +1082,9 @@
 
   // Cookies, class spots and money in a set of orders.
   function tally(list) {
-    const t = { orders: list.length, custom: 0, mini: 0, large: 0, spots: 0, money: 0 };
+    const t = { orders: list.length, custom: 0, mini: 0, large: 0, spots: 0, kits: 0, money: 0 };
     list.forEach((o) => {
-      o.items.forEach((it) => { if (it.kind === 'class') t.spots += it.qty; else t[it.kind] += it.qty; });
+      o.items.forEach((it) => { if (it.kind === 'class') t.spots += it.qty; else if (it.kind === 'kit') t.kits += it.qty; else t[it.kind] += it.qty; });
       t.money += o.invoice ? Number(o.invoice.total) || 0 : Number(o.total) || 0;
     });
     return t;
@@ -1087,13 +1095,14 @@
     const names = {};
     (cfg.flavors || []).forEach((f) => { names[f.id] = f.name; });
     const art = { mini: {}, large: {} };
-    const custom = [], classes = {};
+    const custom = [], classes = {}, kits = {};
     list.forEach((o) => o.items.forEach((it) => {
       if (it.kind === 'custom') custom.push({ o, it });
       else if (it.kind === 'class') { const k = it.title; classes[k] = classes[k] || { title: it.title, spots: 0, date: o.dateNeeded }; classes[k].spots += it.qty; }
+      else if (it.kind === 'kit') { const k = it.eventId || it.title; kits[k] = kits[k] || { title: it.title, qty: 0, date: o.dateNeeded }; kits[k].qty += it.qty; }
       else Object.keys(it.fq || {}).forEach((id) => { const n = names[id] || (it.flavorNames || {})[id] || id; art[it.kind][n] = (art[it.kind][n] || 0) + it.fq[id]; });
     }));
-    return { art, custom, classes: Object.keys(classes).map((k) => classes[k]) };
+    return { art, custom, classes: Object.keys(classes).map((k) => classes[k]), kits: Object.keys(kits).map((k) => kits[k]) };
   }
 
   // Checks that the numbers on this page can be trusted. Each returns { ok, text, n } (n = order number to open).
@@ -1151,14 +1160,14 @@
     return out;
   }
 
-  // Class bookings on one day, grouped into one card per class: the class, its time, spots booked of the max, and
-  // everyone booked (open the card to see them). Expired bookings aren't spots, so they're left out.
+  // Class bookings and pre-orders on one day, grouped into one card per class or kit: its time, how many booked or
+  // ordered of the max, and everyone (open the card to see them). Expired ones don't count, so they're left out.
   const dashOpenClasses = {};
   function classCards(list, day) {
     const groups = {};
-    list.filter((o) => o.status !== 'Expired').forEach((o) => o.items.filter((it) => it.kind === 'class').forEach((it) => {
+    list.filter((o) => o.status !== 'Expired').forEach((o) => o.items.filter(SN.paidNow).forEach((it) => {
       const k = it.eventId || it.title;
-      const g = groups[k] = groups[k] || { key: day + '|' + k, ev: (cfg.events || []).find((e) => e.id === it.eventId), title: it.title, spots: 0, people: [] };
+      const g = groups[k] = groups[k] || { key: day + '|' + k, ev: (cfg.events || []).find((e) => e.id === it.eventId), title: it.title, kit: it.kind === 'kit', spots: 0, people: [] };
       g.spots += it.qty;
       g.people.push({ o, qty: it.qty });
     }));
@@ -1169,11 +1178,11 @@
       const waiting = g.people.filter((p) => !isConfirmed(p.o)).reduce((a, p) => a + p.qty, 0);
       return '<details class="dash-class" data-dash-class="' + esc(g.key) + '"' + (dashOpenClasses[g.key] ? ' open' : '') + '>' +
         '<summary><strong>' + esc(ev.title || g.title) + '</strong>' +
-          '<span>' + (when ? esc(when) + ' · ' : '') + g.spots + (max ? ' of ' + max : '') + ' spot' + (g.spots === 1 && !max ? '' : 's') + ' booked' +
+          '<span>' + (when ? esc(when) + ' · ' : '') + g.spots + (max ? ' of ' + max : '') + (g.kit ? ' ordered' : ' spot' + (g.spots === 1 && !max ? '' : 's') + ' booked') +
           (waiting ? ' · ' + waiting + ' awaiting payment' : '') + '</span>' +
-          '<span class="dash-class-more">' + g.people.length + ' booking' + (g.people.length === 1 ? '' : 's') + '</span></summary>' +
+          '<span class="dash-class-more">' + g.people.length + (g.kit ? ' order' : ' booking') + (g.people.length === 1 ? '' : 's') + '</span></summary>' +
         '<ul>' + g.people.map((p) => '<li><button type="button" class="link-btn" data-dash-open="' + esc(p.o.number) + '">' + esc(p.o.customer.name || p.o.number) + '</button>' +
-          '<span>' + p.qty + ' spot' + (p.qty === 1 ? '' : 's') + ' · ' + esc(p.o.status) + '</span></li>').join('') + '</ul>' +
+          '<span>' + (g.kit ? '× ' + p.qty : p.qty + ' spot' + (p.qty === 1 ? '' : 's')) + ' · ' + esc(p.o.status) + '</span></li>').join('') + '</ul>' +
         '</details>';
     }).join('');
   }
@@ -1221,6 +1230,7 @@
         tile('Artisan cookies', (tc.mini + tc.large) + (c.artisan ? '<span class="muted" style="font-size:16px"> / ' + c.artisan + '</span>' : ''),
           '<div class="hint">' + tc.mini + ' mini · ' + tc.large + ' large</div>' + plus(tp.mini + tp.large)) +
         tile('Class spots', tc.spots, '') +
+        (tc.kits ? tile('Pre-orders', tc.kits, '') : '') +
         tile('Confirmed sales', money(tc.money), tp.orders ? '<span class="dash-pend">+' + money(tp.money) + ' estimated pending</span>' : '') +
       '</div>' +
       '<div class="dash-cal">' + days.map((d) => {
@@ -1229,8 +1239,8 @@
         const cards = classCards(all.filter(isClass), d);
         return '<div class="dash-day' + (d === today ? ' today' : '') + '"><div class="dash-day-h">' + esc(dayLabel(d)) + (d === today ? ' · today' : '') + '</div>' + cards +
           (list.length ? list.map((o) => {
-            const what = o.items.map((it) => it.kind === 'class' ? it.qty + ' × ' + it.title : it.qty + ' ' + (it.kind === 'custom' ? 'custom' : it.kind)).join(', ');
-            const how = isClass(o) ? 'Class' : o.fulfillment === 'delivery' ? 'Drop-off' : 'Pickup';
+            const what = o.items.map((it) => SN.paidNow(it) ? it.qty + ' × ' + it.title : it.qty + ' ' + (it.kind === 'custom' ? 'custom' : it.kind)).join(', ');
+            const how = isClass(o) ? o.type : o.fulfillment === 'delivery' ? 'Drop-off' : 'Pickup';
             return '<button type="button" class="dash-order' + (isPending(o) ? ' pending' : '') + '" data-dash-open="' + esc(o.number) + '" style="border-left-color:' + ((STATUS_STYLE[o.status] || '').match(/color:([^;]+)/) || [, 'var(--navy)'])[1] + '">' +
               '<strong>' + esc(o.number) + '</strong> ' + esc((o.customer.name || '').split(' ')[0]) +
               '<span>' + esc(what) + '</span><span>' + esc(how) + ' · ' + esc(o.status) + (o.allergies ? ' · Allergy' : '') + '</span></button>';
@@ -1249,6 +1259,7 @@
             ? '<h4 class="dash-h4">' + (size === 'mini' ? 'Mini' : 'Large') + ' artisan</h4><table class="dash-table"><tbody>' + artRows(size) +
               totalRow('Total ' + size, bakeTotals[size]) + '</tbody></table>' : '').join('') +
           (bakeTotals.all ? '<table class="dash-table dash-grand"><tbody>' + totalRow('Total cookies to bake', bakeTotals.all) + '</tbody></table>' : '') +
+          (bake.kits.length ? '<h4 class="dash-h4">Pre-orders</h4>' + bake.kits.map((k) => '<div class="dash-line">' + esc(k.title) + ' · pickup ' + esc(dayLabel(k.date)) + ' · <strong>' + k.qty + '</strong> ordered</div>').join('') : '') +
           (bake.classes.length ? '<h4 class="dash-h4">Classes</h4>' + bake.classes.map((k) => '<div class="dash-line">' + esc(k.title) + ' · ' + esc(dayLabel(k.date)) + ' · <strong>' + k.spots + '</strong> spots</div>').join('') : '') +
           (!conf.length ? '<p class="hint">No confirmed orders this week yet.</p>' : '') +
         '</div>' +
@@ -1407,7 +1418,7 @@
       (x.desc ? '<div class="rv-quote">“' + esc(x.desc) + '”</div>' : '') +
       customerPhoto(x, 'Inspiration photo') +
       '</div>').join('');
-    const where = isClass(o) ? 'Class booking'
+    const where = isClass(o) ? (o.type === 'Pre-order' ? 'Pre-order (picked up at the event)' : 'Class booking')
       : o.fulfillment === 'delivery' && o.address ? 'Drop-off · ' + esc(o.address.street) + ', ' + esc(o.address.city) + ' ' + esc(o.address.zip)
       : 'Pickup in ' + esc(cfg.pickupCity);
     const wk = weekInfo(o);
@@ -1421,7 +1432,7 @@
         : esc(SN.prettyDate(o.dateNeeded)) + ' <button type="button" class="link-btn" data-rv="date-edit" style="margin-left:6px">Change date</button>';
     return '<div class="rv-facts">' +
         '<div><div class="k">Customer</div><div class="v">' + esc(o.customer.name) + '</div><div class="hint">' + esc(o.customer.email) + '<br>' + esc(o.customer.phone) + '</div></div>' +
-        '<div><div class="k">' + (isClass(o) ? 'Class date' : 'Needed by') + '</div><div class="v">' + dateBlock + '</div>' +
+        '<div><div class="k">' + (isClass(o) ? (o.type === 'Pre-order' ? 'Pickup date' : 'Class date') : 'Needed by') + '</div><div class="v">' + dateBlock + '</div>' +
           (isClass(o) ? '' : '<div class="hint">' + esc(o.eventType || 'Occasion not specified') + (o.eventTime ? ' · event at ' + esc(o.eventTime) : '') + '</div>') + '</div>' +
         (wk.text ? '<div style="grid-column:1 / -1"><div class="k">That week so far</div><div class="v" style="font-weight:500' + (wk.over ? ';color:var(--error)' : '') + '">' +
           esc(wk.text) + (wk.over ? '. Approving puts it over your limit (' + esc(wk.over) + ').' : '') + '</div></div>' : '') +
@@ -1432,7 +1443,7 @@
         (o.promoCode ? '<div style="grid-column:1 / -1"><div class="k">Code used</div><div class="v">' + esc(o.promoCode) +
           (o.giftCredit && !o.invoice ? ' <span class="hint">(gift card: about ' + money(o.giftCredit) + ' comes off when you approve, from its balance at that time)</span>' : '') + '</div></div>' : '') +
       '</div>' +
-      '<h3 class="rv-h">' + (isClass(o) ? 'Booked' : 'What they asked for') + '</h3>' + it +
+      '<h3 class="rv-h">' + (isClass(o) ? (o.type === 'Pre-order' ? 'Ordered' : 'Booked') : 'What they asked for') + '</h3>' + it +
       (isClass(o) ? '' : '<div class="hint" style="margin-top:8px">Estimate shown to customer: <strong>' + money(o.total) + '</strong></div>');
   }
 
@@ -2350,6 +2361,17 @@
       ? 'Blank, so the card shows the first 3 lines of the full description, cut off with “…”. A short line (up to ' + CARD_LINE_MAX + ' characters) looks tidier.'
       : 'Up to ' + CARD_LINE_MAX + ' characters. Leave blank to show the full description on the card.';
   }
+  // Under "Max attendees" / "How many you can make": how many are booked or ordered so far.
+  function maxHint(ev) {
+    const kit = ev.button === 'Pre-order', n = ev.booked || 0;
+    if ((ev.button === 'Add to bag' || kit) && ev.max !== '' && ev.max != null) return n + (kit ? ' ordered, ' : ' booked, ') + Math.max(0, ev.max - n) + (kit ? ' left' : ' spots left');
+    return n ? n + (kit ? ' ordered' : ' booked') : '';
+  }
+  // Under "Pre-orders close": the last day customers can order.
+  function cutoffHint(ev) {
+    const by = SN.preorderBy(ev);
+    return by ? 'Last day to order: ' + SN.prettyDate(by, { weekday: 'short', month: 'short', day: 'numeric' }) + '. Leave 0 to take orders until the pickup date.' : 'Set the pickup date to see the last day to order.';
+  }
   function renderEvents() {
     const n = cfg.events.length;
     $('#events-editor').innerHTML = n ? cfg.events.map((ev, i) => {
@@ -2362,13 +2384,15 @@
         '<div data-past-note="' + i + '">' + pastClassNote(ev) + '</div>' +
         field(id('title'), 'Title', '<textarea class="input one-line" rows="1" id="' + id('title') + '" ' + attrs('title') + ' style="font-weight:600">' + esc(ev.title) + '</textarea>') +
         '<div class="grid-2">' +
-          field(id('date'), 'Date', '<input class="input" id="' + id('date') + '" type="date" ' + attrs('date') + ' value="' + esc(ev.date) + '">') +
+          field(id('date'), ev.button === 'Pre-order' ? 'Pickup date' : 'Date', '<input class="input" id="' + id('date') + '" type="date" ' + attrs('date') + ' value="' + esc(ev.date) + '">') +
           field(id('venue'), 'Location name', '<textarea class="input one-line" rows="1" id="' + id('venue') + '" ' + attrs('venue') + ' placeholder="e.g. Khepri Kitchen & Coffee">' + esc(ev.venue) + '</textarea>') +
           field(id('start'), 'Start time', '<input class="input" id="' + id('start') + '" type="text" ' + attrs('start') + ' value="' + esc(ev.start) + '" placeholder="e.g. 2:00 PM">') +
           field(id('end'), 'End time', '<input class="input" id="' + id('end') + '" type="text" ' + attrs('end') + ' value="' + esc(ev.end) + '" placeholder="e.g. 4:00 PM">') +
-          field(id('price'), 'Price per person', '<div class="input-wrap"><span>$</span><input id="' + id('price') + '" type="number" min="0" step="1" ' + attrs('price') + ' value="' + esc(ev.price) + '"></div>') +
-          field(id('max'), 'Max attendees', '<input class="input" id="' + id('max') + '" type="number" min="1" ' + attrs('max') + ' value="' + esc(ev.max) + '" placeholder="No limit">',
-            ev.button === 'Add to bag' && ev.max !== '' && ev.max != null ? (ev.booked || 0) + ' booked, ' + Math.max(0, ev.max - (ev.booked || 0)) + ' spots left' : (ev.booked ? ev.booked + ' booked' : '')) +
+          field(id('price'), ev.button === 'Pre-order' ? 'Price each' : 'Price per person', '<div class="input-wrap"><span>$</span><input id="' + id('price') + '" type="number" min="0" step="1" ' + attrs('price') + ' value="' + esc(ev.price) + '"></div>') +
+          field(id('max'), ev.button === 'Pre-order' ? 'How many you can make' : 'Max attendees', '<input class="input" id="' + id('max') + '" type="number" min="1" ' + attrs('max') + ' value="' + esc(ev.max) + '" placeholder="No limit">',
+            maxHint(ev)) +
+          (ev.button === 'Pre-order' ? field(id('cutoff'), 'Pre-orders close', '<div class="input-wrap"><input id="' + id('cutoff') + '" type="number" min="0" step="1" ' + attrs('cutoff') + ' value="' + esc(ev.cutoff) + '" placeholder="0"><span>days before</span></div>',
+            '<span data-cutoff-hint="' + i + '">' + cutoffHint(ev) + '</span>') : '') +
         '</div>' +
         field(id('address'), 'Address', '<textarea class="input one-line" rows="1" id="' + id('address') + '" ' + attrs('address') + ' placeholder="e.g. 106 S. Emerson St., Mount Prospect, IL">' + esc(ev.address) + '</textarea>', 'Customers tap it for directions in their maps app.') +
         field(id('when'), 'Small text above the title (optional)', '<textarea class="input one-line" rows="1" id="' + id('when') + '" ' + attrs('when') + ' placeholder="e.g. Holiday special">' + esc(ev.when) + '</textarea>', 'Leave blank to show the date and time there instead.') +
@@ -2378,8 +2402,10 @@
         photoField(id('photo'), 'Photo', attrs('photo') + ' value="' + esc(ev.photo) + '"') +
         photoField(id('flyer'), 'Flyer (optional)', attrs('flyer') + ' value="' + esc(ev.flyer) + '"') +
         field(id('button'), 'Button', '<select class="input" id="' + id('button') + '" ' + attrs('button') + '>' +
-          ['Add to bag', 'Order now', 'Message me', 'None'].map((b) => '<option' + (b === ev.button ? ' selected' : '') + '>' + b + '</option>').join('') + '</select>',
-          ev.button === 'Add to bag' ? (Number(ev.price) > 0 ? 'Customers book and pay at checkout; no approval needed.' : 'Add a price so customers can book it.') : '') +
+          ['Add to bag', 'Pre-order', 'Order now', 'Message me', 'None'].map((b) => '<option' + (b === ev.button ? ' selected' : '') + '>' + b + '</option>').join('') + '</select>',
+          ev.button === 'Add to bag' ? (Number(ev.price) > 0 ? 'A class: customers book and pay at checkout; no approval needed.' : 'Add a price so customers can book it.')
+            : ev.button === 'Pre-order' ? (Number(ev.price) > 0 ? 'A kit or other item: customers pre-order and pay at checkout, then pick it up on the date. No approval or sales tax.' : 'Add a price so customers can pre-order it.')
+            : 'Add to bag is for a class people book; Pre-order is for a kit or item people pay for ahead.') +
       '</div>';
     }).join('') : '<p class="hint">No events yet. Add one below.</p>';
     $$('#events-editor [data-key="photo"], #events-editor [data-key="flyer"]').forEach(thumb);

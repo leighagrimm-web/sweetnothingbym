@@ -204,7 +204,8 @@ const STARTER_PAGES = [
   ['galleryIntro', 'A peek at cookies made for birthdays, showers, weddings and more. See the newest work on Instagram.', 'Gallery page: text under the heading']
 ];
 // "Add to bag" = a class customers book and pay for at checkout (needs a price; no approval needed).
-const EVENT_BUTTONS = ['Add to bag', 'Order now', 'Message me', 'None'];
+// "Pre-order" = a kit (or other item) bought the same way, by the each, until "Pre-order closes" days before its date.
+const EVENT_BUTTONS = ['Add to bag', 'Pre-order', 'Order now', 'Message me', 'None'];
 // One object per Events row. Blank fields don't show on the website.
 const STARTER_EVENTS = [
   { id: 'e1', show: true, title: '[Cookie decorating class]', date: '', start: '', end: '', address: '', price: '', max: '', desc: '[What attendees will make and what\'s included.]', photo: '[Class photo]', when: '', button: 'Add to bag' },
@@ -214,7 +215,7 @@ const STARTER_EVENTS = [
 ];
 // Events tab column for each field above.
 const EVENT_COLS = { id: 'ID', show: 'Show', title: 'Title', date: 'Date', start: 'Start time', end: 'End time', address: 'Address', price: 'Price', max: 'Max attendees', desc: 'Description', photo: 'Photo', when: 'When', button: 'Button',
-  venue: 'Location', summary: 'Card line', flyer: 'Flyer' };
+  venue: 'Location', summary: 'Card line', flyer: 'Flyer', cutoff: 'Pre-order closes (days before)' };
 const CODE_TYPES = ['Percent off', 'Gift card'];
 // Show, Photo, Caption. The first 4 shown also appear under "Recent creations" on the home page.
 const STARTER_GALLERY = ['Birthday', 'Baby shower', 'Wedding shower', 'Anniversary', 'Holiday', 'Party', 'Artisan box', 'Custom set']
@@ -230,8 +231,8 @@ const TABS = {
   Pages: { headers: ['Key', 'Text', 'Where it shows'], widths: [170, 560, 380], text: ['Key', 'Text'] },
   Events: {
     // Location = the place's name; Card line = the short text on the card (the full Description shows in Details).
-    headers: ['ID', 'Show', 'Title', 'Date', 'Start time', 'End time', 'Address', 'Price', 'Max attendees', 'Description', 'Photo', 'When', 'Button', 'Location', 'Card line', 'Flyer'],
-    widths: [50, 60, 220, 110, 90, 90, 220, 80, 100, 360, 220, 160, 110, 200, 260, 220],
+    headers: ['ID', 'Show', 'Title', 'Date', 'Start time', 'End time', 'Address', 'Price', 'Max attendees', 'Description', 'Photo', 'When', 'Button', 'Location', 'Card line', 'Flyer', 'Pre-order closes (days before)'],
+    widths: [50, 60, 220, 110, 90, 90, 220, 80, 100, 360, 220, 160, 110, 200, 260, 220, 150],
     text: ['ID', 'Date', 'Start time', 'End time', 'Photo', 'When', 'Flyer'], money: ['Price']
   },
   Gallery: { headers: ['Show', 'Photo', 'Caption'], widths: [60, 320, 260], text: ['Photo'] },
@@ -392,7 +393,7 @@ function writeEvents_(events) {
       if (!col) return;
       let v = ev[k];
       if (k === 'show') v = v !== false;
-      else if (k === 'price' || k === 'max') v = v === '' || v == null || isNaN(Number(v)) ? '' : Number(v);
+      else if (k === 'price' || k === 'max' || k === 'cutoff') v = v === '' || v == null || isNaN(Number(v)) ? '' : Number(v);
       else v = String(v == null ? '' : v);
       row[col - 1] = v;
     });
@@ -529,7 +530,7 @@ function buildConfig_(admin) {
       const ev = {
         id: String(r.ID || '').trim() || ('row' + (i + 2)), title: String(r.Title).trim(), date: toISODate_(r.Date),
         start: timeText_(r['Start time']), end: timeText_(r['End time']), address: String(r.Address || '').trim(),
-        price: num(r.Price), max: num(r['Max attendees']), desc: String(r.Description || '').trim(), photo: String(r.Photo || '').trim(),
+        price: num(r.Price), max: num(r['Max attendees']), cutoff: num(r['Pre-order closes (days before)']), desc: String(r.Description || '').trim(), photo: String(r.Photo || '').trim(),
         when: String(r.When || '').trim(), button: EVENT_BUTTONS.indexOf(String(r.Button)) !== -1 ? String(r.Button) : 'None',
         venue: String(r.Location || '').trim(), summary: String(r['Card line'] || '').trim(), flyer: String(r.Flyer || '').trim()
       };
@@ -567,6 +568,18 @@ const COUNTED_STATUSES = ['Invoice sent', 'Paid', 'Baking', 'Ready', 'Completed'
 // says so; unpaid ones become "Expired". "Booked" = confirmed without online payment (Square not set up, or by hand).
 const CLASS_STATUSES = ['Awaiting payment', 'Booked', 'Paid', 'Completed', 'Cancelled', 'Expired'];
 const CLASS_HOLDS_SPOT = ['Awaiting payment', 'Booked', 'Paid', 'Completed'];
+// Pre-order kits work like classes (paid at checkout, held while paying, limited by Max attendees): an order with only
+// kits is a "Pre-order", one with any class a "Class". Both follow the class statuses above.
+const PAID_NOW_TYPES = ['Class', 'Pre-order'];
+function paidNow_(o) { return PAID_NOW_TYPES.indexOf(String(o.type || o.Type || '')) !== -1; }
+function paidNowKind_(kind) { return kind === 'class' || kind === 'kit'; }
+// What such an order holds, for its wording: 'class', 'pre-order' or 'booking' (both).
+function paidWord_(o) {
+  const kit = o.items.some((it) => it.kind === 'kit'), cls = o.items.some((it) => it.kind === 'class');
+  return kit && cls ? 'booking' : kit ? 'pre-order' : 'class';
+}
+// A pre-order's last order day: the event date minus its cutoff days ('' = no date set).
+function preorderBy_(ev) { return ev.date ? addDaysISO_(ev.date, -(Number(ev.cutoff) || 0)) : ''; }
 
 // From the Orders + OrderItems tabs:
 //   weeks: { '2026-11-02': { custom: { approved, pending }, artisan: { approved, pending } } } (Monday of each week)
@@ -582,7 +595,7 @@ function bookingCounts_() {
     const o = orders[String(it.Order).trim()];
     if (!o) return;
     const kind = String(it.Kind), qty = Number(it.Qty) || 0;
-    if (kind === 'class') {
+    if (paidNowKind_(kind)) {
       if (CLASS_HOLDS_SPOT.indexOf(o.status) !== -1) seats[String(it['Event ID'])] = (seats[String(it['Event ID'])] || 0) + qty;
       return;
     }
@@ -708,7 +721,7 @@ const MAX_QTY = 2000;
 
 function occasion_(o) { return o.eventType || 'Not specified'; }
 
-function itemLabel_(kind) { return kind === 'custom' ? 'Custom Cookies' : kind === 'mini' ? 'Mini Artisan' : kind === 'class' ? 'Class' : 'Large Artisan'; }
+function itemLabel_(kind) { return kind === 'custom' ? 'Custom Cookies' : kind === 'mini' ? 'Mini Artisan' : kind === 'class' ? 'Class' : kind === 'kit' ? 'Pre-order' : 'Large Artisan'; }
 
 // admin: a phone order from the admin page (adminCreateOrder): no rate limit, no "taking orders" switch, rule
 // warnings need confirmWarnings, classes are booked without Square, and no request / new-order emails go out.
@@ -720,7 +733,7 @@ function submitOrder_(b, admin) {
   if (sid) { const seen = cache.get('sub_' + sid); if (seen) return JSON.parse(seen); }
 
   const cfg = getConfig_();
-  const hasCookies = (b.items || []).some((it) => it && it.kind !== 'class');
+  const hasCookies = (b.items || []).some((it) => it && !paidNowKind_(it.kind));
   if (hasCookies && !cfg.acceptingOrders && !admin) return { ok: false, code: 'closed', error: 'Sorry, I’m not taking new cookie orders right now.' };
 
   const v = validateOrder_(cfg, b, admin);
@@ -754,7 +767,7 @@ function submitOrder_(b, admin) {
         const ev = cfg.events.find((e) => e.id === it.eventId);
         if (ev && ev.max !== '' && (seats[it.eventId] || 0) + it.qty > ev.max) {
           const left = Math.max(0, ev.max - (seats[it.eventId] || 0));
-          return { ok: false, code: 'invalid', errors: [left ? 'fewer spots in ' + ev.title + ' (only ' + left + ' left)' : ev.title + ' is now sold out. Please remove it'] };
+          return { ok: false, code: 'invalid', errors: [left ? (it.kind === 'kit' ? 'fewer of ' : 'fewer spots in ') + ev.title + ' (only ' + left + ' left)' : ev.title + ' is now sold out. Please remove it'] };
         }
       }
     }
@@ -773,15 +786,15 @@ function submitOrder_(b, admin) {
       o.createdAt = now;
       // Classes are paid at checkout through Square when it's set up (the spot is held until then); a class that's
       // free after a gift card, or with Square not set up, is booked right away.
-      o.status = o.type === 'Class' ? (!admin && squareReady_() && o.total > 0 ? 'Awaiting payment' : 'Booked') : 'Pending review';
-      if (o.type === 'Class') {
+      o.status = paidNow_(o) ? (!admin && squareReady_() && o.total > 0 ? 'Awaiting payment' : 'Booked') : 'Pending review';
+      if (paidNow_(o)) {
         o.invoice = { lines: startingLines_(o), fee: 0, subtotal: round2_(o.subtotal - o.discount), tax: 0, credit: o.giftCredit, total: o.total, note: '', changed: false, sentAt: now.toISOString() };
       }
       const row = appendObject_(ss.getSheetByName('Orders'), {
         'Order': o.number, 'Received': now, 'Status': o.status, 'Type': o.type,
         'Name': o.customer.name, 'Email': o.customer.email, 'Phone': o.customer.phone,
         'Occasion': o.eventType, 'Date needed': o.dateNeeded,
-        'Pickup / drop-off': o.type === 'Class' ? 'Class' : o.fulfillment === 'delivery' ? 'Drop-off' : 'Pickup',
+        'Pickup / drop-off': paidNow_(o) ? o.type : o.fulfillment === 'delivery' ? 'Drop-off' : 'Pickup',
         'Street': o.address ? o.address.street : '', 'City': o.address ? o.address.city : '', 'ZIP': o.address ? o.address.zip : '',
         'Allergies': o.allergies, 'Event time': o.eventTime, 'Pickup window': o.pickupWindow, 'Subtotal': o.subtotal, 'Tax': o.tax, 'Tax rate': o.taxRate, 'Drop-off fee': o.deliveryFee,
         'Estimated total': o.total, 'Promo code': o.promoCode, 'Discount': o.discount, 'Gift card credit': o.giftCredit,
@@ -789,9 +802,9 @@ function submitOrder_(b, admin) {
         'Customer email': admin ? 'Not sent (phone order)' : 'Sending…', 'Owner alert': admin ? 'Phone order' : 'Sending…', 'Updated': now
       });
       appendObjects_(ss.getSheetByName('OrderItems'), o.items.map((it, i) => ({
-        'Order': o.number, 'Line': i + 1, 'Item': itemLabel_(it.kind) + (it.kind === 'class' ? ': ' + it.title : ''), 'Kind': it.kind, 'Qty': it.qty,
+        'Order': o.number, 'Line': i + 1, 'Item': itemLabel_(it.kind) + (paidNowKind_(it.kind) ? ': ' + it.title : ''), 'Kind': it.kind, 'Qty': it.qty,
         'Designs': it.kind === 'custom' ? it.designs : '', 'Flavors': it.kind === 'mini' || it.kind === 'large' ? it.summary : '',
-        'Flavors (data)': it.fq ? JSON.stringify(it.fq) : '', 'Description': it.kind === 'class' ? it.summary : (it.desc || ''), 'Photo': it.photoCell || '',
+        'Flavors (data)': it.fq ? JSON.stringify(it.fq) : '', 'Description': paidNowKind_(it.kind) ? it.summary : (it.desc || ''), 'Photo': it.photoCell || '',
         'Unit price': it.unit, 'Line total': it.lineTotal, 'Event ID': it.eventId || ''
       })));
       placed.push({ order: o, row });
@@ -809,7 +822,7 @@ function submitOrder_(b, admin) {
   placed.forEach(({ order: o, row }) => {
     // Phone orders: nothing goes out now. A class booking can send its confirmation if Melissa ticked the box.
     if (admin) {
-      if (o.type === 'Class' && b.sendClassEmail) setCell_(sh, row, 'Customer email', sendSafely_(() => sendClassBookingEmail_(cfg, o)));
+      if (paidNow_(o) && b.sendClassEmail) setCell_(sh, row, 'Customer email', sendSafely_(() => sendClassBookingEmail_(cfg, o)));
       return;
     }
     if (o.status === 'Awaiting payment') {
@@ -832,8 +845,8 @@ function submitOrder_(b, admin) {
         setCell_(sh, row, 'Pay link', 'FAILED: ' + String(err && err.message || err).slice(0, 200));
       }
     }
-    const toCustomer = o.type === 'Class' ? () => sendClassBookingEmail_(cfg, o) : () => sendOrderRequestEmail_(cfg, o);
-    const toOwner = o.type === 'Class' ? () => sendOwnerClassAlert_(cfg, o) : () => sendOwnerOrderAlert_(cfg, o);
+    const toCustomer = paidNow_(o) ? () => sendClassBookingEmail_(cfg, o) : () => sendOrderRequestEmail_(cfg, o);
+    const toOwner = paidNow_(o) ? () => sendOwnerClassAlert_(cfg, o) : () => sendOwnerOrderAlert_(cfg, o);
     setCell_(sh, row, 'Customer email', sendSafely_(toCustomer));
     setCell_(sh, row, 'Owner alert', sendSafely_(toOwner));
   });
@@ -939,6 +952,19 @@ function validateOrder_(cfg, b, admin) {
         return;
       }
       classes.push({ kind, eventId: ev.id, title: ev.title, date: ev.date, start: ev.start, end: ev.end, address: [ev.venue, ev.address].filter(Boolean).join(', '), qty, unit: round2_(ev.price), lineTotal: round2_(qty * ev.price), summary: classWhen_(ev) });
+    } else if (kind === 'kit') {
+      // A pre-order kit: open until its cutoff before the pickup date, limited by Max attendees.
+      const ev = cfg.events.find((e) => e.id === String(raw.eventId) && e.button === 'Pre-order' && Number(e.price) > 0);
+      const qty = Math.floor(Number(raw.qty));
+      if (!ev) { errors.push('a pre-order that’s no longer available was in your bag. Please remove it'); return; }
+      if (preorderBy_(ev) && preorderBy_(ev) < today) { errors.push('pre-orders for ' + ev.title + ' have closed. Please remove it'); return; }
+      if (!(qty >= 1 && qty <= 50)) { errors.push(ev.title + ': 1 to 50'); return; }
+      if (ev.spotsLeft !== undefined && qty > ev.spotsLeft) {
+        errors.push(ev.spotsLeft ? 'fewer of ' + ev.title + ' (only ' + ev.spotsLeft + ' left)' : ev.title + ' is sold out. Please remove it');
+        return;
+      }
+      const when = classWhen_(ev);
+      classes.push({ kind, eventId: ev.id, title: ev.title, date: ev.date, start: ev.start, end: ev.end, address: [ev.venue, ev.address].filter(Boolean).join(', '), qty, unit: round2_(ev.price), lineTotal: round2_(qty * ev.price), summary: when ? 'Pickup ' + when : '' });
     } else {
       errors.push('a valid item');
     }
@@ -958,7 +984,7 @@ function validateOrder_(cfg, b, admin) {
   const pct = code && code.type === 'Percent off' ? Math.min(100, Math.max(0, code.amount)) : 0;
   let giftLeft = code && code.type === 'Gift card' ? code.balance : 0;
 
-  // Classes: no tax. A gift card is used on classes first, since they're paid now.
+  // Classes and pre-order kits: no tax. A gift card is used on them first, since they're paid now.
   let cls = null;
   if (classes.length) {
     const subtotal = round2_(classes.reduce((a, it) => a + it.lineTotal, 0));
@@ -966,7 +992,7 @@ function validateOrder_(cfg, b, admin) {
     const giftCredit = round2_(Math.min(giftLeft, subtotal - discount));
     giftLeft = round2_(giftLeft - giftCredit);
     cls = {
-      type: 'Class', items: classes, eventType: '', dateNeeded: classes.map((it) => it.date).filter(Boolean).sort()[0] || '', allergies: '', eventTime: '', pickupWindow: '',
+      type: classes.some((it) => it.kind === 'class') ? 'Class' : 'Pre-order', items: classes, eventType: '', dateNeeded: classes.map((it) => it.date).filter(Boolean).sort()[0] || '', allergies: '', eventTime: '', pickupWindow: '',
       fulfillment: 'class', address: null, customer, subtotal, discount, tax: 0, deliveryFee: 0, giftCredit,
       total: round2_(subtotal - discount - giftCredit), taxRate: 0, promoCode: code ? code.code : ''
     };
@@ -1479,10 +1505,10 @@ function readOrders_() {
     try { fq = JSON.parse(g('Flavors (data)') || '{}'); } catch (e) { /* ignore */ }
     const unit = Number(g('Unit price')) || 0;
     const designs = Number(g('Designs')) || 0;
-    if (kind === 'class') {
-      // Classes: the Item column is "Class: <title>" and Description holds the date and time.
+    if (paidNowKind_(kind)) {
+      // Classes and kits: the Item column is "Class: <title>" or "Pre-order: <title>"; Description holds the date and time.
       (items[num] = items[num] || []).push({
-        kind, qty: Number(g('Qty')) || 0, eventId: String(g('Event ID') || ''), title: String(g('Item') || '').replace(/^Class: /, ''),
+        kind, qty: Number(g('Qty')) || 0, eventId: String(g('Event ID') || ''), title: String(g('Item') || '').replace(/^(Class|Pre-order): /, ''),
         unit, lineTotal: Number(g('Line total')) || 0, summary: String(g('Description') || '')
       });
       return;
@@ -1510,11 +1536,11 @@ function orderFromRow_(h, r, items) {
   const json = (k, fallback) => { try { return g(k) ? JSON.parse(g(k)) : fallback; } catch (e) { return fallback; } };
   const num = String(g('Order')).trim();
   return {
-    number: num, type: String(g('Type') || '') || (how === 'Class' ? 'Class' : 'Cookies'),
+    number: num, type: String(g('Type') || '') || (PAID_NOW_TYPES.indexOf(how) !== -1 ? how : 'Cookies'),
     createdAt: iso(g('Received')), status: String(g('Status') || 'Pending review'),
     customer: { name: String(g('Name') || ''), email: String(g('Email') || ''), phone: String(g('Phone') || '') },
     eventType: String(g('Occasion') || ''), dateNeeded: toISODate_(g('Date needed')), allergies: String(g('Allergies') || ''), eventTime: timeText_(g('Event time')), pickupWindow: String(g('Pickup window') || ''),
-    fulfillment: how === 'Class' ? 'class' : delivery ? 'delivery' : 'pickup',
+    fulfillment: PAID_NOW_TYPES.indexOf(how) !== -1 ? 'class' : delivery ? 'delivery' : 'pickup',   // 'class': paid at checkout, no tax or address
     address: delivery ? { street: String(g('Street') || ''), city: String(g('City') || ''), zip: String(g('ZIP') || '') } : null,
     subtotal: Number(g('Subtotal')) || 0, tax: Number(g('Tax')) || 0, taxRate: Number(g('Tax rate')) || 0,
     deliveryFee: Number(g('Drop-off fee')) || 0, total: Number(g('Estimated total')) || 0,
@@ -1546,8 +1572,8 @@ function loadOrder_(number) {
 // A percent promo code becomes its own discount line.
 function startingLines_(o) {
   const lines = o.items.map((it) => ({
-    desc: it.kind === 'class'
-      ? 'Class: ' + it.title + (it.summary ? ' (' + it.summary + ')' : '')
+    desc: paidNowKind_(it.kind)
+      ? itemLabel_(it.kind) + ': ' + it.title + (it.summary ? ' (' + it.summary + ')' : '')
       : it.qty + ' ' + itemLabel_(it.kind) + (it.summary ? ' (' + it.summary.replace(/ · estimated at .*?each/, '') + ')' : ''),
     qty: it.qty, unit: round2_(it.unit)
   }));
@@ -1619,7 +1645,7 @@ function saveInvoice_(o) {
 function adminRetryInvoice(number) {
   requireOwner_();
   const o = loadOrder_(number);
-  if (!o.invoice || o.type === 'Class') return { ok: false, error: number + ' has no approved invoice.' };
+  if (!o.invoice || paidNow_(o)) return { ok: false, error: number + ' has no approved invoice.' };
   if (o.invoice.qb && o.invoice.qb.id) return { ok: true, order: o };
   if (!qbReady_()) return { ok: false, error: 'QuickBooks isn’t connected. Connect it on the Payments tab first.' };
   qbInvoiceForOrder_(getConfig_(), o);
@@ -1658,10 +1684,10 @@ function adminDecline(number, note) {
 function adminSetStatus(number, status) {
   requireOwner_();
   const o = loadOrder_(number);
-  const allowed = o.type === 'Class' ? CLASS_STATUSES : COUNTED_STATUSES.concat(['Cancelled']);
+  const allowed = paidNow_(o) ? CLASS_STATUSES : COUNTED_STATUSES.concat(['Cancelled']);
   if (allowed.indexOf(status) === -1) return { ok: false, error: 'Unknown status.' };
   let note = '';
-  if (o.type !== 'Class') {
+  if (!paidNow_(o)) {
     if (!o.invoice) return { ok: false, error: number + ' hasn’t been approved yet. Use Review → Decline instead.' };
     if (o.status === 'Cancelled') return { ok: false, error: number + ' was cancelled, and its invoice and gift card were undone, so it can’t be reopened. Ask the customer to order again.' };
     // Cancelling an approved cookie order: the gift card amount goes back on the card, and an unpaid QuickBooks
@@ -1673,14 +1699,14 @@ function adminSetStatus(number, status) {
       saveInvoice_(o);
     }
   }
-  if (o.type === 'Class' && ['Awaiting payment', 'Expired'].indexOf(o.status) !== -1 && ['Booked', 'Paid'].indexOf(status) !== -1) {
+  if (paidNow_(o) && ['Awaiting payment', 'Expired'].indexOf(o.status) !== -1 && ['Booked', 'Paid'].indexOf(status) !== -1) {
     confirmClass_(o, status);
     return { ok: true, weekCounts: weekCountsNow_() };
   }
   // Cancelling a class booking: any gift card amount goes back on the card (an expired hold already gave it back).
   // If it was still waiting on Square, its pay link is closed too, so a spot that's been given away can't be paid
   // for later. (Card payments on a paid booking are refunded by hand in Square.)
-  if (o.type === 'Class' && status === 'Cancelled' && CLASS_HOLDS_SPOT.indexOf(o.status) !== -1) {
+  if (paidNow_(o) && status === 'Cancelled' && CLASS_HOLDS_SPOT.indexOf(o.status) !== -1) {
     const sq = (o.invoice && o.invoice.square) || {};
     if (o.status === 'Awaiting payment') {
       try { if (sq.linkId && squareReady_()) squareFetch_('delete', '/v2/online-checkout/payment-links/' + sq.linkId); } catch (e) { /* already gone */ }
@@ -1731,7 +1757,7 @@ function adminChangeDate(number, newDate, notify, note) {
   const d = toISODate_(newDate);
   if (!d) return { ok: false, error: 'Pick a valid date.' };
   const o = loadOrder_(number);
-  if (o.type === 'Class') return { ok: false, error: 'Class dates are set on the Events tab.' };
+  if (paidNow_(o)) return { ok: false, error: 'Class and pre-order dates are set on the Events tab.' };
   const old = o.dateNeeded;
   const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
   const row = findOrderRow_(sh, number);
@@ -1756,7 +1782,7 @@ function adminSetHandoff(number, date, time, notify, note) {
   const t = clean_(time, 20);
   if (!d || !t) return { ok: false, error: 'Pick a date and a time.' };
   const o = loadOrder_(number);
-  if (o.type === 'Class') return { ok: false, error: 'Classes don’t have a pickup time.' };
+  if (paidNow_(o)) return { ok: false, error: 'Classes and pre-orders use the date and time on the Events tab.' };
   if (['Declined', 'Cancelled'].indexOf(o.status) !== -1) return { ok: false, error: number + ' is ' + o.status + '.' };
   const sh = SpreadsheetApp.getActive().getSheetByName('Orders');
   const row = findOrderRow_(sh, number);
@@ -1781,7 +1807,7 @@ function sendHandoffReminders_(sh, rows) {
   if (Number(Utilities.formatDate(now, tz_(), 'H')) < 8) return [];
   const tomorrow = Utilities.formatDate(new Date(now.getTime() + 864e5), tz_(), 'yyyy-MM-dd');
   const sent = [];
-  rows.filter((r) => String(r.Type || 'Cookies') !== 'Class' && toISODate_(r['Handoff date']) === tomorrow && !String(r['Reminder sent'] || '') &&
+  rows.filter((r) => !paidNow_(r) && toISODate_(r['Handoff date']) === tomorrow && !String(r['Reminder sent'] || '') &&
       ['Declined', 'Cancelled', 'Completed', 'Pending review'].indexOf(String(r.Status)) === -1)
     .forEach((r) => {
       const o = loadOrder_(String(r.Order));
@@ -1796,7 +1822,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-11-21c';
+const CODE_VERSION = '2026-11-23';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
@@ -1810,7 +1836,7 @@ function completePastOrders_(sh, rows, cfg) {
   const today = todayISO_();
   const done = [];
   rows.forEach((r) => {
-    const type = String(r.Type || 'Cookies') === 'Class' ? 'Class' : 'Cookies';
+    const type = paidNow_(r) ? 'Class' : 'Cookies';   // pre-orders complete like classes
     let date = toISODate_(r['Date needed']);
     if (COMPLETE_AFTER[type].indexOf(String(r.Status)) === -1 || !date || date >= today) return;
     if (type === 'Class') {
@@ -1829,7 +1855,7 @@ function completePastOrders_(sh, rows, cfg) {
 function sendPayReminders_(sh, rows) {
   if (Number(Utilities.formatDate(new Date(), tz_(), 'H')) < 9) return [];
   const sent = [];
-  rows.filter((r) => String(r.Type || 'Cookies') !== 'Class' && String(r.Status) === 'Invoice sent' && !String(r['Pay reminder sent'] || '') &&
+  rows.filter((r) => !paidNow_(r) && String(r.Status) === 'Invoice sent' && !String(r['Pay reminder sent'] || '') &&
       toISODate_(r['Date needed']) && daysUntil_(toISODate_(r['Date needed'])) <= PAY_DUE_DAYS && daysUntil_(toISODate_(r['Date needed'])) >= 0)
     .forEach((r) => {
       const o = loadOrder_(String(r.Order));
@@ -2328,7 +2354,7 @@ function squarePaymentLink_(cfg, o) {
     order: {
       location_id: prop_('SQUARE_LOCATION_ID'),
       reference_id: o.number,
-      line_items: o.items.map((it) => ({ name: ('Class: ' + it.title).slice(0, 500), note: it.summary || undefined, quantity: String(it.qty), base_price_money: { amount: cents(it.unit), currency: 'USD' } })),
+      line_items: o.items.map((it) => ({ name: (itemLabel_(it.kind) + ': ' + it.title).slice(0, 500), note: it.summary || undefined, quantity: String(it.qty), base_price_money: { amount: cents(it.unit), currency: 'USD' } })),
       discounts: discounts.length ? discounts : undefined
     },
     checkout_options: { redirect_url: String(cfg.siteUrl || '') + 'order.html?paid=' + encodeURIComponent(o.number), ask_for_shipping_address: false },
@@ -2484,13 +2510,13 @@ function checkClassPayment_(b) {
   const number = clean_(b.number, 20);
   let o;
   try { o = loadOrder_(number); } catch (e) { return { ok: false, error: 'We couldn’t find that booking.' }; }
-  if (o.type !== 'Class') return { ok: false, error: 'We couldn’t find that booking.' };
+  if (!paidNow_(o)) return { ok: false, error: 'We couldn’t find that booking.' };
   if (o.status === 'Awaiting payment' && o.invoice && o.invoice.square && squareReady_()) {
     try { if (squareOrderPaid_(o.invoice.square.orderId)) confirmClass_(o, 'Paid'); } catch (e) { console.error('Square check failed', e); }
   }
   return {
     ok: true, number: o.number, status: o.status, total: o.total,
-    classes: o.items.map((it) => ({ title: it.title, summary: it.summary, qty: it.qty, eventId: it.eventId })),
+    classes: o.items.map((it) => ({ kind: it.kind, title: it.title, summary: it.summary, qty: it.qty, unit: it.unit, eventId: it.eventId })),
     payUrl: o.status === 'Awaiting payment' && o.invoice && o.invoice.square ? o.invoice.square.url : '',
     holdMinutes: Number(getConfig_().classHoldMinutes) || 30
   };
@@ -2974,16 +3000,18 @@ function sendDeclineEmail_(cfg, o) {
 function sendClassBookingEmail_(cfg, o) {
   const first = (o.customer.name || '').split(' ')[0];
   const paid = o.status === 'Paid';
-  const html = shell_(cfg, 'You’re booked' + (first ? ', ' + esc_(first) : '') + '!', o.number,
-    '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">Your spot' + (o.items.reduce((a, it) => a + it.qty, 0) > 1 ? 's are' : ' is') +
-      ' saved. ' + classPayLine_(o) + '</div>' +
+  const w = paidWord_(o);
+  const head = w === 'pre-order' ? 'Your pre-order is in' : 'You’re booked';
+  const saved = w === 'class' ? 'Your spot' + (o.items.reduce((a, it) => a + it.qty, 0) > 1 ? 's are' : ' is') + ' saved.' : 'Your ' + w + ' is saved.';
+  const html = shell_(cfg, head + (first ? ', ' + esc_(first) : '') + '!', o.number,
+    '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">' + saved + ' ' + classPayLine_(o) + '</div>' +
     classDetails_(o) + totalsBlock_(o, paid ? 'Paid' : 'Total') + classInfoBlock_(cfg, o) +
     p_('Questions or need to change your booking? Just reply to this email and mention your order number.', 14));
   sendMail_({
     to: o.customer.email,
-    subject: subjectPrefix_(cfg) + 'You’re booked! – Sweet Nothings ' + o.number,
+    subject: subjectPrefix_(cfg) + head + '! – Sweet Nothings ' + o.number,
     htmlBody: html,
-    body: ['You’re booked' + (first ? ', ' + first : '') + '!', 'Order number ' + o.number, '', classPayLine_(o), '',
+    body: [head + (first ? ', ' + first : '') + '!', 'Order number ' + o.number, '', classPayLine_(o), '',
       classText_(o), '', totalsText_(o, paid ? 'Paid' : 'Total'), '', classInfoText_(cfg, o), '', 'Questions? Just reply to this email.'].join('\n'),
     name: cfg.senderName, replyTo: cfg.replyToEmail
   });
@@ -2993,20 +3021,24 @@ function sendClassBookingEmail_(cfg, o) {
 function sendClassExpiredEmail_(cfg, o) {
   const first = (o.customer.name || '').split(' ')[0];
   const mins = Number(cfg.classHoldMinutes) || 30;
-  const line = 'Your payment didn’t come through within ' + mins + ' minutes, so your spot wasn’t held and you haven’t been charged anything.';
+  const w = paidWord_(o);
+  const what = w === 'class' ? 'spot' : w;
+  const line = 'Your payment didn’t come through within ' + mins + ' minutes, so your ' + what + ' wasn’t held and you haven’t been charged anything.';
   const again = cfg.siteUrl ? cfg.siteUrl + 'events.html' : '';
-  const html = shell_(cfg, 'Your class spot wasn’t held' + (first ? ', ' + esc_(first) : ''), o.number,
+  const head = w === 'class' ? 'Your class spot wasn’t held' : 'Your ' + w + ' wasn’t held';
+  const still = w === 'class' ? 'Still want to come? Spots may still be open, so you can book again.' : 'Still want it? There may still be some left, so you can order again.';
+  const html = shell_(cfg, head + (first ? ', ' + esc_(first) : ''), o.number,
     '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">' + esc_(line) + '</div>' +
     classDetails_(o) +
-    p_('Still want to come? Spots may still be open, so you can book again.', 15) +
-    (again ? button_(again, 'Book again') : '') +
+    p_(still, 15) +
+    (again ? button_(again, w === 'class' ? 'Book again' : 'Order again') : '') +
     p_('If you did pay, or think something went wrong, just reply to this email and mention your order number.', 14));
   sendMail_({
     to: o.customer.email,
-    subject: subjectPrefix_(cfg) + 'Your class spot wasn’t held – Sweet Nothings ' + o.number,
+    subject: subjectPrefix_(cfg) + head + ' – Sweet Nothings ' + o.number,
     htmlBody: html,
     body: [(first ? 'Hi ' + first + ',' : 'Hi,'), '', line, '', classText_(o), '',
-      'Still want to come? Spots may still be open' + (again ? ': ' + again : '.'), '',
+      still + (again ? ' ' + again : ''), '',
       'If you did pay, or think something went wrong, just reply to this email and mention your order number ' + o.number + '.'].join('\n'),
     name: cfg.senderName, replyTo: cfg.replyToEmail
   });
@@ -3022,9 +3054,11 @@ function classPayLine_(o) {
 // late: paid in Square after the hold ran out (the spot may have been taken by then).
 function sendOwnerClassAlert_(cfg, o, late) {
   const how = o.status === 'Paid' ? 'Paid online through Square.' : o.total > 0 ? 'Not paid online; collect payment another way.' : 'Nothing to pay.';
-  const html = shell_(cfg, late ? 'Late class payment: check spots' : 'New class booking', o.number,
+  const w = paidWord_(o);
+  const what = w === 'class' ? 'class booking' : w;
+  const html = shell_(cfg, late ? 'Late ' + w + ' payment: check what’s left' : 'New ' + what, o.number,
     (late ? '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px"><strong>Paid after the ' + (Number(cfg.classHoldMinutes) || 30) +
-      '-minute hold ran out.</strong> The spot was released meanwhile, so the class may now be over capacity. Check the class and refund in Square if needed.</div>' : '') +
+      '-minute hold ran out.</strong> It was released meanwhile, so the ' + (w === 'pre-order' ? 'kits' : 'class') + ' may now be oversold. Check it and refund in Square if needed.</div>' : '') +
     '<div style="font-size:15px;margin-bottom:18px"><strong>' + esc_(o.customer.name) + '</strong><br>' +
       '<a href="mailto:' + esc_(o.customer.email) + '" style="color:' + C.navy + '">' + esc_(o.customer.email) + '</a><br>' + esc_(o.customer.phone) + '</div>' +
     classDetails_(o) + totalsBlock_(o, 'Total') +
@@ -3032,9 +3066,9 @@ function sendOwnerClassAlert_(cfg, o, late) {
     p_(how + ' Booked automatically; no review needed. Reply to this email to write to the customer.', 13));
   sendMail_({
     to: cfg.ownerEmail,
-    subject: subjectPrefix_(cfg) + (late ? 'LATE class payment – ' : 'New class booking – ') + o.number + ' (' + o.items.map((it) => it.qty + ' × ' + it.title).join(', ') + ')',
+    subject: subjectPrefix_(cfg) + (late ? 'LATE ' + w + ' payment – ' : 'New ' + what + ' – ') + o.number + ' (' + o.items.map((it) => it.qty + ' × ' + it.title).join(', ') + ')',
     htmlBody: html,
-    body: [(late ? 'LATE class payment (after the hold ran out; check spots): ' : 'New class booking: ') + o.number, how, o.customer.name, o.customer.email, o.customer.phone, '', classText_(o), '', totalsText_(o, 'Total')].join('\n'),
+    body: [(late ? 'LATE ' + w + ' payment (after the hold ran out; check what’s left): ' : 'New ' + what + ': ') + o.number, how, o.customer.name, o.customer.email, o.customer.phone, '', classText_(o), '', totalsText_(o, 'Total')].join('\n'),
     name: cfg.senderName, replyTo: o.customer.email
   });
 }
@@ -3092,18 +3126,23 @@ function photoUrl_(v) {
 }
 // The full class info for the booking email: where (with a directions link), the description, the flyer and
 // calendar buttons. Uses the class as it is on the Events tab now, so later edits (new address, flyer) show up.
-function classInfoBlock_(cfg, o) {
+// Pre-order kits: "Pickup" before the date and place, and no calendar buttons.
+function classInfoEvents_(cfg, o) {
   const seen = {};
-  return o.items.map((it) => (cfg.events || []).find((e) => e.id === it.eventId)).filter((ev) => ev && !seen[ev.id] && (seen[ev.id] = true)).map((ev) => {
+  return o.items.map((it) => ({ ev: (cfg.events || []).find((e) => e.id === it.eventId), kit: it.kind === 'kit' }))
+    .filter((x) => x.ev && !seen[x.ev.id] && (seen[x.ev.id] = true));
+}
+function classInfoBlock_(cfg, o) {
+  return classInfoEvents_(cfg, o).map(({ ev, kit }) => {
     const place = classPlace_(ev);
     const maps = ev.address ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(place) : '';
     const flyer = photoUrl_(ev.flyer);
-    const gcal = googleCalUrl_(cfg, ev);
-    const ics = cfg.siteUrl && classTimes_(ev) ? cfg.siteUrl + 'calendar.html?event=' + encodeURIComponent(ev.id) : '';
+    const gcal = kit ? '' : googleCalUrl_(cfg, ev);
+    const ics = !kit && cfg.siteUrl && classTimes_(ev) ? cfg.siteUrl + 'calendar.html?event=' + encodeURIComponent(ev.id) : '';
     const btn = (href, label) => '<a href="' + esc_(href) + '" style="display:inline-block;margin:0 8px 8px 0;padding:10px 16px;border-radius:999px;border:1px solid ' + C.navy + ';color:' + C.navy + ';text-decoration:none;font-weight:600;font-size:14px">' + label + '</a>';
     return '<div style="border-top:1px solid ' + C.line + ';padding-top:14px;margin-bottom:18px">' + h2_(esc_(ev.title)) +
-      '<div style="font-size:15px;font-weight:600;margin-bottom:8px">' + esc_([prettyDate_(ev.date), [ev.start, ev.end].filter(Boolean).join('–')].filter(Boolean).join(' · ')) + '</div>' +
-      (place ? '<div style="margin-bottom:12px;font-size:15px"><div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em">Where</div>' +
+      '<div style="font-size:15px;font-weight:600;margin-bottom:8px">' + esc_((kit && ev.date ? 'Pickup ' : '') + [prettyDate_(ev.date), [ev.start, ev.end].filter(Boolean).join('–')].filter(Boolean).join(' · ')) + '</div>' +
+      (place ? '<div style="margin-bottom:12px;font-size:15px"><div style="color:' + C.muted + ';font-size:12px;text-transform:uppercase;letter-spacing:.06em">' + (kit ? 'Pickup at' : 'Where') + '</div>' +
         (ev.venue ? '<div style="font-weight:600">' + esc_(ev.venue) + '</div>' : '') +
         (ev.address ? '<a href="' + esc_(maps) + '" style="color:' + C.navy + '">' + esc_(ev.address) + '</a><div style="color:' + C.muted + ';font-size:13px">Tap the address for directions.</div>' : '') + '</div>' : '') +
       (ev.desc ? '<div style="font-size:15px;white-space:pre-wrap;margin-bottom:12px">' + esc_(ev.desc) + '</div>' : '') +
@@ -3114,24 +3153,26 @@ function classInfoBlock_(cfg, o) {
   }).join('');
 }
 function classInfoText_(cfg, o) {
-  const seen = {};
-  return o.items.map((it) => (cfg.events || []).find((e) => e.id === it.eventId)).filter((ev) => ev && !seen[ev.id] && (seen[ev.id] = true)).map((ev) =>
-    [ev.title, [prettyDate_(ev.date), [ev.start, ev.end].filter(Boolean).join('–')].filter(Boolean).join(' · '),
-      classPlace_(ev) ? 'Where: ' + classPlace_(ev) : '', ev.desc || '', photoUrl_(ev.flyer) ? 'Flyer: ' + photoUrl_(ev.flyer) : '',
-      googleCalUrl_(cfg, ev) ? 'Add to Google Calendar: ' + googleCalUrl_(cfg, ev) : '',
-      cfg.siteUrl && classTimes_(ev) ? 'Add to Apple / Outlook calendar: ' + cfg.siteUrl + 'calendar.html?event=' + encodeURIComponent(ev.id) : ''].filter(Boolean).join('\n')).join('\n\n');
+  return classInfoEvents_(cfg, o).map(({ ev, kit }) =>
+    [ev.title, (kit && ev.date ? 'Pickup ' : '') + [prettyDate_(ev.date), [ev.start, ev.end].filter(Boolean).join('–')].filter(Boolean).join(' · '),
+      classPlace_(ev) ? (kit ? 'Pickup at: ' : 'Where: ') + classPlace_(ev) : '', ev.desc || '', photoUrl_(ev.flyer) ? 'Flyer: ' + photoUrl_(ev.flyer) : '',
+      !kit && googleCalUrl_(cfg, ev) ? 'Add to Google Calendar: ' + googleCalUrl_(cfg, ev) : '',
+      !kit && cfg.siteUrl && classTimes_(ev) ? 'Add to Apple / Outlook calendar: ' + cfg.siteUrl + 'calendar.html?event=' + encodeURIComponent(ev.id) : ''].filter(Boolean).join('\n')).join('\n\n');
 }
+// "2 spots × $60.00" for a class, "2 × $25.00" for a kit.
+function paidQty_(it) { return it.kind === 'kit' ? it.qty + ' × ' + money_(it.unit) : it.qty + ' spot' + (it.qty > 1 ? 's' : '') + ' × ' + money_(it.unit); }
 function classDetails_(o) {
-  return '<div style="border-top:1px solid ' + C.line + ';padding-top:14px;margin-bottom:18px">' + h2_('Your class' + (o.items.length > 1 ? 'es' : '')) +
+  const w = paidWord_(o);
+  return '<div style="border-top:1px solid ' + C.line + ';padding-top:14px;margin-bottom:18px">' + h2_(w === 'class' ? 'Your class' + (o.items.length > 1 ? 'es' : '') : 'Your ' + w) +
     o.items.map((it) =>
       '<div style="padding:8px 0;font-size:15px"><table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr><td><strong>' + esc_(it.title) + '</strong></td>' +
         '<td align="right">' + money_(it.lineTotal) + '</td></tr></table>' +
         '<div style="color:' + C.muted + ';font-size:14px">' + esc_([it.summary, it.address].filter(Boolean).join(' · ')) + '</div>' +
-        '<div style="color:' + C.muted + ';font-size:14px">' + it.qty + ' spot' + (it.qty > 1 ? 's' : '') + ' × ' + money_(it.unit) + '</div></div>').join('') +
+        '<div style="color:' + C.muted + ';font-size:14px">' + paidQty_(it) + '</div></div>').join('') +
   '</div>';
 }
 function classText_(o) {
-  return o.items.map((it) => it.title + ' – ' + it.qty + ' spot' + (it.qty > 1 ? 's' : '') + ' × ' + money_(it.unit) + ' = ' + money_(it.lineTotal) +
+  return o.items.map((it) => it.title + ' – ' + paidQty_(it) + ' = ' + money_(it.lineTotal) +
     '\n   ' + [it.summary, it.address].filter(Boolean).join(' · ')).join('\n');
 }
 
@@ -3140,19 +3181,19 @@ function classText_(o) {
 function sendOrderMessageEmail_(cfg, o, text) {
   const inv = o.invoice;
   const totals = inv
-    ? totalsBlock_(invoiceTotals_(o), o.type === 'Class' ? 'Total' : 'Amount due')
+    ? totalsBlock_(invoiceTotals_(o), paidNow_(o) ? 'Total' : 'Amount due')
     : totalsBlock_(o, 'Estimated total');
   const html = shell_(cfg, 'A message about your order', o.number,
     '<div style="font-size:15px;white-space:pre-wrap;margin-bottom:18px;color:' + C.navy + '">' + esc_(text) + '</div>' +
     '<p style="margin:0 0 18px;font-size:15px">— Sweet Nothings</p>' +
-    (o.type === 'Class' ? classDetails_(o) : facts_(o, 'message') + itemsBlock_(o, 'Your order')) + totals +
+    (paidNow_(o) ? classDetails_(o) : facts_(o, 'message') + itemsBlock_(o, 'Your order')) + totals +
     p_('Just reply to this email to answer.', 14));
   sendMail_({
     to: o.customer.email,
     subject: subjectPrefix_(cfg) + 'A message about your order ' + o.number + ' – Sweet Nothings',
     htmlBody: html,
     body: text + '\n\n— Sweet Nothings\n\nYour order ' + o.number + ':\n' +
-      (o.type === 'Class' ? classText_(o) : 'Needed by: ' + prettyDate_(o.dateNeeded) + '\n' + itemsText_(o)) + '\n\nJust reply to this email to answer.',
+      (paidNow_(o) ? classText_(o) : 'Needed by: ' + prettyDate_(o.dateNeeded) + '\n' + itemsText_(o)) + '\n\nJust reply to this email to answer.',
     name: cfg.senderName, replyTo: cfg.replyToEmail
   });
 }
@@ -3251,6 +3292,7 @@ function sendMessageReplyEmail_(cfg, m, text) {
 
 // "24 Custom Cookies", "12 Mini Artisan", or for a class "2 spots · Class: Holiday decorating"
 function itemHeading_(it) {
+  if (it.kind === 'kit') return it.qty + ' × Pre-order: ' + it.title;
   return it.kind === 'class' ? it.qty + ' spot' + (it.qty > 1 ? 's' : '') + ' · Class: ' + it.title : it.qty + ' ' + itemLabel_(it.kind);
 }
 
