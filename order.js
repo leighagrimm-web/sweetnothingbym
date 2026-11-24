@@ -874,6 +874,10 @@ SN.ready.then(function () {
           (c.eventId && c.kind !== 'kit' ? '<div class="row-gap" style="justify-content:center;gap:8px;margin-top:10px">' +
             '<a class="btn ghost small" href="calendar.html?event=' + encodeURIComponent(c.eventId) + '&to=google" target="_blank" rel="noopener">Add to Google Calendar</a>' +
             '<a class="btn ghost small" href="calendar.html?event=' + encodeURIComponent(c.eventId) + '">Add to Apple / Outlook</a></div>' : '')).join('') +
+        // A pre-order's pickup (the key lets the calendar page look up this order).
+        (p.calKey ? '<div class="row-gap" style="justify-content:center;gap:8px;margin-top:10px">' +
+          '<a class="btn ghost small" href="calendar.html?order=' + encodeURIComponent(p.number) + '&k=' + encodeURIComponent(p.calKey) + '&to=google" target="_blank" rel="noopener">Add pickup to Google Calendar</a>' +
+          '<a class="btn ghost small" href="calendar.html?order=' + encodeURIComponent(p.number) + '&k=' + encodeURIComponent(p.calKey) + '">Add to Apple / Outlook</a></div>' : '') +
         '<p class="muted" style="margin:12px 0 0">' + (p.status === 'Paid' ? 'Your payment went through. ' : '') + 'A confirmation email is on its way.</p>';
     } else if (p.status === 'Awaiting payment') {
       body = paidTries < 6

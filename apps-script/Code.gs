@@ -32,8 +32,13 @@ function doGet(e) {
       return json_({ ok: true, config: publicConfig_(live) });
     }
     if (p.action === 'ping') return json_({ ok: true, time: new Date().toISOString() });
+    // An order's pickup / drop-off for calendar.html (?order=SN-1234&k=key).
+    if (p.action === 'calevent') {
+      const ev = orderCalLookup_(p);
+      return json_(ev && classTimes_(ev) ? { ok: true, event: ev, times: classTimes_(ev) } : { ok: false, error: 'There’s nothing to add to a calendar for that order yet.' });
+    }
     if (p.action === 'ics') {
-      const ev = (getConfig_().events || []).find((x) => x.id === String(p.event || ''));
+      const ev = p.order ? orderCalLookup_(p) : (getConfig_().events || []).find((x) => x.id === String(p.event || ''));
       const ics = ev ? classIcs_(getConfig_(), ev) : '';
       if (!ics) return json_({ ok: false, error: 'That class isn’t on the calendar.' });
       return ContentService.createTextOutput(ics).setMimeType(ContentService.MimeType.ICAL);
@@ -1822,7 +1827,7 @@ function sendHandoffReminders_(sh, rows) {
 // 8 days out gets one reminder email (after 9 AM), with the amount due and the QuickBooks pay link.
 const PAY_DUE_DAYS = 7;
 // Bump this (the date) whenever admin.js needs something new from Code.gs, and set NEEDS_CODE in admin.js to match.
-const CODE_VERSION = '2026-11-23';
+const CODE_VERSION = '2026-11-23b';
 function daysUntil_(iso) {
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd');
   return Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);
@@ -2518,6 +2523,7 @@ function checkClassPayment_(b) {
     ok: true, number: o.number, status: o.status, total: o.total,
     classes: o.items.map((it) => ({ kind: it.kind, title: it.title, summary: it.summary, qty: it.qty, unit: it.unit, eventId: it.eventId })),
     payUrl: o.status === 'Awaiting payment' && o.invoice && o.invoice.square ? o.invoice.square.url : '',
+    calKey: o.type === 'Pre-order' && orderCalEvent_(getConfig_(), o) ? calKey_(o.number) : '',
     holdMinutes: Number(getConfig_().classHoldMinutes) || 30
   };
 }
@@ -3003,16 +3009,17 @@ function sendClassBookingEmail_(cfg, o) {
   const w = paidWord_(o);
   const head = w === 'pre-order' ? 'Your pre-order is in' : 'You’re booked';
   const saved = w === 'class' ? 'Your spot' + (o.items.reduce((a, it) => a + it.qty, 0) > 1 ? 's are' : ' is') + ' saved.' : 'Your ' + w + ' is saved.';
+  const cal = o.type === 'Pre-order' ? orderCalButtons_(cfg, o) : { html: '', text: '' };   // classes have their own, per class
   const html = shell_(cfg, head + (first ? ', ' + esc_(first) : '') + '!', o.number,
     '<div style="background:' + C.blush + ';border-radius:12px;padding:16px 18px;font-size:15px;margin-bottom:18px">' + saved + ' ' + classPayLine_(o) + '</div>' +
-    classDetails_(o) + totalsBlock_(o, paid ? 'Paid' : 'Total') + classInfoBlock_(cfg, o) +
+    classDetails_(o) + totalsBlock_(o, paid ? 'Paid' : 'Total') + classInfoBlock_(cfg, o) + cal.html +
     p_('Questions or need to change your booking? Just reply to this email and mention your order number.', 14));
   sendMail_({
     to: o.customer.email,
     subject: subjectPrefix_(cfg) + head + '! – Sweet Nothings ' + o.number,
     htmlBody: html,
     body: [head + (first ? ', ' + first : '') + '!', 'Order number ' + o.number, '', classPayLine_(o), '',
-      classText_(o), '', totalsText_(o, paid ? 'Paid' : 'Total'), '', classInfoText_(cfg, o), '', 'Questions? Just reply to this email.'].join('\n'),
+      classText_(o), '', totalsText_(o, paid ? 'Paid' : 'Total'), '', classInfoText_(cfg, o), cal.text ? '\n' + cal.text : '', '', 'Questions? Just reply to this email.'].join('\n'),
     name: cfg.senderName, replyTo: cfg.replyToEmail
   });
 }
@@ -3083,9 +3090,11 @@ function clock24_(t) {
   return [h, Number(m[2] || 0)];
 }
 // Local (Chicago) start and end for a class, as "20261119T180000". No end time: two hours after the start.
+// ev.allDay (an order's pickup with no time): the whole day, as "20261222" to "20261223".
 function classTimes_(ev) {
   if (!ev || !ev.date) return null;
   const s = clock24_(ev.start);
+  if (!s && ev.allDay) return { allDay: true, start: String(ev.date).replace(/-/g, ''), end: addDaysISO_(ev.date, 1).replace(/-/g, '') };
   if (!s) return null;
   const e = clock24_(ev.end) || [s[0] + 2, s[1]];
   const d = String(ev.date).replace(/-/g, '');
@@ -3096,9 +3105,14 @@ function classPlace_(ev) { return [ev.venue, ev.address].filter(Boolean).join(',
 function googleCalUrl_(cfg, ev) {
   const t = classTimes_(ev);
   if (!t) return '';
-  const details = [String(ev.desc || '').slice(0, 1200), cfg.siteUrl ? 'Details: ' + cfg.siteUrl + 'events.html' : ''].filter(Boolean).join('\n\n');
+  const details = calDetails_(cfg, ev);
   return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(ev.title) +
     '&dates=' + t.start + '/' + t.end + '&ctz=America/Chicago&details=' + encodeURIComponent(details) + '&location=' + encodeURIComponent(classPlace_(ev));
+}
+// The note on a calendar entry: an order's own text (ev.details), else the class description and a link to the page.
+function calDetails_(cfg, ev) {
+  if (ev.details != null) return String(ev.details).slice(0, 1500);
+  return [String(ev.desc || '').slice(0, 1200), cfg.siteUrl ? 'Details: ' + cfg.siteUrl + 'events.html' : ''].filter(Boolean).join('\n\n');
 }
 // A calendar file (Apple Calendar, Outlook), in Chicago time.
 function classIcs_(cfg, ev) {
@@ -3111,11 +3125,59 @@ function classIcs_(cfg, ev) {
     'BEGIN:STANDARD', 'TZOFFSETFROM:-0500', 'TZOFFSETTO:-0600', 'TZNAME:CST', 'DTSTART:19701101T020000', 'RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU', 'END:STANDARD',
     'END:VTIMEZONE',
     'BEGIN:VEVENT', 'UID:' + ev.id + '-' + t.start + '@sweetnothingsbym.com', 'DTSTAMP:' + Utilities.formatDate(new Date(), 'UTC', "yyyyMMdd'T'HHmmss'Z'"),
-    'DTSTART;TZID=America/Chicago:' + t.start, 'DTEND;TZID=America/Chicago:' + t.end,
+    t.allDay ? 'DTSTART;VALUE=DATE:' + t.start : 'DTSTART;TZID=America/Chicago:' + t.start, t.allDay ? 'DTEND;VALUE=DATE:' + t.end : 'DTEND;TZID=America/Chicago:' + t.end,
     'SUMMARY:' + esc(ev.title), 'LOCATION:' + esc(classPlace_(ev)),
-    'DESCRIPTION:' + esc([String(ev.desc || '').slice(0, 1200), cfg.siteUrl ? 'Details: ' + cfg.siteUrl + 'events.html' : ''].filter(Boolean).join('\n\n')),
+    'DESCRIPTION:' + esc(calDetails_(cfg, ev)),
     'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
 }
+/* ---------- "Add to calendar" for an order: a cookie pickup / drop-off time, or a pre-order's pickup ---------- */
+// Order links carry a short key made from the order number, so the calendar page can't be used to look up other
+// people's orders by guessing numbers. The secret is made once and kept in Script Properties.
+function calKey_(number) {
+  const p = SCRIPT_PROPS();
+  let secret = p.getProperty('CAL_SECRET');
+  if (!secret) { secret = Utilities.getUuid(); p.setProperty('CAL_SECRET', secret); }
+  return Utilities.computeHmacSha256Signature(String(number), secret).slice(0, 8).map((b) => ((b + 256) % 256).toString(16).padStart(2, '0')).join('');
+}
+// The order as a calendar event (shaped like an Events card), or null when there's nothing to put on a calendar yet.
+function orderCalEvent_(cfg, o) {
+  if (o.type === 'Pre-order') {
+    const kits = o.items.filter((it) => it.kind === 'kit');
+    const ev = kits.length ? (cfg.events || []).find((e) => e.id === kits[0].eventId) : null;
+    if (!ev || !ev.date) return null;
+    return { id: o.number, title: 'Pick up: ' + kits.map((it) => it.title).join(', '), date: ev.date, start: ev.start, end: ev.end, venue: ev.venue, address: ev.address, allDay: true,
+      details: 'Sweet Nothings order ' + o.number + ': ' + kits.map((it) => it.qty + ' × ' + it.title).join(', ') };
+  }
+  if (paidNow_(o) || !o.handoff || !o.handoff.date || !clock24_(o.handoff.time)) return null;
+  const isDel = o.fulfillment === 'delivery' && o.address;
+  const s = clock24_(o.handoff.time);
+  const endMin = s[0] * 60 + s[1] + 30;
+  const two = (n) => String(n).padStart(2, '0');
+  return { id: o.number, title: isDel ? 'Cookies from Sweet Nothings arrive' : 'Pick up cookies from Sweet Nothings', date: o.handoff.date,
+    start: two(s[0]) + ':' + two(s[1]), end: two(Math.min(23, Math.floor(endMin / 60))) + ':' + two(endMin % 60),
+    venue: isDel ? '' : 'Sweet Nothings', address: isDel ? o.address.street + ', ' + o.address.city + ' ' + o.address.zip : cfg.pickupAddress || cfg.pickupCity || '',
+    details: 'Sweet Nothings order ' + o.number + '\n' + itemsText_(o) + (!isDel && cfg.pickupInstructions ? '\n\n' + cfg.pickupInstructions : '') +
+      (cfg.ownerPhone ? '\n\nRunning late? Text or call ' + cfg.ownerPhone : '') };
+}
+// The calendar page's address for an order (Apple / Outlook download), and both buttons for an email.
+function orderCalPage_(cfg, o) { return cfg.siteUrl ? cfg.siteUrl + 'calendar.html?order=' + encodeURIComponent(o.number) + '&k=' + calKey_(o.number) : ''; }
+function orderCalButtons_(cfg, o) {
+  const ev = orderCalEvent_(cfg, o);
+  if (!ev || !classTimes_(ev)) return { html: '', text: '' };
+  const gcal = googleCalUrl_(cfg, ev), page = orderCalPage_(cfg, o);
+  const btn = (href, label) => '<a href="' + esc_(href) + '" style="display:inline-block;margin:0 8px 8px 0;padding:10px 16px;border-radius:999px;border:1px solid ' + C.navy + ';color:' + C.navy + ';text-decoration:none;font-weight:600;font-size:14px">' + label + '</a>';
+  return {
+    html: '<div style="margin:0 0 18px">' + btn(gcal, 'Add to Google Calendar') + (page ? btn(page, 'Add to Apple / Outlook calendar') : '') + '</div>',
+    text: 'Add to Google Calendar: ' + gcal + (page ? '\nAdd to Apple / Outlook calendar: ' + page : '')
+  };
+}
+// For the calendar page: the order's event, if the key matches.
+function orderCalLookup_(p) {
+  const number = clean_(p.order, 20);
+  if (!number || String(p.k || '') !== calKey_(number)) return null;
+  try { return orderCalEvent_(getConfig_(), loadOrder_(number)); } catch (e) { return null; }
+}
+
 // A Drive share link as an image address (like SN.photoUrl on the site), else ''.
 function photoUrl_(v) {
   const s = String(v || '').trim();
@@ -3214,6 +3276,7 @@ function sendHandoffEmail_(cfg, o, kind, note) {
   const when = handoffWhen_(o);
   const place = isDel ? o.address.street + ', ' + o.address.city + ' ' + o.address.zip : cfg.pickupAddress;
   const title = kind === 'reminder' ? (isDel ? 'Your cookies arrive tomorrow' : 'See you tomorrow!') : 'Your ' + label.toLowerCase() + ' time is set';
+  const cal = orderCalButtons_(cfg, o);
   const intro = kind === 'reminder'
     ? 'Just a reminder about your ' + label.toLowerCase() + ' tomorrow.'
     : 'Thanks for working out a time with me! Here’s what we agreed.';
@@ -3229,8 +3292,8 @@ function sendHandoffEmail_(cfg, o, kind, note) {
       (place ? '<div style="margin-top:8px;font-size:15px">' + esc_(place) + '</div>' : '') +
       (!isDel && cfg.pickupInstructions ? '<div style="color:' + C.muted + ';margin-top:6px;font-size:14px">' + esc_(cfg.pickupInstructions) + '</div>' : '') +
     '</div>' +
-    phone + itemsBlock_(o, 'Your order') + p_('— Sweet Nothings', 15));
-  const text = [intro, note || '', label + ': ' + when, place || '', !isDel && cfg.pickupInstructions ? cfg.pickupInstructions : '',
+    cal.html + phone + itemsBlock_(o, 'Your order') + p_('— Sweet Nothings', 15));
+  const text = [intro, note || '', label + ': ' + when, place || '', !isDel && cfg.pickupInstructions ? cfg.pickupInstructions : '', cal.text,
     cfg.ownerPhone ? 'Running late or need to change something? Text or call me at ' + cfg.ownerPhone + '.' : 'Need to change something? Just reply to this email.',
     '', 'Your order ' + o.number + ':', itemsText_(o), '', '— Sweet Nothings'].filter((l, i, a) => l !== '' || a[i - 1] !== '').join('\n');
   sendMail_({

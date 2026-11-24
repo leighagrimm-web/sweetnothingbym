@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261123b">
+<link rel="stylesheet" href="styles.css?v=20261123c">
 </head>
 <body data-page="privacy">
 <div id="site-header"></div>
@@ -25,23 +25,20 @@
   </section>
 </main>
 <div id="site-footer"></div>
-<script src="config.js?v=20261123b"></script>
-<script src="layout.js?v=20261123b"></script>
-<script src="order.js?v=20261123b"></script>
+<script src="config.js?v=20261123c"></script>
+<script src="layout.js?v=20261123c"></script>
+<script src="order.js?v=20261123c"></script>
 <script>
-// "Add to calendar" for a class, from the booking email and the booking-confirmed screen:
-//   calendar.html?event=e1&to=google -> Google Calendar's ready-to-save event
-//   calendar.html?event=e1           -> the calendar file from Apps Script (?action=ics): iPhone/iPad/Mac open it
-//                                      right in Calendar; other computers download it for Outlook / their calendar.
+// "Add to calendar", from emails and the booking-confirmed screen:
+//   calendar.html?event=e1            a class (from the Events settings)
+//   calendar.html?order=SN-1234&k=... an order's pickup / drop-off time or a pre-order's pickup (the key comes in its email)
+//   &to=google                        straight on to Google Calendar's ready-to-save event
+// Otherwise the calendar file comes from Apps Script (?action=ics): iPhone/iPad/Mac open it right in Calendar;
+// other computers download it for Outlook / their calendar.
 SN.ready.then(function () {
   const q = new URLSearchParams(location.search);
-  const ev = (SN.load().events || []).find((e) => e.id === q.get('event'));
   const $ = (id) => document.getElementById(id);
-  if (!ev || !ev.date || !ev.start) {
-    $('cal-title').textContent = 'We couldn’t find that class';
-    $('cal-msg').innerHTML = 'It may have been moved or removed. See <a href="events.html">Events &amp; Parties</a> for the latest.';
-    return;
-  }
+  const two = (n) => String(n).padStart(2, '0');
   // "6:00 PM" / "6pm" / "18:00" -> [18, 0]
   const clock = (t) => {
     const m = String(t || '').trim().match(/^(\d{1,2})(?::(\d{2}))?\s*([ap])?\.?m?\.?$/i);
@@ -50,42 +47,65 @@ SN.ready.then(function () {
     if (m[3] && /p/i.test(m[3])) h += 12;
     return [h, Number(m[2] || 0)];
   };
-  const s = clock(ev.start), e = clock(ev.end) || (s && [s[0] + 2, s[1]]);
-  const two = (n) => String(n).padStart(2, '0');
-  const day = ev.date.replace(/-/g, '');
-  const place = SN.eventPlace(ev);
-  const google = s ? 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(ev.title) +
-    '&dates=' + day + 'T' + two(s[0]) + two(s[1]) + '00/' + day + 'T' + two(Math.min(e[0], 23)) + two(e[1]) + '00' +
-    '&ctz=America/Chicago&details=' + encodeURIComponent(String(ev.desc || '').slice(0, 1200) + '\n\nDetails: ' + location.origin + location.pathname.replace(/calendar\.html$/, 'events.html')) +
-    '&location=' + encodeURIComponent(place) : '';
-  const icsUrl = SN_ENV.api + '?action=ics&event=' + encodeURIComponent(ev.id);
+  const notFound = (title, html) => { $('cal-title').textContent = title; $('cal-msg').innerHTML = html; };
 
-  $('cal-title').textContent = ev.title;
-  $('cal-msg').textContent = [SN.classWhen(ev), place].filter(Boolean).join(' · ');
-  $('cal-google').href = google;
-  $('cal-file').href = icsUrl;
-  $('cal-btns').hidden = false;
+  // Shows the buttons and opens the calendar. times: { start, end, allDay } as Code.gs's classTimes_ makes them.
+  function show(ev, times, details, icsUrl) {
+    const place = SN.eventPlace(ev);
+    const google = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(ev.title) +
+      '&dates=' + times.start + '/' + times.end + (times.allDay ? '' : '&ctz=America/Chicago') +
+      '&details=' + encodeURIComponent(details) + '&location=' + encodeURIComponent(place);
+    // Order times come as "17:00" (from the admin's time box); class times as typed ("6:00 PM").
+    const t12 = (t) => (/^\d{1,2}:\d{2}$/.test(String(t || '')) ? SN.time12(t) : t);
+    const when = times.allDay ? SN.prettyDate(ev.date, { weekday: 'short', month: 'short', day: 'numeric' }) + ' (all day)'
+      : SN.classWhen(Object.assign({}, ev, { start: t12(ev.start), end: t12(ev.end) }));
+    $('cal-title').textContent = ev.title;
+    $('cal-msg').textContent = [when, place].filter(Boolean).join(' · ');
+    $('cal-google').href = google;
+    $('cal-file').href = icsUrl;
+    $('cal-btns').hidden = false;
 
-  const apple = /iPhone|iPad|Macintosh/.test(navigator.userAgent);
-  // Elsewhere, download the file with a proper name so Outlook / the calendar app opens it.
-  const download = () => fetch(icsUrl).then((r) => r.text()).then((text) => {
-    if (!/BEGIN:VCALENDAR/.test(text)) throw new Error('no calendar');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([text], { type: 'text/calendar' }));
-    a.download = 'Sweet-Nothings-' + ev.title.replace(/[^\w]+/g, '-') + '.ics';
-    document.body.appendChild(a); a.click(); a.remove();
-  });
-  $('cal-file').addEventListener('click', (evt) => {
-    if (apple) return;   // Apple devices open the file straight from the link
-    evt.preventDefault();
-    download().catch(() => { location.href = icsUrl; });
-  });
+    const apple = /iPhone|iPad|Macintosh/.test(navigator.userAgent);
+    // Elsewhere, download the file with a proper name so Outlook / the calendar app opens it.
+    const download = () => fetch(icsUrl).then((r) => r.text()).then((text) => {
+      if (!/BEGIN:VCALENDAR/.test(text)) throw new Error('no calendar');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], { type: 'text/calendar' }));
+      a.download = 'Sweet-Nothings-' + ev.title.replace(/[^\w]+/g, '-') + '.ics';
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+    $('cal-file').addEventListener('click', (evt) => {
+      if (apple) return;   // Apple devices open the file straight from the link
+      evt.preventDefault();
+      download().catch(() => { location.href = icsUrl; });
+    });
 
-  if (q.get('to') === 'google' && google) { location.replace(google); return; }
-  if (!q.get('to')) {
-    if (apple) location.href = icsUrl;
-    else download().catch(() => { /* the buttons are still there */ });
+    if (q.get('to') === 'google') { location.replace(google); return; }
+    if (!q.get('to')) {
+      if (apple) location.href = icsUrl;
+      else download().catch(() => { /* the buttons are still there */ });
+    }
   }
+
+  if (q.get('order')) {
+    const keyQuery = 'order=' + encodeURIComponent(q.get('order')) + '&k=' + encodeURIComponent(q.get('k') || '');
+    SN.request({ query: 'action=calevent&' + keyQuery }, 15000).then((r) => {
+      if (!r || !r.ok) { notFound('Nothing to add yet', SN.esc((r && r.error) || 'We couldn’t find that order.') + ' Questions? Just reply to your order email.'); return; }
+      show(r.event, r.times, r.event.details || '', SN_ENV.api + '?action=ics&' + keyQuery);
+    }).catch(() => notFound('We couldn’t reach the calendar', 'Please try the link again in a minute.'));
+    return;
+  }
+
+  const ev = (SN.load().events || []).find((e) => e.id === q.get('event'));
+  if (!ev || !ev.date || !ev.start) {
+    notFound('We couldn’t find that class', 'It may have been moved or removed. See <a href="events.html">Events &amp; Parties</a> for the latest.');
+    return;
+  }
+  const s = clock(ev.start), e = clock(ev.end) || [s[0] + 2, s[1]];
+  const day = ev.date.replace(/-/g, '');
+  show(ev, { start: day + 'T' + two(s[0]) + two(s[1]) + '00', end: day + 'T' + two(Math.min(e[0], 23)) + two(e[1]) + '00' },
+    String(ev.desc || '').slice(0, 1200) + '\n\nDetails: ' + location.origin + location.pathname.replace(/calendar\.html$/, 'events.html'),
+    SN_ENV.api + '?action=ics&event=' + encodeURIComponent(ev.id));
 });
 </script>
 </body>
