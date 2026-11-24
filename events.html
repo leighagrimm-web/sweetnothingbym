@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261121e">
+<link rel="stylesheet" href="styles.css?v=20261123a">
 </head>
 <body data-page="events">
 <div id="site-header"></div>
@@ -31,9 +31,9 @@
   </section>
 </main>
 <div id="site-footer"></div>
-<script src="config.js?v=20261121e"></script>
-<script src="layout.js?v=20261121e"></script>
-<script src="order.js?v=20261121e"></script>
+<script src="config.js?v=20261123a"></script>
+<script src="layout.js?v=20261123a"></script>
+<script src="order.js?v=20261123a"></script>
 <script>
 // Heading from the Sheet's Pages tab; one card per row on the Events tab. Anything left blank doesn't show.
 // Classes ("Add to bag") show spots left and go in the bag, booked and paid at checkout with no approval needed.
@@ -90,7 +90,7 @@ SN.ready.then(function () {
         '<h3>' + esc(ev.title) + '</h3>' +
         (ev.when && when ? '<p class="hint">' + esc(when) + '</p>' : '') +
         (ev.venue || ev.address ? '<p class="hint">' + esc(ev.venue || ev.address) + '</p>' : '') +
-        (line ? '<p class="desc ev-line">' + esc(line) + '</p>' : '<div class="desc"></div>') +
+        '<div class="desc">' + (line ? '<p class="ev-line">' + esc(line) + '</p>' : '') + '</div>' +
         priceLine(ev) +
         // See details sits above the buttons, so every card's button lines up along the bottom.
         (hasDetails(ev) ? '<button type="button" class="link-btn ev-more" data-details="' + esc(ev.id) + '">See details →</button>' : '') +

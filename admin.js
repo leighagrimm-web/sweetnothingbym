@@ -883,6 +883,7 @@
       if (el.dataset.key === 'photo' || el.dataset.key === 'flyer') thumb(el);
       if (el.dataset.list === 'events' && el.dataset.key === 'button') renderEvents();
       // A changed date can start or end the "Coming soon" card: redo the notes without redrawing the fields being typed in.
+      if (el.dataset.list === 'events' && (el.dataset.key === 'summary' || el.dataset.key === 'desc')) { const h = $('[data-card-line="' + el.dataset.i + '"]'); if (h) h.textContent = cardLineHint(list[Number(el.dataset.i)]); }
       if (el.dataset.list === 'events' && el.dataset.key === 'date') $$('[data-past-note]').forEach((d) => { d.innerHTML = pastClassNote(cfg.events[Number(d.dataset.pastNote)]); });
       if (el.dataset.list === 'homeItems' && el.dataset.key === 'link') { const l = $('#hl-' + el.dataset.i); if (l) l.placeholder = /^(mini|large|custom)$/.test(v) ? 'Blank = shows the price' : 'Short line'; }
       markDirty();
@@ -2340,6 +2341,15 @@
       ? 'This class’s date has passed, so the website shows a <strong>Coming soon</strong> card here until the next class is added. Change the date (and details) here, or add a new class. The card’s wording is under Website pages.'
       : 'This class’s date has passed, so it’s hidden on the website.') + '</p>';
   }
+  // The card shows up to 3 lines; everything else belongs in the full description, under "See details".
+  const CARD_LINE_MAX = 100;
+  function cardLineHint(ev) {
+    const n = String(ev.summary || '').length;
+    if (n) return n + ' of ' + CARD_LINE_MAX + ' characters. Put everything else in Full description (customers see it under "See details").';
+    return String(ev.desc || '').length > CARD_LINE_MAX
+      ? 'Blank, so the card shows the first 3 lines of the full description, cut off with “…”. A short line (up to ' + CARD_LINE_MAX + ' characters) looks tidier.'
+      : 'Up to ' + CARD_LINE_MAX + ' characters. Leave blank to show the full description on the card.';
+  }
   function renderEvents() {
     const n = cfg.events.length;
     $('#events-editor').innerHTML = n ? cfg.events.map((ev, i) => {
@@ -2362,7 +2372,8 @@
         '</div>' +
         field(id('address'), 'Address', '<textarea class="input one-line" rows="1" id="' + id('address') + '" ' + attrs('address') + ' placeholder="e.g. 106 S. Emerson St., Mount Prospect, IL">' + esc(ev.address) + '</textarea>', 'Customers tap it for directions in their maps app.') +
         field(id('when'), 'Small text above the title (optional)', '<textarea class="input one-line" rows="1" id="' + id('when') + '" ' + attrs('when') + ' placeholder="e.g. Holiday special">' + esc(ev.when) + '</textarea>', 'Leave blank to show the date and time there instead.') +
-        field(id('summary'), 'Short line on the card (optional)', '<textarea class="input one-line" rows="1" id="' + id('summary') + '" ' + attrs('summary') + ' placeholder="e.g. Decorate 6 fall cookies to take home. All supplies included.">' + esc(ev.summary) + '</textarea>', 'Leave blank to show the start of the description.') +
+        field(id('summary'), 'Short line on the card', '<textarea class="input one-line" rows="1" maxlength="' + CARD_LINE_MAX + '" id="' + id('summary') + '" ' + attrs('summary') + ' placeholder="e.g. Decorate 6 fall cookies to take home. All supplies included.">' + esc(ev.summary) + '</textarea>',
+          '<span data-card-line="' + i + '">' + cardLineHint(ev) + '</span>') +
         field(id('desc'), 'Full description', '<textarea class="input" id="' + id('desc') + '" rows="4" ' + attrs('desc') + '>' + esc(ev.desc) + '</textarea>', 'Shows when customers tap "See details".') +
         photoField(id('photo'), 'Photo', attrs('photo') + ' value="' + esc(ev.photo) + '"') +
         photoField(id('flyer'), 'Flyer (optional)', attrs('flyer') + ' value="' + esc(ev.flyer) + '"') +

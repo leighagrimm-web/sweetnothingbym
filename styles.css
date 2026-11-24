@@ -101,6 +101,7 @@ button { font: inherit; color: inherit; }
 .card-body .price { margin-top: 6px; font-weight: 600; }
 .card-body .price span { font-weight: 400; color: var(--muted); }
 /* Special Events: short cards; the full text, address and flyer open in a Details panel */
+/* At most 3 lines, ending in …; it sits inside the growing .desc so a 4th line never peeks out below. */
 .ev-line { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .card-body .ev-more { align-self: flex-start; margin-top: 2px; min-height: 44px; font-size: 15px; text-decoration: none; }
 .card-body .ev-more:hover { text-decoration: underline; }
